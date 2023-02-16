@@ -2,7 +2,7 @@ module GATs
 export DeBruijn, TermCon, TypeCon, TermInContext, TypeInContext, Axiom,
        EmptyTheory, TheoryExt, Theory, 
        TheoryExtType, TheoryExtTerm, TheoryExtAxiom,
-       typecons, termcons, axioms, args, head
+       type_constructors, term_constructors, axioms, args, headof
 # Terms
 #######
 
@@ -29,7 +29,7 @@ struct TypeInContext <: InContext
   TypeInContext(h,a=TermInContext[]) = new(h,a)
 end
 
-head(x::InContext) = x.head
+headof(x::InContext) = x.head
 args(x::InContext) = x.args
 
 # Judgments
@@ -68,6 +68,7 @@ struct TermCon <: Constructor
 end
 
 args(x::Constructor) = x.args
+name(x::Constructor) = x.name 
 
 struct Axiom <: Constructor
   ctx::Theory

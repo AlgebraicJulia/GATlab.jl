@@ -10,22 +10,22 @@ ThSet = TheoryExtType(
 
 HomCtx = TheoryExtTerm(
   ThSet,
-  [TermCon(ThSet, :a, TypeInContext((1,1),[])),
-   TermCon(ThSet, :b, TypeInContext((1,1),[]))],
+  [TermConstructor(ThSet, :a, TypeInContext((0,1),[])), 
+   TermConstructor(ThSet, :b, TypeInContext((0,1),[]))],
 )
 
 ThGraph = TheoryExtType(
-  ThSet,
-  [TypeCon(HomCtx,:Hom,[(1,1),(1,2)])],
+    ThSet,
+    [TypeConstructor(HomCtx,:Hom,[(0,1),(0,2)])],
 )
 
 ComposeCtx1 = TheoryExtTerm(
-  ThGraph,
-  [
-    TermCon(ThGraph, :a, TypeInContext((2,1),[])),
-    TermCon(ThGraph, :b, TypeInContext((2,1),[])),
-    TermCon(ThGraph, :c, TypeInContext((2,1),[])),
-  ],
+    ThGraph,
+    [
+        TermConstructor(ThGraph, :a, TypeInContext((1,1),[])),
+        TermConstructor(ThGraph, :b, TypeInContext((1,1),[])),
+        TermConstructor(ThGraph, :c, TypeInContext((1,1),[])),
+    ],
 )
 ComposeCtx2 = TheoryExtTerm(
   ComposeCtx1,
