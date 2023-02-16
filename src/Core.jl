@@ -1,8 +1,8 @@
 module Core
-export TermConstructor, TypeConstructor, TermInContext, TypeInContext, Axiom,
+export TermCon, TypeCon, TermInContext, TypeInContext, Axiom,
        EmptyTheory, TheoryExt, Theory, 
        TheoryExtType, TheoryExtTerm, TheoryExtAxiom,
-       type_constructors, term_constructors, axioms, args, head
+       typecons, termcons, axioms, args, head
 # Terms
 #######
 
@@ -43,11 +43,11 @@ name - just documentation (and for rendering)
 args - indexing all the term constructors in ctx
        this should be sufficient to type infer everything in ctx
 """
-struct TypeConstructor <: Constructor
+struct TypeCon <: Constructor
   ctx::Theory
   name::Symbol # JUST DOCUMENTATION
   args::Vector{DeBruijn} 
-  TypeConstructor(c,n,a=DeBruijn[]) = new(c,n,a)
+  TypeCon(c,n,a=DeBruijn[]) = new(c,n,a)
 end
 
 """
@@ -59,12 +59,12 @@ typ  - output type of applying the term constructor
 args - indexing all the term constructors in ctx
        this should be sufficient to type infer everything in ctx
 """
-struct TermConstructor <: Constructor 
+struct TermCon <: Constructor
   ctx::Theory
   name::Symbol
   typ::TypeInContext
   args::Vector{DeBruijn}
-  TermConstructor(c,n,t,a=DeBruijn[]) = new(c,n,t,a)
+  TermCon(c,n,t,a=DeBruijn[]) = new(c,n,t,a)
 end
 
 args(x::Constructor) = x.args
@@ -85,31 +85,31 @@ struct EmptyTheory <: Theory end
 
 struct TheoryExt <: Theory
   parent::Theory
-  type_constructors::Vector{TypeConstructor}
-  term_constructors::Vector{TermConstructor}
+  typecons::Vector{TypeCon}
+  termcons::Vector{TermCon}
   axioms::Vector{Axiom}
-  function TheoryExt(parent,type_constructors,term_constructors,axioms)
-    for tc in term_constructors ∪ type_constructors
+  function TheoryExt(parent,typecons,termcons,axioms)
+    for tc in termcons ∪ typecons
       # parent ∉ ancestors(tc.ctx) || error("")
     end 
-    new(parent,type_constructors,term_constructors,axioms)
+    new(parent,typecons,termcons,axioms)
   end
 end
 
-TheoryExtType(p,tc::Vector{TypeConstructor}) = 
-  TheoryExt(p,tc,TermConstructor[],Axiom[])
+TheoryExtType(p,tc::Vector{TypeCon}) =
+  TheoryExt(p,tc,TermCon[],Axiom[])
 
-TheoryExtTerm(p,tc::Vector{TermConstructor}) = 
-  TheoryExt(p,TypeConstructor[],tc,Axiom[])
+TheoryExtTerm(p,tc::Vector{TermCon}) =
+  TheoryExt(p,TypeCon[],tc,Axiom[])
 
 TheoryExtAxiom(p,ax::Vector{Axiom}) = 
-  TheoryExt(p,TypeConstructor[],TermConstructor[],ax)
+  TheoryExt(p,TypeCon[],TermCon[],ax)
 
 """List all type/term constructors"""
-type_constructors(::EmptyTheory) = []
-type_constructors(t::TheoryExt) = vcat([t.type_constructors], type_constructors(t.parent))
-term_constructors(::EmptyTheory) = []
-term_constructors(t::TheoryExt) = vcat([t.term_constructors], term_constructors(t.parent))
+typecons(::EmptyTheory) = []
+typecons(t::TheoryExt) = vcat([t.typecons], typecons(t.parent))
+termcons(::EmptyTheory) = []
+termcons(t::TheoryExt) = vcat([t.termcons], termcons(t.parent))
 axioms(::EmptyTheory) = []
 axioms(t::TheoryExt) = vcat([t.axioms], axioms(t.parent))
 
