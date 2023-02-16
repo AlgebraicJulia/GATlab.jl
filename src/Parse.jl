@@ -1,5 +1,8 @@
 module Parse
 export parse_symexpr, parse_declaration
+
+using ..Core 
+
 using MLStyle
 
 struct SymExpr

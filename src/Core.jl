@@ -1,6 +1,7 @@
 module Core
 export TermConstructor, TypeConstructor, TermInContext, TypeInContext, Axiom,
-       EmptyTheory, TheoryExt
+       EmptyTheory, TheoryExt, Theory, 
+       TheoryExtType, TheoryExtTerm, TheoryExtAxiom
 # Terms
 #######
 
@@ -18,11 +19,13 @@ args -
 struct TermInContext <: InContext
   head::DeBruijn # debruijn index into the term context
   args::Vector{TermInContext}
+  TermInContext(h,a=TermInContext[]) = new(h,a)
 end
 
 struct TypeInContext <: InContext
   head::DeBruijn # debruijn index into the type context
   args::Vector{TermInContext}
+  TypeInContext(h,a=TermInContext[]) = new(h,a)
 end
 
 head(x::InContext) = x.head
@@ -43,6 +46,7 @@ struct TypeConstructor <: Constructor
   ctx::Theory
   name::Symbol # JUST DOCUMENTATION
   args::Vector{DeBruijn} 
+  TypeConstructor(c,n,a=DeBruijn[]) = new(c,n,a)
 end
 
 """
@@ -59,6 +63,7 @@ struct TermConstructor <: Constructor
   name::Symbol
   typ::TypeInContext
   args::Vector{DeBruijn}
+  TermConstructor(c,n,t,a=DeBruijn[]) = new(c,n,t,a)
 end
 
 struct Axiom <: Constructor
@@ -77,17 +82,25 @@ struct EmptyTheory <: Theory end
 
 struct TheoryExt <: Theory
   parent::Theory
-  term_constructors::Vector{TermConstructor}
   type_constructors::Vector{TypeConstructor}
+  term_constructors::Vector{TermConstructor}
   axioms::Vector{Axiom}
-  function Theory(parent,term_constructors,type_constructors,axioms)
+  function TheoryExt(parent,type_constructors,term_constructors,axioms)
     for tc in term_constructors ∪ type_constructors
-      parent ∈ ancestors(tc.ctx) || error("")
+      # parent ∉ ancestors(tc.ctx) || error("")
     end 
-    new(parent,term_constructors,type_constructors,axioms)
+    new(parent,type_constructors,term_constructors,axioms)
   end
 end
 
+TheoryExtType(p,tc::Vector{TypeConstructor}) = 
+  TheoryExt(p,tc,TermConstructor[],Axiom[])
+
+TheoryExtTerm(p,tc::Vector{TermConstructor}) = 
+  TheoryExt(p,TypeConstructor[],tc,Axiom[])
+
+TheoryExtAxiom(p,ax::Vector{Axiom}) = 
+  TheoryExt(p,TypeConstructor[],TermConstructor[],ax)
 
 """List all type/term constructors"""
 type_constructors(t::EmptyTheory) = []
