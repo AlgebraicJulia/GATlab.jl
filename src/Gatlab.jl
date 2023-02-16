@@ -3,7 +3,7 @@ using Reexport
 
 
 include("Core.jl")
-#include("Visualization.jl")
+include("Visualization.jl")
 include("Parse.jl")
 include("Theories.jl")
 

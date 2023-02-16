@@ -1,47 +1,59 @@
 module Visualization
+
 using ..Core 
+using ..Core: Constructor, InContext
 
-Base.show(t::AbstractTheory) = """Theory
-$(join(type_constructors(t)), "\n")
-$(join(term_constructors(t)), "\n")
-$(join(axioms(t)), "\n")
-"""
-Base.show(t::TypeConstructor) = show(sequent(t)) 
-Base.show(t::TermConstructor) = show(sequent(t)) 
-Base.show(t::Axiom) = show(sequent(t)) 
+using DataStructures
 
+function Base.show(io::IO, m::MIME"text/plain", t::Theory)  
+  println(io,"##########\n# Theory #\n##########\nType Constructors\n=================\n")
+  for x in vcat(type_constructors(t)...) show(io,m,x) end
+  println(io,"\nTerm Constructors\n=================\n")
+  for x in filter(x->arity(x)>0,vcat(term_constructors(t)...)) show(io,m,x) end
+  println(io,"\nAxioms\n======\n")
+  for x in vcat(axioms(t)...) show(io,m,x) end
+  println(io,"\nConstants\n=========\n")
+  for x in filter(x->arity(x)==0,vcat(term_constructors(t)...)) show(io,m,x) end
+end 
+
+Base.show(io::IO,m::MIME"text/plain",t::TypeConstructor) = show(io,m,sequent(t)) 
+Base.show(io::IO,m::MIME"text/plain",t::TermConstructor) = show(io,m,sequent(t)) 
+Base.show(io::IO,m::MIME"text/plain",t::Axiom) = show(io,m,sequent(t)) 
+
+"""Intermediate representation of a judgment for pretty printing"""
 struct Sequent 
   name::String
   ctx::Vector{Pair{Vector{String}, String}} 
   judgment::String
 end 
 
-function show(s::Sequent)
+function Base.show(io::IO,::MIME"text/plain",s::Sequent)
   numerator = join(["($(join(xs, ","))):$t" for (xs,t) in s.ctx], " | ")
-  n = maximum(length.([numerator, s.judgment]))
-  return join([numerator,repeat("-",n), s.judgment],"\n")
+  n = maximum(length.([numerator, s.judgment])) + 2
+  off_n,off_d = [repeat(" ",(n-length(x))÷2) for x in [numerator, s.judgment]]
+  title = repeat("-", n) * "  " * s.name
+  println(io,join([off_n * numerator, title, off_d * s.judgment], "\n"))
 end
 
-"""Convert a type constructor into a context string and a """
 function sequent(t::Constructor)
   arg_syms = [show_cons(t.ctx,i,j) for (i,j) in args(t)]
-  Sequent(t.name * " introduction", 
-          extract_ctx(t.ctx), t.name*"($(join(arg_syms, ","))")
+  arg = isempty(arg_syms) ? "" : "($(join(arg_syms, ",")))"
+  Sequent("$(t.name) introduction", 
+          extract_ctx(t.ctx), "$(t.name)$arg")
 end 
 
 function sequent(t::Axiom)
-  t_cons = term_constructors(t)
   t1,t2 = [show_cons(t.ctx,i,j) for (i,j) in [t.lhs,t.rhs]]
   typ = show_type(t.ctx, t.type)
   Sequent(t.name, extract_ctx(t.ctx), "$t1 = $t2 : $typ")
 end
 
 """Gets term constructor by default, term=false to get type constructor"""
-function get_cons(t::Theory, lvl::Int,i::Int; term=true)
+function debruijn_to_cons(t::Theory, lvl::Int,i::Int; term=true)
   if lvl == 0
     return term ? t.term_constructors[i] : t.type_constructors[i]
   else
-    return get_cons(t, lvl-1, i)
+    return debruijn_to_cons(t, lvl-1, i)
   end
 end
 
@@ -50,10 +62,25 @@ function show_cons(t::Theory, c::Constructor)
   return c.symbol * a
 end
 
+function show_inctx(t::Theory, tic::InContext) 
+  f = show_cons(t, head(tic)...; term=tic isa TermInContext)
+  a = isempty(args(tic)) ? "" : "($(join([show_inctx(t,a) for a in tic.args],",")))"
+  return "$f$a"
+end
+
 show_cons(t::Theory, lvl::Int,i::Int; term=true) = 
-  show_cons(t, get_cons(t,lvl,i; term=term))
+  show_cons(t, debruijn_to_cons(t,lvl,i; term=term))
 
-
+"""GET ALL ZERO ARITY TERM CONSTRUCTORS IN A THEORY"""
+function extract_ctx(t::Theory)
+  typdict = DefaultOrderedDict{String,Vector{String}}(()=>String[])
+  for con in filter(x->arity(x)==0,vcat(term_constructors(t)...)) 
+    push!(typdict[show_inctx(t,con.typ)], con.name)
+  end
+  # [["foo","bar"]=>"Baz",["α,β"]=>"Λ(Θ,Ω)"]
+  return [v=>k for (k,v) in collect(typdict)]
+end 
+arity(x) = length(args(x))
 
 
 end # module 

@@ -1,7 +1,8 @@
 module Core
 export TermConstructor, TypeConstructor, TermInContext, TypeInContext, Axiom,
        EmptyTheory, TheoryExt, Theory, 
-       TheoryExtType, TheoryExtTerm, TheoryExtAxiom
+       TheoryExtType, TheoryExtTerm, TheoryExtAxiom,
+       type_constructors, term_constructors, axioms, args, head
 # Terms
 #######
 
@@ -66,6 +67,8 @@ struct TermConstructor <: Constructor
   TermConstructor(c,n,t,a=DeBruijn[]) = new(c,n,t,a)
 end
 
+args(x::Constructor) = x.args
+
 struct Axiom <: Constructor
   ctx::Theory
   name::Symbol
@@ -103,10 +106,12 @@ TheoryExtAxiom(p,ax::Vector{Axiom}) =
   TheoryExt(p,TypeConstructor[],TermConstructor[],ax)
 
 """List all type/term constructors"""
-type_constructors(t::EmptyTheory) = []
-type_constructors(t::TheoryExt) = vcat([t.type_construcators], type_constructors(t.parent))
-term_constructors(t::EmptyTheory) = []
-term_constructors(t::TheoryExt) = vcat([t.term_construcators], term_constructors(t.parent))
+type_constructors(::EmptyTheory) = []
+type_constructors(t::TheoryExt) = vcat([t.type_constructors], type_constructors(t.parent))
+term_constructors(::EmptyTheory) = []
+term_constructors(t::TheoryExt) = vcat([t.term_constructors], term_constructors(t.parent))
+axioms(::EmptyTheory) = []
+axioms(t::TheoryExt) = vcat([t.axioms], axioms(t.parent))
 
 parent(::EmptyTheory) = EmptyTheory()
 parent(t::TheoryExt) = t.parent
