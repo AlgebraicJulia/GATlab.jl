@@ -1,5 +1,5 @@
 module Parse
-export parse_symexpr, parse_declaration, extend_theory
+export parse_symexpr, parse_declaration, add_decls
 
 using ..GATs
 
@@ -73,6 +73,7 @@ end
 
 function extend_theory(theory::Theory, extension::Vector{Pair{Symbol, SymExpr}})
   TheoryExt(
+    Symbol(""),
     theory,
     TypeInContext[],
     nullary_termcon.(Ref(theory), extension),
@@ -127,7 +128,7 @@ function parse_type(theory::Theory, e::SymExpr)
   TypeInContext(head, args)
 end
 
-function extend_theory(theory::Theory, decls::Vector{Declaration})
+function add_decls(theory::Theory, decls::Vector{Declaration}; name=Symbol(""))
   new_typecons = map(filter(decl -> decl.type == SymExpr(:TYPE), decls)) do decl
     context = foldl(extend_theory, decl.context; init=theory)
     TypeCon(
@@ -146,6 +147,7 @@ function extend_theory(theory::Theory, decls::Vector{Declaration})
     )
   end
   TheoryExt(
+    name,
     theory,
     new_typecons,
     new_termcons,
