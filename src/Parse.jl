@@ -1,5 +1,5 @@
 module Parse
-export parse_symexpr, parse_declaration, add_decls
+export parse_symexpr, parse_declaration, add_decls, @theory
 
 using ..GATs
 
@@ -152,6 +152,22 @@ function add_decls(theory::Theory, decls::Vector{Declaration}; name=Symbol(""))
     new_typecons,
     new_termcons,
     Axiom[]
+  )
+end
+
+macro theory(head, body)
+  (name, parent) = @match head begin
+    :($(name::Symbol) <: $(parent::Symbol)) => (name, parent)
+    _ => error("expected head of @theory macro to be in the form name <: parent")
+  end
+  lines = @match body begin
+    Expr(:block, lines...) => filter(line -> typeof(line) != LineNumberNode, lines)
+    _ => error("expected body of @theory macro to be a block")
+  end
+  esc(
+    quote
+      $name = add_decls($parent, parse_declaration.($lines))
+    end
   )
 end
 
