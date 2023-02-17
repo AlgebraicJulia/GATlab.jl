@@ -1,5 +1,5 @@
-module Core
-export TermCon, TypeCon, TermInContext, TypeInContext, Axiom,
+module GATs
+export DeBruijn, TermCon, TypeCon, TermInContext, TypeInContext, Axiom,
        EmptyTheory, TheoryExt, Theory, 
        TheoryExtType, TheoryExtTerm, TheoryExtAxiom,
        typecons, termcons, axioms, args, head
@@ -113,8 +113,8 @@ termcons(t::TheoryExt) = vcat([t.termcons], termcons(t.parent))
 axioms(::EmptyTheory) = []
 axioms(t::TheoryExt) = vcat([t.axioms], axioms(t.parent))
 
-parent(::EmptyTheory) = EmptyTheory()
-parent(t::TheoryExt) = t.parent
+Base.parent(::EmptyTheory) = EmptyTheory()
+Base.parent(t::TheoryExt) = t.parent
 
 
 end # module

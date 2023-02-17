@@ -1,39 +1,39 @@
 module Theories
 export ThSet, HomCtx, ThGraph, ThLawlessCat 
-using ..Core 
+using ..GATs
 
 ThSet = TheoryExtType(
-    EmptyTheory(),
-    [TypeConstructor(EmptyTheory(), :Ob, [])],
+  EmptyTheory(),
+  [TypeCon(EmptyTheory(), :Ob, [])],
 )
 
 
 HomCtx = TheoryExtTerm(
   ThSet,
-  [TermConstructor(ThSet, :a, TypeInContext((1,1),[])), 
-   TermConstructor(ThSet, :b, TypeInContext((1,1),[]))],
+  [TermCon(ThSet, :a, TypeInContext((1,1),[])),
+   TermCon(ThSet, :b, TypeInContext((1,1),[]))],
 )
 
 ThGraph = TheoryExtType(
-    ThSet,
-    [TypeConstructor(HomCtx,:Hom,[(1,1),(1,2)])],
+  ThSet,
+  [TypeCon(HomCtx,:Hom,[(1,1),(1,2)])],
 )
 
 ComposeCtx1 = TheoryExtTerm(
-    ThGraph,
-    [
-        TermConstructor(ThGraph, :a, TypeInContext((2,1),[])),
-        TermConstructor(ThGraph, :b, TypeInContext((2,1),[])),
-        TermConstructor(ThGraph, :c, TypeInContext((2,1),[])),
-    ],
+  ThGraph,
+  [
+    TermCon(ThGraph, :a, TypeInContext((2,1),[])),
+    TermCon(ThGraph, :b, TypeInContext((2,1),[])),
+    TermCon(ThGraph, :c, TypeInContext((2,1),[])),
+  ],
 )
 ComposeCtx2 = TheoryExtTerm(
   ComposeCtx1,
   [
-    TermConstructor(ComposeCtx1,:f, TypeInContext((2,1), 
-                    [TermInContext((1,1),[]),TermInContext((1,2),[])])),
-    TermConstructor(ComposeCtx1,:g, TypeInContext((2,1), 
-                    [TermInContext((1,2),[]),TermInContext((1,3),[])])),
+    TermCon(ComposeCtx1,:f, TypeInContext((2,1),
+                                          [TermInContext((1,1),[]),TermInContext((1,2),[])])),
+    TermCon(ComposeCtx1,:g, TypeInContext((2,1),
+                                          [TermInContext((1,2),[]),TermInContext((1,3),[])])),
   ],
 )
 
