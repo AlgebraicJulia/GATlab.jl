@@ -2,7 +2,7 @@ module GATs
 export DeBruijn, TermCon, TypeCon, TermInContext, TypeInContext, Axiom,
        EmptyTheory, TheoryExt, Theory, 
        TheoryExtType, TheoryExtTerm, TheoryExtAxiom,
-       type_constructors, term_constructors, axioms, args, headof
+       typecons, termcons, axioms, args, headof
 # Terms
 #######
 
@@ -31,6 +31,7 @@ end
 
 headof(x::InContext) = x.head
 args(x::InContext) = x.args
+arity(x::InContext) = length(args(x))
 
 # Judgments
 ############
@@ -67,13 +68,14 @@ struct TermCon <: Constructor
   TermCon(c,n,t,a=DeBruijn[]) = new(c,n,t,a)
 end
 
-args(x::Constructor) = x.args
 name(x::Constructor) = x.name 
+args(x::Constructor) = x.args
+arity(x::Constructor) = length(args(x))
 
-struct Axiom <: Constructor
+struct Axiom # <: Judgment, with Constructor <: Judgment too?
   ctx::Theory
   name::Symbol
-  type::TypeInContext
+  type::TypeInContext # THIS SHOULD BE DERIVABLE
   rhs::TermInContext
   lhs::TermInContext
 end
@@ -85,26 +87,31 @@ end
 struct EmptyTheory <: Theory end 
 
 struct TheoryExt <: Theory
+  name::Symbol
   parent::Theory
   typecons::Vector{TypeCon}
   termcons::Vector{TermCon}
   axioms::Vector{Axiom}
-  function TheoryExt(parent,typecons,termcons,axioms)
+  function TheoryExt(name,parent,typecons,termcons,axioms)
     for tc in termcons ∪ typecons
       # parent ∉ ancestors(tc.ctx) || error("")
     end 
-    new(parent,typecons,termcons,axioms)
+    new(name,parent,typecons,termcons,axioms)
   end
 end
 
-TheoryExtType(p,tc::Vector{TypeCon}) =
-  TheoryExt(p,tc,TermCon[],Axiom[])
+TheoryExtType(p,tc::Vector{TypeCon}; name="") =
+  TheoryExt(Symbol(name),p,tc,TermCon[],Axiom[])
 
-TheoryExtTerm(p,tc::Vector{TermCon}) =
-  TheoryExt(p,TypeCon[],tc,Axiom[])
+TheoryExtTerm(p,tc::Vector{TermCon}; name="") =
+  TheoryExt(Symbol(name),p,TypeCon[],tc,Axiom[])
 
-TheoryExtAxiom(p,ax::Vector{Axiom}) = 
-  TheoryExt(p,TypeCon[],TermCon[],ax)
+TheoryExtAxiom(p,ax::Vector{Axiom}; name="") = 
+  TheoryExt(Symbol(name),p,TypeCon[],TermCon[],ax)
+
+TheoryExtType(p,  tc::TypeCon; name="") = TheoryExtType(p,[tc];name=name)
+TheoryExtTerm(p,  tc::TermCon; name="") = TheoryExtTerm(p,[tc];name=name)
+TheoryExtAxiom(p, ax::Axiom;   name="") = TheoryExtAxiom(p,[ax];name=name)
 
 """List all type/term constructors"""
 typecons(::EmptyTheory) = []

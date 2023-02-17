@@ -1,49 +1,46 @@
 module Theories
-export ThSet, HomCtx, ThGraph, ThLawlessCat 
-using ..GATs
+export ThSet, ThGraph, ThLawlessCat 
+using ..Core 
 
 ThSet = TheoryExtType(
-  EmptyTheory(),
-  [TypeCon(EmptyTheory(), :Ob, [])],
+    EmptyTheory(),
+    TypeCon(EmptyTheory(), :Ob, []),
+    name="Set"
 )
 
 
 HomCtx = TheoryExtTerm(
   ThSet,
-  [TermConstructor(ThSet, :a, TypeInContext((0,1),[])), 
-   TermConstructor(ThSet, :b, TypeInContext((0,1),[]))],
+  [TermCon(ThSet, :a, TypeInContext((0,1),[])), 
+   TermCon(ThSet, :b, TypeInContext((0,1),[]))],
 )
 
 ThGraph = TheoryExtType(
     ThSet,
-    [TypeConstructor(HomCtx,:Hom,[(0,1),(0,2)])],
+    TypeCon(HomCtx,:Hom,[(0,1),(0,2)]),
+    name="Graph"
 )
 
 ComposeCtx1 = TheoryExtTerm(
     ThGraph,
-    [
-        TermConstructor(ThGraph, :a, TypeInContext((1,1),[])),
-        TermConstructor(ThGraph, :b, TypeInContext((1,1),[])),
-        TermConstructor(ThGraph, :c, TypeInContext((1,1),[])),
-    ],
+    [TermCon(ThGraph, :a, TypeInContext((1,1))),  # Ob
+     TermCon(ThGraph, :b, TypeInContext((1,1))),  # Ob
+     TermCon(ThGraph, :c, TypeInContext((1,1))),],# Ob
 )
 ComposeCtx2 = TheoryExtTerm(
   ComposeCtx1,
-  [
-    TermCon(ComposeCtx1,:f, TypeInContext((2,1),
-                                          [TermInContext((1,1),[]),TermInContext((1,2),[])])),
-    TermCon(ComposeCtx1,:g, TypeInContext((2,1),
-                                          [TermInContext((1,2),[]),TermInContext((1,3),[])])),
-  ],
+  [TermCon(ComposeCtx1,:f,TypeInContext((1,1), TermInContext.([(0,1),(0,2)]))), # Hom(A,B)
+   TermCon(ComposeCtx1,:g,TypeInContext((1,1), TermInContext.([(0,2),(0,3)])))],# Hom(B,C)
 )
 
-# TODO
-# ThLawlessCat = TheoryExtTerm(
-#   ThGraph,
-#   [TermConstructor(ComposeCtx2,
-#     :compose,
-#     TypeInContext((3,1),TermInContext.([(1,2),(1,3)])),
-#     TermInContext.([((0,1)),((0,2))]))],
-# )
+ThLawlessCat = TheoryExtTerm(
+  ThGraph,
+  TermCon(ComposeCtx2,
+    Symbol("•"),
+    TypeInContext((2,1), TermInContext.([(1,2),(1,3)])), # Hom(A,C)
+    [((0,1)),((0,2))]), # (f,g)
+    name="LawlessCat"
+)
+
 
 end
