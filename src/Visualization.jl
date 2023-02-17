@@ -1,26 +1,32 @@
 module Visualization
 
 using ..GATs 
-using ..GATs: Constructor, InContext, name, arity
+using ..GATs: Constructor, InContext, name, arity, debruijn_to_cons
 
 using DataStructures
 
 function Base.show(io::IO, m::MIME"text/plain", t::Theory)  
   println(io,"##########\n# Theory #\n##########\nType Constructors\n=================")
-  for x in vcat(reverse(typecons(t))...)
-    show(io,m,sequent(t,x)) 
+  for (xt,xs) in reverse(typecons(t))
+    for x in xs 
+      show(io,m,sequent(xt,x)) 
+    end
   end
   println(io,"\nTerm Constructors\n=================")
-  for x in filter(x->arity(x)>0,vcat(reverse(termcons(t))...)) 
-    show(io,m,sequent(t,x)) 
+  for (xt,xs) in reverse(termcons(t))
+    for x in filter(x-> arity(x) > 0, xs)
+      show(io,m,sequent(xt,x)) 
+    end
   end
   println(io,"\nAxioms\n======")
   for x in vcat(axioms(t)...) 
     show(io,m,sequent(x)) 
   end
   println(io,"\nConstants\n=========")
-  for x in filter(x->arity(x)==0,vcat(reverse(termcons(t))...)) 
-    show(io,m,sequent(t,x)) 
+  for (xt,xs) in reverse(termcons(t))
+    for x in filter(x-> arity(x) == 0, xs)
+      show(io,m,sequent(xt,x)) 
+    end
   end
 end 
 
@@ -58,15 +64,6 @@ function sequent(t::Axiom)
   Sequent(string(t.name), ctx_diff(t.ctx), "$t1 = $t2 : $typ")
 end
 
-"""Gets term constructor by default, term=false to get type constructor"""
-function debruijn_to_cons(t::TheoryExt, lvl::Int,i::Int; term=true)
-  if lvl == 0
-    return term ? t.termcons[i] : t.typecons[i]
-  else
-    return debruijn_to_cons(t.parent, lvl-1, i; term=term)
-  end
-end
-
 function show_cons(c::Constructor)
   a = isempty(c.args) ? "" : "($(join([show_cons(c.ctx,x...) for x in c.args],",")))"
   return "$(name(c))$a"
@@ -85,10 +82,15 @@ show_cons(t::Theory, lvl::Int,i::Int; term=true) =
 function extract_consts(t::Theory)
   typdict = DefaultOrderedDict{String,OrderedSet{String}}(
     ()->OrderedSet{String}())
-  for con in filter(x->arity(x)==0,reverse(vcat(reverse.(termcons(t))...))) 
-    k,v = string.([show_type(con), name(con)])
-    push!(typdict[k],v)
-  end
+
+  for (_, xs) in reverse(termcons(t))
+    for con in xs 
+      if arity(con) == 0
+        k,v = string.([show_type(con), name(con)])
+        push!(typdict[k],v)
+      end
+    end 
+  end 
   return typdict
 end 
 

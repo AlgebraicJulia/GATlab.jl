@@ -36,7 +36,7 @@ ThLawlessCat = TheoryExtTerm(
   ThGraph,
   TermCon(ComposeCtx2,
     Symbol("•"),
-    TypeInContext((2,1), TermInContext.([(1,2),(1,3)])), # Hom(A,C)
+    TypeInContext((2,1), TermInContext.([(1,1),(1,3)])), # Hom(A,C)
     [((0,1)),((0,2))]), # (f,g)
     name="LawlessCat"
 )
