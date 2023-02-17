@@ -14,18 +14,49 @@ using StructEquality
   end
 end
 
-struct Declaration
+abstract type DeclBody end
+
+struct NewTerm <: DeclBody
   head::Symbol
   args::Vector{Symbol}
   type::SymExpr
+end
+
+@as_record NewTerm
+
+struct NewType <: DeclBody
+  head::Symbol
+  args::Vector{Symbol}
+end
+
+@as_record NewType
+
+struct NewAxiom <: DeclBody
+  lhs::SymExpr
+  rhs::SymExpr
+  type::SymExpr
+end
+
+@as_record NewAxiom
+
+struct Declaration
+  body::DeclBody
   context::Vector{Vector{Pair{Symbol, SymExpr}}}
 end
 
 const Expr0 = Union{Symbol, Expr}
 
+function parse_args(e::Expr0)
+  @match e begin
+    (name::Symbol) => (name, Symbol[])
+    :($(name::Symbol)($(args...))) => (name, Symbol[args...])
+    _ => error("Could not parse $e as an application of a symbol to arguments")
+  end
+end
+
 function parse_symexpr(e::Expr0)
   @match e begin
-    s::Symbol => SymExpr(s,SymExpr[])
+    (name::Symbol) => SymExpr(name, SymExpr[])
     Expr(:call, f::Symbol, args...) => SymExpr(f, Vector{SymExpr}(parse_symexpr.(args)))
     _ => error("Could not parse $e as a symbolic expression")
   end
@@ -44,15 +75,23 @@ function Base.show(io::IO, m::MIME"text/plain", e::SymExpr)
   end
 end
 
+function parse_declbody(e::Expr0)
+  @match e begin
+    :($expr :: TYPE) => NewType(parse_args(expr)...)
+    :($expr :: $type) => NewTerm(parse_args(expr)..., parse_symexpr(type))
+    :($lhs == $rhs :: $type) => NewAxiom(parse_symexpr(lhs), parse_symexpr(rhs), parse_symexpr(type))
+    _ => error("Could not parse declaration head $e")
+  end
+end
+
 function parse_declaration(e::Expr)
   @match e begin
-    :($(head::Symbol)($(args...))::$type ⊣ [$(contextexts...)]) =>
+    :($body ⊣ [$(contextexts...)]) =>
       Declaration(
-        head,
-        args,
-        parse_symexpr(type),
+        parse_declbody(body),
         parse_contextext.(contextexts)
       )
+    # Expr(:comparison, args...)
     _ => error("Could not parse declaration $e")
   end
 end
@@ -71,7 +110,7 @@ function parse_binding(binding::Expr)
   end
 end
 
-function extend_theory(theory::Theory, extension::Vector{Pair{Symbol, SymExpr}})
+function make_context(theory::Theory, extension::Vector{Pair{Symbol, SymExpr}})
   TheoryExt(
     Symbol(""),
     theory,
@@ -129,30 +168,56 @@ function parse_type(theory::Theory, e::SymExpr)
 end
 
 function add_decls(theory::Theory, decls::Vector{Declaration}; name=Symbol(""))
-  new_typecons = map(filter(decl -> decl.type == SymExpr(:TYPE), decls)) do decl
-    context = foldl(extend_theory, decl.context; init=theory)
-    TypeCon(
-      context,
-      decl.head,
-      lookup_termcon.(Ref(context), decl.args)
-    )
+  new_typecons = TypeCon[]
+  new_termcons = TermCon[]
+  new_axioms = Axiom[]
+  for decl in decls
+    context = foldl(make_context, decl.context; init=theory)
+    @match decl.body begin
+      NewType(head, args) =>
+        push!(
+          new_typecons,
+          TypeCon(
+            context,
+            head,
+            lookup_termcon.(Ref(context), args)
+          )
+        )
+      NewTerm(head, args, type) =>
+        push!(
+          new_termcons,
+          TermCon(
+            context,
+            head,
+            parse_type(context, type),
+            lookup_termcon.(Ref(context), args)
+          )
+        )
+      NewAxiom(lhs, rhs, type) =>
+        push!(
+          new_axioms,
+          Axiom(
+            context,
+            Symbol(""),
+            parse_type(context, type),
+            parse_term(context, lhs),
+            parse_term(context, rhs)
+          )
+        )
+    end
   end
-  new_termcons = map(filter(decl -> decl.type != SymExpr(:TYPE), decls)) do decl
-    context = foldl(extend_theory, decl.context; init=theory)
-    TermCon(
-      context,
-      decl.head,
-      parse_type(context, decl.type),
-      lookup_termcon.(Ref(context), decl.args)
-    )
-  end
+
   TheoryExt(
     name,
     theory,
     new_typecons,
     new_termcons,
-    Axiom[]
+    new_axioms
   )
+end
+
+function theory_impl(parent::Theory, lines::Vector)
+  foldl((theory, line) -> add_decls(theory, [parse_declaration(line)]), lines; init=parent)
 end
 
 macro theory(head, body)
@@ -166,18 +231,18 @@ macro theory(head, body)
   end
   esc(
     quote
-      $name = add_decls($parent, parse_declaration.($lines))
+      $name = $(GlobalRef(Parse, :theory_impl))($parent, $lines)
     end
   )
 end
 
 """
 
-@theory Set <: Empty begin
+@theory ThSet <: Empty begin
   Ob::TYPE ⊣ []
 end
 
-@theory Graph <: Set begin
+@theory ThGraph <: ThSet begin
   Hom(x,y)::TYPE ⊣ [(a::Ob, b::Ob)]
 end
 

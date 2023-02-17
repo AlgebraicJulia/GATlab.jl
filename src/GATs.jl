@@ -1,6 +1,6 @@
 module GATs
 export DeBruijn, TermCon, TypeCon, TermInContext, TypeInContext, Axiom,
-       EmptyTheory, TheoryExt, Theory, 
+       EmptyTheory, ThEmpty, TheoryExt, Theory,
        TheoryExtType, TheoryExtTerm, TheoryExtAxiom,
        typecons, termcons, axioms, args, headof
 
@@ -95,7 +95,9 @@ Base.:(==)(x::Axiom, y::Axiom) =
 # Theories
 ###########
 
-@struct_hash_equal struct EmptyTheory <: Theory end 
+@struct_hash_equal struct EmptyTheory <: Theory end
+
+const ThEmpty = EmptyTheory()
 
 struct TheoryExt <: Theory
   name::Symbol
