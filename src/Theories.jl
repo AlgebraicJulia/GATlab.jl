@@ -1,6 +1,6 @@
 module Theories
 export ThSet, ThGraph, ThLawlessCat 
-using ..Core 
+using ..GATs 
 
 ThSet = TheoryExtType(
     EmptyTheory(),

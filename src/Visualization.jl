@@ -1,7 +1,7 @@
 module Visualization
 
-using ..Core 
-using ..Core: Constructor, InContext, name, arity
+using ..GATs 
+using ..GATs: Constructor, InContext, name, arity
 
 using DataStructures
 
