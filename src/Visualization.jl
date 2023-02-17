@@ -45,10 +45,8 @@ end
 show_type(t::TermCon) = show_inctx(t.ctx, t.typ)
 
 function sequent(basetheory::Theory, t::Constructor)
-  # println("CONVERTING TO SEQUENT: $(name(t))")
   arg_syms = [show_cons(t.ctx,i,j) for (i,j) in args(t)]
-  # println("\targs $(arg_syms)")
-  typ = t isa TermCon ? ": $(show_type(t))" : ""
+  typ = t isa TermCon ? ": $(show_type(t))" : ": TYPE"
   arg = isempty(arg_syms) ? "" : "($(join(arg_syms, ",")))"
   Sequent("$(t.name) introduction", 
     ctx_diff(t.ctx, basetheory), "$(t.name)$arg $typ")
@@ -62,7 +60,6 @@ end
 
 """Gets term constructor by default, term=false to get type constructor"""
 function debruijn_to_cons(t::TheoryExt, lvl::Int,i::Int; term=true)
-  # println("\t\tACCESSING DEBRUIJN (term $term) $(t.name) $lvl@$i")
   if lvl == 0
     return term ? t.termcons[i] : t.typecons[i]
   else
@@ -85,7 +82,7 @@ show_cons(t::Theory, lvl::Int,i::Int; term=true) =
   show_cons(debruijn_to_cons(t,lvl,i; term=term))
 
 """GET ALL ZERO ARITY TERM CONSTRUCTORS IN A THEORY"""
-function extract_ctx(t::Theory)
+function extract_consts(t::Theory)
   typdict = DefaultOrderedDict{String,OrderedSet{String}}(
     ()->OrderedSet{String}())
   for con in filter(x->arity(x)==0,reverse(vcat(reverse.(termcons(t))...))) 
@@ -96,8 +93,8 @@ function extract_ctx(t::Theory)
 end 
 
 """The difference between two contexts"""
-ctx_diff(t1::Theory,t2::Theory) = ctx_diff(extract_ctx.([t1,t2])...)
-ctx_diff(t1::Theory) = ctx_diff(extract_ctx(t1), DefaultOrderedDict(()->nothing))
+ctx_diff(t1::Theory,t2::Theory) = ctx_diff(extract_consts.([t1,t2])...)
+ctx_diff(t1::Theory) = ctx_diff(extract_consts(t1), DefaultOrderedDict(()->nothing))
 ctx_diff(t1::DefaultOrderedDict,t2::DefaultOrderedDict) =
   [collect(setdiff(t1[k],get(t2,k,[]))) => k for k in keys(t1)]
  
