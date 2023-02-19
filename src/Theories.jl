@@ -1,67 +1,32 @@
 module Theories
-export ThSet, ThGraph, ThLawlessCat, ThAscCat
-using ..GATs 
-
-ThSet = TheoryExtType(
-    EmptyTheory(),
-    TypeCon(EmptyTheory(), :Ob, []),
-    name="Set"
-)
-
-HomCtx = TheoryExtTerm(
-  ThSet,
-  [TermCon(ThSet, :a, TypeInContext((0,1),[])), 
-   TermCon(ThSet, :b, TypeInContext((0,1),[]))],
-)
-
-ThGraph = TheoryExtType(
-    ThSet,
-    TypeCon(HomCtx,:Hom,[(0,1),(0,2)]),
-    name="Graph"
-)
-
-ComposeCtx1 = TheoryExtTerm(
-    ThGraph,
-    [TermCon(ThGraph, :a, TypeInContext((1,1))),  # Ob
-     TermCon(ThGraph, :b, TypeInContext((1,1))),  # Ob
-     TermCon(ThGraph, :c, TypeInContext((1,1))),],# Ob
-)
-ComposeCtx2 = TheoryExtTerm(
-  ComposeCtx1,
-  [TermCon(ComposeCtx1,:f,TypeInContext((1,1), TermInContext.([(0,1),(0,2)]))), # Hom(A,B)
-   TermCon(ComposeCtx1,:g,TypeInContext((1,1), TermInContext.([(0,2),(0,3)])))],# Hom(B,C)
-)
-
-ThLawlessCat = TheoryExtTerm(
-  ThGraph,
-  TermCon(ComposeCtx2,
-    Symbol("•"),
-    TypeInContext((2,1), TermInContext.([(1,1),(1,3)])), # Hom(A,C)
-    [((0,1)),((0,2))]), # (f,g)
-    name="LawlessCat"
-)
+export ThSet, ThGraph, ThLawlessCat, ThAscCat, ThCategory
+using ..GATs, ..Parse
 
 
-# Associativity 
-#---------------
-AscCtx1 = TheoryExtTerm(
-    ThLawlessCat,
-    [TermCon(ThLawlessCat, x, TypeInContext((2,1))) for x in [:a,:b,:c,:d]], # Ob
-)
-AscCtx2 = TheoryExtTerm(
-  AscCtx1,
-  [TermCon(AscCtx1, Symbol(f), TypeInContext((2, 1), 
-           TermInContext.([(0,i),(0,i+1)]))) 
-   for (i,f) in enumerate("fgh")]
-)
+@theory ThSet <: ThEmpty begin
+  Ob::TYPE ⊣ []
+end
 
-f,_,h = [TermInContext((0,i)) for i in 1:3]
-fg,gh = [TermInContext((2,1),TermInContext.([(0,i),(0,i+1)])) for i in 1:2]
-f_gh = TermInContext((2,1), [fg,h])
-fg_h = TermInContext((2,1), [f,gh])
-hom_ad = TypeInContext((3,1),TermInContext.([(1,1),(1,4)]))
-ThAscCat = TheoryExtAxiom(ThLawlessCat,
-  Axiom(AscCtx2, :associativity, hom_ad, fg_h, f_gh);
-  name="AscCat")
+@theory ThGraph <: ThSet begin
+  Hom(a,b)::TYPE ⊣ [(a::Ob, b::Ob)]
+end
+
+@theory ThLawlessCat <: ThGraph begin
+  (f ⋅ g)::Hom(a,c) ⊣ [(a::Ob, b::Ob, c::Ob), (f::Hom(a,b), g::Hom(b,c))]
+end
+
+@theory ThAscCat <: ThLawlessCat begin
+  ((f ⋅ g) ⋅ h == (f ⋅ (g ⋅ h)) :: Hom(a,d)) ⊣ [(a::Ob, b::Ob, c::Ob, d::Ob), (f::Hom(a,b), g::Hom(b,c), h::Hom(c,d))]
+end
+
+@theory ThIdLawlessCat <: ThAscCat begin
+  id(a)::Hom(a,a) ⊣ [(a::Ob,)]
+end
+
+@theory ThCategory <: ThIdLawlessCat begin
+  (id(a) ⋅ f == f :: Hom(a,b)) ⊣ [(a::Ob, b::Ob), (f::Hom(a,b),)]
+  (f ⋅ id(b) == f :: Hom(a,b)) ⊣ [(a::Ob, b::Ob), (f::Hom(a,b),)]
+end
+
 
 end

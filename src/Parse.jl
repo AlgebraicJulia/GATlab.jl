@@ -2,6 +2,7 @@ module Parse
 export parse_symexpr, parse_declaration, add_decls, @theory
 
 using ..GATs
+using ..GATs: EmptyTheory
 
 using MLStyle
 using StructEquality
