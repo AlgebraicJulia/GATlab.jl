@@ -2,7 +2,7 @@ module Parse
 export parse_symexpr, parse_declaration, add_decls, @theory
 
 using ..GATs
-using ..GATs: EmptyTheory
+using ..GATs: EmptyTheory, rename
 
 using MLStyle
 using StructEquality
@@ -213,8 +213,9 @@ function add_decls(theory::Theory, decls::Vector{Declaration}; name=Symbol(""))
   )
 end
 
-function theory_impl(parent::Theory, lines::Vector)
-  foldl((theory, line) -> add_decls(theory, [parse_declaration(line)]), lines; init=parent)
+function theory_impl(parent::Theory, lines::Vector; name::String="")
+  T = foldl((theory, line) -> add_decls(theory, [parse_declaration(line)]), lines; init=parent)
+  rename(T, Symbol(replace(name,r"^Th"=>""))) # trim off leading "Th"
 end
 
 macro theory(head, body)
@@ -226,9 +227,10 @@ macro theory(head, body)
     Expr(:block, lines...) => filter(line -> typeof(line) != LineNumberNode, lines)
     _ => error("expected body of @theory macro to be a block")
   end
+  N = string(name)
   esc(
     quote
-      $name = $(GlobalRef(Parse, :theory_impl))($parent, $lines)
+      $name = $(GlobalRef(Parse, :theory_impl))($parent, $lines; name=$N)
     end
   )
 end

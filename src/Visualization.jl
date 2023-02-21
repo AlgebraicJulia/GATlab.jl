@@ -40,17 +40,18 @@ end
 """Intermediate representation of a judgment for pretty printing"""
 struct Sequent 
   name::String
-  ctx::Vector{Pair{Vector{String}, String}} 
+  ctx::String
   judgment::String
 end 
 
-Base.show(j::Judgment) = show(io,m,sequent(j)) 
+Base.show(io::IO,m::MIME"text/plain",j::Judgment) = show(io,m,sequent(j)) 
+
+Base.show(io::IO,m::MIME"text/plain",c::Context) = show(io,m,ctx_string(c)) 
+
+
 
 function Base.show(io::IO,::MIME"text/plain",s::Sequent)
-  numerator = join(map(s.ctx) do (xs,t)
-    if length(xs) == 0 return "" end 
-    (length(xs)==1 ? only(xs) : "($(join(xs, ",")))") * ":$t" 
-  end, " | ")
+  numerator = s.ctx
   n = maximum(length.([numerator, s.judgment])) + 2
   off_n,off_d = [repeat(" ",(n-length(x))÷2) for x in [numerator, s.judgment]]
   title = repeat("-", n) * "  " * s.name
@@ -65,7 +66,7 @@ function sequent(t::Constructor)
   typ = t isa TermCon ? ": $(show_type(t))" : ": TYPE"
   arg = isempty(arg_syms) ? "" : "($(join(arg_syms, ",")))"
   Sequent("$(t.name) introduction", 
-    ctx_strings(codom(C), dom(C)), "$(t.name)$arg $typ")
+    ctx_string(C), "$(t.name)$arg $typ")
 end 
 
 function sequent(t::Axiom)
@@ -74,7 +75,7 @@ function sequent(t::Axiom)
   t1,t2 = [show_inctx(T,x) for x in [t.lhs,t.rhs]]
   typ = show_inctx(T, t.type)
   Sequent(string(t.name), 
-    ctx_strings(T, dom(C)), "$t1 = $t2 : $typ")
+    ctx_string(C), "$t1 = $t2 : $typ")
 end
 
 function show_cons(c::Constructor)
@@ -91,11 +92,19 @@ end
 show_cons(t::Theory, lvl::Int,i::Int; term=true) = 
   show_cons(debruijn_to_cons(t,lvl,i; term=term))
 
+
+ctx_string(c::Context) = join(map(ctx_dict(c)) do (xs,t)
+    if length(xs) == 0 return "" end 
+    (length(xs)==1 ? only(xs) : "($(join(xs, ",")))") * ":$t" 
+  end, " | ")
+
+
+
 """
 Get the strings required to print the a context t1 that extends t2.
 E.g. [["a","b","c"]=>"Ob", ["f","g"]=>["Hom(a,b)"], ...]
 """
-function ctx_strings(t1::Theory,t2::Theory=nothing)
+function ctx_dict(t1::Theory,t2::Theory=nothing)
   ctx_terms = is_context(t1, t2)
   typdict = DefaultOrderedDict{String,OrderedSet{String}}(()->OrderedSet{String}())
   for con_idx in ctx_terms
@@ -105,5 +114,6 @@ function ctx_strings(t1::Theory,t2::Theory=nothing)
   end 
   return [collect(v) => k for (k,v) in collect(typdict)]
 end 
+ctx_dict(c::Context) = ctx_dict(codom(c),dom(c))
 
 end # module 

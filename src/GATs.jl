@@ -184,6 +184,9 @@ struct TheoryExt <: Theory
   end
 end
 
+rename(t::TheoryExt,n::Symbol) = 
+  TheoryExt(n,t.parent,t.typecons,t.termcons,t.axioms)
+
 """Chain of ancestors, ending in ThEmpty"""
 ancestors(t::TheoryExt) = [t, ancestors(parent(t))...]
 
@@ -370,10 +373,10 @@ name(f::EmptyTheoryHom) = name(codom(f))
 name(f::TheoryHomExt) = f.name
 dom(::EmptyTheoryHom) = ThEmpty 
 dom(f::TheoryHomExt) = f.dom
-codom(::TheoryHom) = f.codom 
+codom(f::TheoryHom) = f.codom 
 typemap(::EmptyTheoryHom) = DeBruijn[]
 typemap(f::TheoryHomExt) = f.typemap
-termmap(::EmptyTheoryHom) = Pair{Theory,TermInContext}[]
+termmap(::EmptyTheoryHom) = Pair{Context,TermInContext}[]
 termmap(f::TheoryHomExt) = f.termmap
 axmap(::EmptyTheoryHom) = Proof[]
 axmap(f::TheoryHomExt) = f.axmap
@@ -382,7 +385,7 @@ axmap(f::TheoryHomExt) = f.axmap
 function typemap(f::TheoryHomExt, d::DeBruijn)
   d1,d2 = d 
   if d1 == 0
-    return typemap(typecons)[d2]
+    return typemap(f)[d2]
   else 
     return typemap(parent(f), (d1-1, d2))
   end
@@ -428,6 +431,7 @@ x:F(C) | (a₁,a₂):F(A)(x, F(S(0) + 0)) ...
 
 """
 function (f::TheoryHomExt)(t::Context)
+  error("NOT IMPLEMENTED YET")
   dom(t) == dom(f) || error("Can not lift context: domains do not agree")
   n_f = name(f)
   new_ctx = Context(0,codom(f)) # initialize result
@@ -436,7 +440,9 @@ function (f::TheoryHomExt)(t::Context)
     new_terms = map(termcons(ext)) do tc # term constructor in X 
       isempty(args(tc)) || error("Context only adds nullary term constructors")
       f_c = f(ctx(tc))
-      ty = TypeInContext(typemap(f,tc.typ.head - i),map(tc.type.args) do t_arg 
+      type_depth, type_ind = tc.typ.head
+      ty_head = typemap(f,(type_depth - i, type_ind))
+      ty = TypeInContext(ty_head,map(tc.type.args) do t_arg 
         f(t_arg)
       end)
       TermCon(f_c, "$n_f($(name(tc)))", ty)
