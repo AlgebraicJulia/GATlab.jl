@@ -1,8 +1,9 @@
 module Visualization
 
 using ..GATs 
-using ..GATs: EmptyTheory, Constructor, InContext, name, arity, 
-              debruijn_to_cons, is_context, meet
+using ..GATs: EmptyTheory, Constructor, Judgment, InContext, name, arity, 
+              debruijn_to_cons, is_context, meet, 
+              all_typecons, all_termcons, all_axioms
 
 using DataStructures
 
@@ -11,27 +12,27 @@ function Base.show(io::IO, m::MIME"text/plain", t::Theory)
   n_name = repeat('#',length(string(n)) + 4)
 
   println(io,"$n_name\n# $n #\n$n_name\nType Constructors\n=================")
-  for (xt,xs) in reverse(typecons(t))
+  for (_,xs) in reverse(all_typecons(t))
     for x in xs 
-      show(io,m,sequent(xt,x)) 
+      show(io,m,sequent(x)) 
     end
   end
   println(io,"\nTerm Constructors\n=================")
-  for (xt,xs) in reverse(termcons(t))
+  for (_,xs) in reverse(all_termcons(t))
     for x in filter(x-> arity(x) > 0, xs)
-      show(io,m,sequent(xt,x)) 
+      show(io,m,sequent(x)) 
     end
   end
   println(io,"\nAxioms\n======")
-  for (xt, xs) in reverse(axioms(t)) 
+  for (_, xs) in reverse(all_axioms(t)) 
     for x in xs 
-      show(io,m,sequent(xt,x)) 
+      show(io,m,sequent(x)) 
     end
   end
   println(io,"\nConstants\n=========")
-  for (xt,xs) in reverse(termcons(t))
+  for (_,xs) in reverse(all_termcons(t))
     for x in filter(x-> arity(x) == 0, xs)
-      show(io,m,sequent(xt,x)) 
+      show(io,m,sequent(x)) 
     end
   end
 end 
@@ -42,6 +43,8 @@ struct Sequent
   ctx::Vector{Pair{Vector{String}, String}} 
   judgment::String
 end 
+
+Base.show(j::Judgment) = show(io,m,sequent(j)) 
 
 function Base.show(io::IO,::MIME"text/plain",s::Sequent)
   numerator = join(map(s.ctx) do (xs,t)
@@ -54,21 +57,24 @@ function Base.show(io::IO,::MIME"text/plain",s::Sequent)
   println(io,join([off_n * numerator, title, off_d * s.judgment,""], "\n"))
 end
 
-show_type(t::TermCon) = show_inctx(t.ctx, t.typ)
+show_type(t::TermCon) = show_inctx(codom(t.ctx), t.typ)
 
-function sequent(basetheory::Theory, t::Constructor)
-  arg_syms = [show_cons(t.ctx,i,j) for (i,j) in args(t)]
+function sequent(t::Constructor)
+  C = ctx(t)
+  arg_syms = [show_cons(codom(C),i,j) for (i,j) in args(t)]
   typ = t isa TermCon ? ": $(show_type(t))" : ": TYPE"
   arg = isempty(arg_syms) ? "" : "($(join(arg_syms, ",")))"
   Sequent("$(t.name) introduction", 
-    ctx_strings(t.ctx, meet(t.ctx,basetheory)), "$(t.name)$arg $typ")
+    ctx_strings(codom(C), dom(C)), "$(t.name)$arg $typ")
 end 
 
-function sequent(basetheory::Theory, t::Axiom)
-  t1,t2 = [show_inctx(t.ctx,x) for x in [t.lhs,t.rhs]]
-  typ = show_inctx(t.ctx, t.type)
+function sequent(t::Axiom)
+  C = ctx(t)
+  T = codom(C)
+  t1,t2 = [show_inctx(T,x) for x in [t.lhs,t.rhs]]
+  typ = show_inctx(T, t.type)
   Sequent(string(t.name), 
-    ctx_strings(t.ctx, meet(t.ctx,basetheory)), "$t1 = $t2 : $typ")
+    ctx_strings(T, dom(C)), "$t1 = $t2 : $typ")
 end
 
 function show_cons(c::Constructor)

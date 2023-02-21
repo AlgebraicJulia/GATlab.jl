@@ -12,10 +12,10 @@ ThSet′ = TheoryExtType(ThEmpty, TypeCon(ThEmpty, :Ob), name="Set")
 
 @test ThSet == ThSet′
 
-HomCtx = TheoryExtTerm(
+HomCtx = Context(
   ThSet′,
-  [TermCon(ThSet, :a, TypeInContext((0,1),[])), 
-   TermCon(ThSet, :b, TypeInContext((0,1),[]))],
+  [TermCon(ThSet′, :a, TypeInContext((0,1))), 
+   TermCon(ThSet′, :b, TypeInContext((0,1)))],
 )
 
 ThGraph′ = TheoryExtType(
@@ -26,13 +26,13 @@ ThGraph′ = TheoryExtType(
 
 @test ThGraph == ThGraph′
 
-ComposeCtx1 = TheoryExtTerm(
+ComposeCtx1 = Context(
     ThGraph′,
-    [TermCon(ThGraph, :a, TypeInContext((1,1))),  # Ob
-     TermCon(ThGraph, :b, TypeInContext((1,1))),  # Ob
-     TermCon(ThGraph, :c, TypeInContext((1,1))),],# Ob
+    [TermCon(ThGraph′, :a, TypeInContext((1,1))),  # Ob
+     TermCon(ThGraph′, :b, TypeInContext((1,1))),  # Ob
+     TermCon(ThGraph′, :c, TypeInContext((1,1))),],# Ob
 )
-ComposeCtx2 = TheoryExtTerm(
+ComposeCtx2 = Context(
   ComposeCtx1,
   [TermCon(ComposeCtx1,:f,TypeInContext((1,1), TermInContext.([(0,1),(0,2)]))), # Hom(A,B)
    TermCon(ComposeCtx1,:g,TypeInContext((1,1), TermInContext.([(0,2),(0,3)])))],# Hom(B,C)
@@ -49,11 +49,11 @@ ThLawlessCat′ = TheoryExtTerm(
 
 @test ThLawlessCat′ == ThLawlessCat
 
-AscCtx1 = TheoryExtTerm(
+AscCtx1 = Context(
     ThLawlessCat′,
-    [TermCon(ThLawlessCat, Symbol(x), TypeInContext((2,1))) for x in "αβγδ"], # Ob
+    [TermCon(ThLawlessCat′, Symbol(x), TypeInContext((2,1))) for x in "αβγδ"], # Ob
 )
-AscCtx2 = TheoryExtTerm(
+AscCtx2 = Context(
   AscCtx1,
   [TermCon(AscCtx1, Symbol(f), TypeInContext((2, 1), 
            TermInContext.([(0,i),(0,i+1)]))) 

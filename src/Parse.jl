@@ -111,21 +111,17 @@ function parse_binding(binding::Expr)
   end
 end
 
-function make_context(theory::Theory, extension::Vector{Pair{Symbol, SymExpr}})
-  TheoryExt(
-    Symbol(""),
-    theory,
-    TypeInContext[],
-    nullary_termcon.(Ref(theory), extension),
-    Axiom[]
-  )
+function make_context(theory::Context, extension::Vector{Pair{Symbol, SymExpr}})
+  Context(theory.depth+1, TheoryExtTerm(
+    codom(theory), nullary_termcon.(Ref(theory), extension),
+  ))
 end
 
-function nullary_termcon(theory::Theory, extension::Pair{Symbol, SymExpr})
+function nullary_termcon(theory::Context, extension::Pair{Symbol, SymExpr})
   TermCon(
     theory,
     extension[1],
-    parse_type(theory, extension[2]),
+    parse_type(codom(theory), extension[2]),
     TermInContext[]
   )
 end
@@ -173,7 +169,7 @@ function add_decls(theory::Theory, decls::Vector{Declaration}; name=Symbol(""))
   new_termcons = TermCon[]
   new_axioms = Axiom[]
   for decl in decls
-    context = foldl(make_context, decl.context; init=theory)
+    context = foldl(make_context, decl.context; init=Context(0,theory))
     @match decl.body begin
       NewType(head, args) =>
         push!(
@@ -181,7 +177,7 @@ function add_decls(theory::Theory, decls::Vector{Declaration}; name=Symbol(""))
           TypeCon(
             context,
             head,
-            lookup_termcon.(Ref(context), args)
+            lookup_termcon.(Ref(codom(context)), args)
           )
         )
       NewTerm(head, args, type) =>
@@ -190,8 +186,8 @@ function add_decls(theory::Theory, decls::Vector{Declaration}; name=Symbol(""))
           TermCon(
             context,
             head,
-            parse_type(context, type),
-            lookup_termcon.(Ref(context), args)
+            parse_type(codom(context), type),
+            lookup_termcon.(Ref(codom(context)), args)
           )
         )
       NewAxiom(lhs, rhs, type) =>
@@ -200,9 +196,9 @@ function add_decls(theory::Theory, decls::Vector{Declaration}; name=Symbol(""))
           Axiom(
             context,
             Symbol(""),
-            parse_type(context, type),
-            parse_term(context, lhs),
-            parse_term(context, rhs)
+            parse_type(codom(context), type),
+            parse_term(codom(context), lhs),
+            parse_term(codom(context), rhs)
           )
         )
     end
