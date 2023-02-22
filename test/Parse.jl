@@ -30,7 +30,7 @@ ComposeCtx1 = Context(
     ThGraph′,
     [TermCon(ThGraph′, :a, TypeInContext((1,1))),  # Ob
      TermCon(ThGraph′, :b, TypeInContext((1,1))),  # Ob
-     TermCon(ThGraph′, :c, TypeInContext((1,1))),],# Ob
+     TermCon(ThGraph′, :c, TypeInContext((1,1)))], # Ob
 )
 ComposeCtx2 = Context(
   ComposeCtx1,

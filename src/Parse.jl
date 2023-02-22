@@ -113,8 +113,8 @@ end
 
 function make_context(theory::Context, extension::Vector{Pair{Symbol, SymExpr}})
   Context(theory.depth+1, TheoryExtTerm(
-    codom(theory), nullary_termcon.(Ref(theory), extension),
-  ))
+    codom(theory), nullary_termcon.(Ref(theory), extension); depth=theory.depth,
+    name="ctx $(join(first.(extension),","))"))
 end
 
 function nullary_termcon(theory::Context, extension::Pair{Symbol, SymExpr})

@@ -1,6 +1,7 @@
 module Theories
-export ThSet, ThGraph, ThLawlessCat, ThAscCat, ThCategory,ThMagma,ThSemiGroup,
-  ThMonoid,ThGroup,ThNat,ThNatPlus,ThNatPlusTimes
+export ThSet, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThPreorder,
+        ThMagma,ThSemiGroup,ThMonoid,ThGroup,
+        ThNat,ThNatPlus,ThNatPlusTimes
 
 using ..GATs, ..Parse
 
@@ -29,6 +30,45 @@ end
   (id(a) ⋅ f == f :: Hom(a,b)) ⊣ [(a::Ob, b::Ob), (f::Hom(a,b),)]
   (f ⋅ id(b) == f :: Hom(a,b)) ⊣ [(a::Ob, b::Ob), (f::Hom(a,b),)]
 end
+
+# BUG this sends the parser into an infinite loop? 
+# @theory ThThinCategory <: ThCategory begin
+#   (f == g :: Hom(A,B)) ⊣ [(A::Ob, B::Ob), (f::Hom(A,B), g::Hom(A,B))]
+# end
+
+@theory ThPreorder <: ThSet begin
+  Leq(a,b)::TYPE ⊣ [(a::Ob, b::Ob)]
+
+  # Preorder axioms are lifted to term constructors in the GAT.
+  refl(A)::Leq(A,A) ⊣ [(A::Ob,)] # ∀ A there is a term reflexive(A) which impliesLeq A,A
+  trans(f, g)::Leq(A,C) ⊣ [(A::Ob, B::Ob, C::Ob),(f::Leq(A,B),g::Leq(B,C))]
+
+  # Axioms of the GAT are equivalences on terms or simplification rules in the logic
+  (f == g :: Leq(A,B)) ⊣ [(A::Ob, B::Ob), (f::Leq(A,B), g::Leq(A,B))]
+end
+
+"""
+Defining ThMonotoneMap via pushout (+ morphisms MMdom and MMcodom)
+
+@theory ThMonotoneMap
+  MMdom <: ThPreorder{
+    Ob = Ob1
+    Leq = Leq1
+    refl = refl1
+    trans = trans1
+  }
+  MMcodom <: ThPreorder{
+    Ob = Ob2
+    Leq = Leq2
+    refl = refl2
+    trans = trans2
+  }
+
+  f(a) :: Ob2  ⊣ [(a::Ob1,)]
+  mono(lt) :: Leq2(f(x),f(y))) ⊣ [(x::Ob1, y::Ob1), (lt::Leq(x,y),)]
+end
+"""
+
 
 # Abstract algebra
 @theory ThMagma <: ThSet begin
@@ -70,16 +110,23 @@ end
 end
 
 """
-@instance NatPlusIsMonoid{Monoid, NatPlus}
+@instance NatPlusIsMonoid{ThMonoid, ThNatPlus}
   Ob = ℕ
   ∘(x, y) = x + y
   e() = Z() 
 end
 
-@instance Swap{Monoid,Monoid}
+@instance Swap{ThMonoid,ThMonoid}
   Ob = Ob
   ∘(x, y) = y ∘ x
   e() = e() 
+end 
+
+@instance CatIsPreorder{ThCategory,ThPreorder}
+  Ob = Ob 
+  Hom = Leq 
+  ⋅(a,b) = trans(a,b)
+  id(a) = refl(a)
 end 
 """
 
