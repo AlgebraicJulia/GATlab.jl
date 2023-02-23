@@ -133,7 +133,7 @@ end
 function lookup_typecon(theory::TheoryExt, name::Symbol; depth=0)
   index = findfirst(tc -> tc.name == name, theory.typecons)
   if !isnothing(index)
-    (depth, index)
+    DeBruijn(depth, index)
   else
     lookup_typecon(parent(theory), name; depth=depth+1)
   end
@@ -146,7 +146,7 @@ end
 function lookup_termcon(theory::TheoryExt, name::Symbol; depth=0)
   index = findfirst(tc -> tc.name == name, theory.termcons)
   if !isnothing(index)
-    (depth, index)
+    DeBruijn(depth, index)
   else
     lookup_termcon(parent(theory), name; depth=depth+1)
   end

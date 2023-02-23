@@ -20,7 +20,19 @@ Indices are made w/ reference to an implicit theory. The first index
 indicates how many "parent" relationships to traverse. The second value 
 indexes a list (of either term constructors or type constructors).
 """
-const DeBruijn = Tuple{Int,Int}
+@struct_hash_equal struct DeBruijn 
+  depth::Int 
+  idx::Int 
+  DeBruijn(i,j) = i >= 0 ? new(i,j) : error("Bad depth ($i,$j)")
+end
+const D = DeBruijn
+DeBruijn(d::DeBruijn) = d
+DeBruijn(t::Tuple{Int,Int}) = DeBruijn(t...)
+
+Base.:(-)(x::DeBruijn, n::Int) = DeBruijn(x.depth-n, x.idx)
+Base.:(+)(x::DeBruijn, n::Int) = DeBruijn(x.depth+n, x.idx)
+Base.collect(x::DeBruijn) = [x.depth, x.idx]
+Base.show(io,::MIME"text/plain",x::DeBruijn) = println(io,"($(x.depth),$(x.idx))")
 
 """
 head - indexes term constructors in an (implicit) theory
@@ -29,30 +41,35 @@ args - arguments that the term constructor is applied to
 @struct_hash_equal struct TermInContext <: InContext
   head::DeBruijn # debruijn index into the term context
   args::Vector{TermInContext}
-  TermInContext(h,a=TermInContext[]) = new(h,a)
+  TermInContext(h,a=TermInContext[]) = new(DeBruijn(h),a)
 end
 
 @struct_hash_equal struct TypeInContext <: InContext
   head::DeBruijn # debruijn index into the type context
   args::Vector{TermInContext}
-  TypeInContext(h,a=TermInContext[]) = new(h,a)
+  TypeInContext(h,a=TermInContext[]) = new(DeBruijn(h),a)
 end
+
+
 
 headof(x::InContext) = x.head
 args(x::InContext) = x.args
 arity(x::InContext) = length(args(x))
 
 # Offset the depth of the index
-Base.:(-)(x::T, n::Int) where T<:InContext = let (h1,h2) = headof(x);
-                                             T((h1+1,h2),args(x) .- n) end
+Base.map(f, x::T) where T<:InContext = T(f(headof(x)), [map(f,a) for a in args(x)])
+Base.:(-)(x::T, n::Int) where T<:InContext = map(db->db-n, x)
+Base.:(+)(x::T, n::Int) where T<:InContext = map(db->db+n, x)
 
-Base.:(+)(x::T, n::Int) where T<:InContext = let (h1,h2) = headof(x);
-                                             T((h1+1,h2),args(x).+n) end
 # Context 
 #########
 
 """
 A context is an extension of a theory that adds only nullary term constructors.
+
+Call the theory being extended the domain or the base theory.
+Call the final theory in the sequence the codomain or the extension.
+
 The depth parameter indicates what theory to interpret as being extended.
 """
 @struct_hash_equal struct Context 
@@ -70,52 +87,54 @@ Context(c::Context) = c
 dom(c::Context) = parent(c.codom,c.depth) 
 codom(c::Context) = c.codom
 Base.length(c::Context) = c.depth
+"""A sequence of theories starting with the base theory"""
 Base.collect(t::Context) = reverse(ancestors(codom(t))[1:t.depth])
 
-"""Takes a type defined at the current level of the context and creates a 
-new, extended context that adds a constant of that type
-
-Indices are offset by 1 due to being added at a new level
+"""
+Takes a type defined at the current level of the context and creates a 
+new, extended context that adds a constant of that type.
 """
 add_term(c::Context,ty::TypeInContext,name::Symbol) = 
-  Context(c, TermCon(c, name, ty))
+  Context(c, TermCon(c, name, ty); name="add_$name")
 
 # Judgments
 ############
 
 """
-A type constructor for some theory of T
+A type constructor for some theory of T.
 
 ctx  - a context whose base theory is the parent of the theory of this typecon
 name - just documentation (and for rendering)
-args - indexing all the term constructors in ctx
-       this should be sufficient to type infer everything in ctx
+args - indexes the ctx. I.e. "(0,1)" refers to the first term constructor in the 
+       codom of the context. This subset ought be sufficient to type infer every  
+       constant introduced in the context.
 """
 struct TypeCon <: Constructor
   ctx::Context
   name::Symbol
   args::Vector{DeBruijn} 
-  TypeCon(c,n,a=DeBruijn[]) = new(Context(c),n,a)
+  TypeCon(c,n,a=DeBruijn[]) = new(Context(c),n,DeBruijn.(a))
 end
 
 Base.:(==)(x::TypeCon, y::TypeCon) = x.args == y.args && x.ctx == y.ctx 
 Base.hash(x::TypeCon, h::UInt64) = hash(x.ctx, hash(x.args, h))
 
 """
-A term constructor for some theory of T
+A term constructor for some theory T
 
-ctx  - a theory that is a decendent of the parent of T 
+ctx  - a context whose domain is T 
 name - just documentation (and for rendering)
 typ  - output type of applying the term constructor
-args - indexing all the term constructors in ctx
-       this should be sufficient to type infer everything in ctx
+args - indexes the ctx. I.e. "(0,1)" refers to the first term constructor in the 
+       codom of the context. This subset ought be sufficient to type infer every  
+       constant introduced in the context.
 """
 struct TermCon <: Constructor
   ctx::Context
   name::Symbol 
   typ::TypeInContext
   args::Vector{DeBruijn}
-  TermCon(c,n,t,a=DeBruijn[]) = new(Context(c),n,t,a)
+  TermCon(c,n,t,a=DeBruijn[]) = new(Context(c),n,t,DeBruijn.(a))
 end
 
 Base.:(==)(x::TermCon, y::TermCon) =   
@@ -172,7 +191,6 @@ termcons(::EmptyTheory) = []
 axioms(::EmptyTheory) = []
 ancestors(::EmptyTheory) = [ThEmpty]
 
-
 """
 Name     - just documentation
 Parent   - the theory being extended
@@ -182,12 +200,6 @@ axioms   - new axioms e.g. ((f ⋅ g) ⋅ h == (f ⋅ (g ⋅ h)) :: Hom(a,d)) �
 depth    - What depth of context we are extending. If depth=0, we are extending 
            a true theory, thus the contexts of our judgments must be equal to 
            the theory we are extending.
-
-whether or not to enforce that the context of judgments is the parent 
-           theory. We generally want this to be the case, except in the case of 
-           building up a context iteratively, e.g. T ⊂ C1 ⊂ C2, in which case 
-           we want the C2 to be a context of depth 2 even though its parent 
-           theory is C1).
 """
 struct TheoryExt <: Theory
   name::Symbol
@@ -226,13 +238,10 @@ function meet(x::TheoryExt,y::TheoryExt)
   end 
 end
 
-
 TheoryExtType(p,tc::AbstractVector{TypeCon}; name="") =
   TheoryExt(Symbol(name),p,tc,TermCon[],Axiom[])
-
 TheoryExtTerm(p,tc::AbstractVector{TermCon}; name="", depth=0) =
   TheoryExt(Symbol(name),p,TypeCon[],tc,Axiom[];depth=depth)
-
 TheoryExtAxiom(p,ax::AbstractVector{Axiom}; name="") = 
   TheoryExt(Symbol(name),p,TypeCon[],TermCon[],ax)
 
@@ -255,9 +264,11 @@ List all type/term constructors along with the theory when they are introduced
 
 E.g. typecons(Th) == [..., ThGrph=>[Hom],ThSet=>[Ob], ThEmpty=>[]]
 """
-all_typecons(t::Theory) = [t=>typecons(t) for t in ancestors(t)] # vcat([t=>t.typecons], typecons(t.parent))
-all_termcons(t::Theory) = [t=>termcons(t) for t in ancestors(t)]# vcat([t=>t.termcons], termcons(t.parent))
-all_axioms(t::Theory) = [t=>axioms(t) for t in ancestors(t)] # vcat([t=>t.axioms], axioms(t.parent))
+all_typecons(t::Theory) = [typecons(t) for t in ancestors(t)]
+all_termcons(t::Theory) = [termcons(t) for t in ancestors(t)]
+all_axioms(t::Theory) = [axioms(t) for t in ancestors(t)] 
+
+Base.length(t::Theory) = length(ancestors(t))
 
 """Traverse linked list of theory extensions"""
 Base.parent(t::TheoryExt) = t.parent
@@ -271,11 +282,12 @@ end
 """
 Gets term constructor by default, term=false to get type constructor
 """
-function debruijn_to_cons(t::TheoryExt, lvl::Int,i::Int; term=true)
-  if lvl == 0
-    return term ? t.termcons[i] : t.typecons[i]
+function debruijn_to_cons(t::TheoryExt, i::DeBruijn; term=true)
+  # println("getting index $i in $(name(t))")
+  if i.depth == 0
+    return term ? t.termcons[i.idx] : t.typecons[i.idx]
   else
-    return debruijn_to_cons(t.parent, lvl-1, i; term=term)
+    return debruijn_to_cons(t.parent, i-1; term=term)
   end
 end
 
@@ -300,8 +312,7 @@ function is_context(X::TheoryExt, Y::Theory; check=false)
   elseif any(tc -> !isempty(tc.args), X.termcons)
     return check ? error("Non nullary term constructors") : nothing
   end
-  return vcat([(i+1,j) for (i,j) in parent_ctx], 
-              [(0,i) for i in 1:length(X.termcons)])
+  return vcat(parent_ctx .+ 1, [D(0,i) for i in 1:length(X.termcons)])
 end
 
 # Theory Morphisms
@@ -383,7 +394,7 @@ axmap   - Proofs that F(a)=F(b) (in codomain) for each axiom a=b in the domain.
     length(ty) == length(d.typecons) || error("One type assignment per typecon")
     length(trm) == length(d.termcons) || error("One term assignment per termcon")
     length(ax) == length(d.axioms) || error("One proof per axiom")
-    return new(Symbol(n), p,d,c,ty,trm,ax)
+    return new(Symbol(n), p,d,c,DeBruijn.(ty),trm,ax)
   end
 end
 
@@ -402,22 +413,16 @@ axmap(::EmptyTheoryHom) = Proof[]
 axmap(f::TheoryHomExt) = f.axmap
 
 """Send an index (referring to a type constructor) in dom to one in codom"""
-function typemap(f::TheoryHomExt, d::DeBruijn)
-  d1,d2 = d 
-  if d1 == 0
-    return typemap(f)[d2]
-  else 
-    return typemap(parent(f), (d1-1, d2))
-  end
-end 
+typemap(f::TheoryHomExt, d::DeBruijn) =
+  d.depth == 0 ? typemap(f)[d.idx] : typemap(parent(f), d-1)
 
 function termmap(f::TheoryHomExt, d::DeBruijn)
   # println("Calling termmap on hom out of $(name(dom(f))) : $d")
-  d1,d2 = d 
-  if d1 == 0
-    return termmap(f)[d2]
+  if d.depth < 0 error("Calling termmap with $d")
+  elseif d.depth == 0
+    return termmap(f)[d.idx]
   else 
-    return termmap(parent(f), (d1-1, d2))
+    return termmap(parent(f), d-1)
   end
 end 
 
@@ -469,38 +474,36 @@ function (f::TheoryHomExt)(cX::Context, cY::Context, t::TermInContext)
     lx,ly = [length(termcons(parent(codom(c), i-1))) for c in [cX,cY]]
     lx == ly || error("cX and cY must have parallel structure $i $lx $ly")
   end
-  t1, t2 = headof(t)
-  pattern = termmap(f, (t1 - cX.depth,t2)) # a term constructor in Y
+  pattern = termmap(f, headof(t)-cX.depth) # a term constructor in Y
   phead = headof(pattern)
-  # println("PATTERN $(pattern)")
-  TermInContext((phead[1]+cY.depth, phead[2]), map(args(pattern)) do parg
-    (pa_1, pa_2) = headof(parg)
-    if pa_1 <= cX.depth # translating
-      return args(t)[pa_2]
+  TermInContext(phead+cY.depth, map(args(pattern)) do parg
+    hp = headof(parg)
+    if hp.depth <= cX.depth # translating
+      return args(t)[hp.idx]
     else
       return f(cX, cY, parg)
     end
   end)
-  # n_f = name(f)
-  # Create a corresponding extension Yᵢ for each extension Xᵢ in context.
-  # for (i, ext) in enumerate(collect(t))
-  #   new_terms = map(termcons(ext)) do tc # term constructor in X 
-  #     isempty(args(tc)) || error("Context only adds nullary term constructors")
-  #     f_c = f(ctx(tc))
-  #     type_depth, type_ind = tc.typ.head
-  #     type_depth′, i′ = typemap(f,(type_depth - (i - 1), type_ind))
-  #     ty = TypeInContext((type_depth′+t.depth-1, i′), map(tc.typ.args) do t_arg 
-  #       f(t_arg)
-  #     end)
-
-  #     println("NEW TY"); show(stdout,"text/plain",ty)
-  #     new_term = TermCon(f_c, Symbol("$n_f($(name(tc)))"), ty)
-  #     println("NEW TERM $new_term"); show(stdout,"text/plain",new_term)
-  #     return new_term
-  #   end 
-  # end
-  # return new_ctx
 end 
+
+"""
+Map a concrete type, with indices refering to context cX, into a type with 
+indices refering to context cY.
+"""
+function (f::TheoryHomExt)(cX::Context, cY::Context, t::TypeInContext)
+  dom(cX) == dom(f) || error("Theory Morphism domain does not match")
+  dom(cY) == codom(f) || error("Theory Morphism codomain does not match")
+  cX.depth == cY.depth || error("cY must be a translation of cX under f")
+  for i in 1:cX.depth 
+    lx,ly = [length(termcons(parent(codom(c), i-1))) for c in [cX,cY]]
+    lx == ly || error("cX and cY must have parallel structure $i $lx $ly")
+  end
+  println("f @ depth $(cX.depth) of type $t")
+  ft = typemap(f, headof(t)-cX.depth)
+
+  return TypeInContext(ft+cY.depth, [f(cX,cY,a) for a in args(t)])
+end 
+
 
 
 """
@@ -513,7 +516,21 @@ F ↓
   Y ↪ Y₁ ↪ Y₂ ↪ Y₃
 
 """
-
+function (f::TheoryHomExt)(cX::Context)
+  dom(f)==dom(cX) || error("Theory morphism domain does not match")
+  cY = Context(codom(f))
+  for i in (1:cX.depth) .- 1
+    X = Context(i, parent(codom(cX), cX.depth-i))
+    println("i $i $(X.depth) $(cY.depth)")
+    tcs = map(termcons(parent(codom(cX), cX.depth-i-1))) do tc 
+      println("TC $(name(tc))")
+      isempty(args(tc)) || error("Context only adds nullary term constructors $(args(tc))")
+      TermCon(cY, name(tc), f(X,cY,tc.typ))
+    end
+    cY = Context(cY, tcs)
+  end
+  return cY
+end 
 
 
 """ 

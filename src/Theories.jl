@@ -112,7 +112,7 @@ end
 """
 @instance NatPlusIsMonoid{ThMonoid, ThNatPlus}
   Ob = ℕ
-  ∘(x, y) = x + y
+  x ∘ y = x + y
   e() = Z() 
 end
 

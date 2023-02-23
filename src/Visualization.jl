@@ -7,6 +7,7 @@ using ..GATs: EmptyTheory, Constructor, Judgment, InContext, name, arity,
               all_typecons, all_termcons, all_axioms, TheoryHom
 
 using DataStructures
+
 # Contexts 
 ##########
 Base.show(io::IO,m::MIME"text/plain",c::Context) = show(io,m,ctx_string(c)) 
@@ -21,11 +22,12 @@ end, " | ")
 Get the strings required to print the a context t1 that extends t2.
 E.g. [["a","b","c"]=>"Ob", ["f","g"]=>["Hom(a,b)"], ...]
 """
-function ctx_dict(t1::Theory,t2::Theory=nothing)
-  ctx_terms = is_context(t1, t2)
+function ctx_dict(ext_theory::Theory,base_theory::Theory=nothing)
+  ctx_terms = is_context(ext_theory, base_theory)
+  # println("CTX TERMS $(name(ext_theory)) ↩ $(name(base_theory)) : $ctx_terms")
   typdict = DefaultOrderedDict{String,OrderedSet{String}}(()->OrderedSet{String}())
   for con_idx in ctx_terms
-    con = debruijn_to_cons(t1, con_idx...)
+    con = debruijn_to_cons(ext_theory, con_idx)
     k,v = string.([show_type(con), name(con)])
     push!(typdict[k],v)
   end 
@@ -35,6 +37,7 @@ ctx_dict(c::Context) = ctx_dict(codom(c),dom(c))
 
 # Terms 
 #######
+
 """Intermediate representation of a judgment for pretty printing"""
 struct Sequent 
   name::String
@@ -42,8 +45,13 @@ struct Sequent
   judgment::String
 end 
 
+
+"""
+Here we interpret a 
+"""
 function show_inctx(t::TheoryExt, tic::InContext)
-  f = name(debruijn_to_cons(t, headof(tic)...; term=tic isa TermInContext))
+  # println("showing tic $tic in theory $(name(t)) of length $(length(t))")
+  f = name(debruijn_to_cons(t, headof(tic); term=tic isa TermInContext))
   a = isempty(args(tic)) ? "" : "($(join([show_inctx(t,a) for a in tic.args],",")))"
   return "$f$a"
 end
@@ -70,7 +78,7 @@ show_type(t::TermCon) = show_inctx(codom(t.ctx), t.typ)
 
 function sequent(t::Constructor)
   C = ctx(t)
-  arg_syms = [show_cons(codom(C),i,j) for (i,j) in args(t)]
+  arg_syms = [show_cons(codom(C),i) for i in args(t)]
   typ = t isa TermCon ? ": $(show_type(t))" : ": TYPE"
   arg = isempty(arg_syms) ? "" : "($(join(arg_syms, ",")))"
   Sequent("$(t.name) introduction", 
@@ -87,11 +95,11 @@ function sequent(t::Axiom)
 end
 
 function show_cons(c::Constructor)
-  a = isempty(c.args) ? "" : "($(join([show_cons(c.ctx,x...) for x in c.args],",")))"
+  a = isempty(c.args) ? "" : "($(join([show_cons(c.ctx,x) for x in c.args],",")))"
   return "$(name(c))$a"
 end
-show_cons(t::Theory, lvl::Int,i::Int; term=true) = 
-  show_cons(debruijn_to_cons(t,lvl,i; term=term))
+show_cons(t::Theory, i::DeBruijn; term=true) = 
+  show_cons(debruijn_to_cons(t,i; term=term))
 
 
 # Theories
@@ -102,25 +110,25 @@ function Base.show(io::IO, m::MIME"text/plain", t::Theory)
   n_name = repeat('#',length(string(n)) + 4)
 
   println(io,"$n_name\n# $n #\n$n_name\nType Constructors\n=================")
-  for (_,xs) in reverse(all_typecons(t))
+  for xs in reverse(all_typecons(t))
     for x in xs 
       show(io,m,sequent(x)) 
     end
   end
   println(io,"\nTerm Constructors\n=================")
-  for (_,xs) in reverse(all_termcons(t))
+  for xs in reverse(all_termcons(t))
     for x in filter(x-> arity(x) > 0, xs)
       show(io,m,sequent(x)) 
     end
   end
   println(io,"\nAxioms\n======")
-  for (_, xs) in reverse(all_axioms(t)) 
+  for xs in reverse(all_axioms(t)) 
     for x in xs 
       show(io,m,sequent(x)) 
     end
   end
   println(io,"\nConstants\n=========")
-  for (_,xs) in reverse(all_termcons(t))
+  for xs in reverse(all_termcons(t))
     for x in filter(x-> arity(x) == 0, xs)
       show(io,m,sequent(x)) 
     end
@@ -131,13 +139,38 @@ end
 # Theory morphisms 
 ##################
 
-# IN PROGRESS
-function Base.show(io::IO,m::MIME"text/plain",t::TheoryHom)
-  X,Y = dom(t), codom(t)
-  nX,nY = name.([X,Y])
-  tymap = join(tymap,",")
-  trmap = ""
-  println(io,"TheoryHom($nX,$nY)($tymap, $trmap)")
+function Base.show(io::IO,::MIME"text/plain",thom::TheoryHom)
+  X,Y = dom(thom), codom(thom)
+  nX,nY = name.([X, Y])
+  tymap = join(reverse(vcat(map(enumerate(all_typecons(X))) do (d,tcs)  
+    depth = d - 1
+    map(enumerate(tcs)) do (i,tc)
+      println("DEPTH $depth i $i")
+      y = typemap(thom, DeBruijn(depth,i)) 
+      return "$(name(tc)): $(name(debruijn_to_cons(Y,y; term=false)))"
+    end
+  end...)),", ")
+  trmap = join(reverse(vcat(map(enumerate(all_termcons(X))) do (d,tcs) 
+    depth = d - 1
+    map(enumerate(tcs)) do (i,tc)
+      trm = termmap(thom, DeBruijn(depth,i))
+      as = args(trm)
+      if all(a->a.depth==0, headof.(as)) && 1:length(as) == [z.idx for z in headof.(as)]
+          tstr = name(debruijn_to_cons(Y, headof(trm))) # special case: easy!
+      else 
+        tctx = Context(Y, map(enumerate(tc.args)) do (i,a)
+          arg_tcon = debruijn_to_cons(codom(tc.ctx), a)
+          new_type = thom(Context(X),Context(Y),arg_tcon.typ+depth+1)
+          TermCon(Y, Symbol("[$i]"),new_type, [f(X,Y,a+depth+1) for a in args(arg_tcon)])
+        end)
+        trm′ = map(x->x.depth==0 ? x : x+1, trm) # keep zeros, increment all else
+        tstr = show_term(tctx, trm′).judgment
+      end 
+      return "$(name(tc)): $tstr"
+    end
+  end...)), ", ")
+  trstr = isempty(trmap) ? "" : " || $trmap"
+  println(io, "TheoryHom($nX,$nY)($tymap$trstr)")
 end 
 
 

@@ -8,14 +8,15 @@ Test whether the @theory macro produces what we expect (manually constructed)
 """
 
 
-ThSet′ = TheoryExtType(ThEmpty, TypeCon(ThEmpty, :Ob), name="Set")
+ThSet′ = TheoryExtType(ThEmpty, TypeCon(ThEmpty, :Ob), name="Set!")
 
 @test ThSet == ThSet′
+
 
 HomCtx = Context(
   ThSet′,
   [TermCon(ThSet′, :a, TypeInContext((0,1))), 
-   TermCon(ThSet′, :b, TypeInContext((0,1)))],
+   TermCon(ThSet′, :b, TypeInContext((0,1)))],; name="ab Ctx"
 )
 
 ThGraph′ = TheoryExtType(
