@@ -2,7 +2,35 @@ module TestGATs
 
 using Test
 using Gatlab
-using Gatlab.GATs: EmptyTheoryHom,TheoryHomExt
+
+Emp = Judgment[]
+ThSet = Theory("ThSet", [Judgment("Ob",[],TypeCon())])
+ThGrph = extend(ThSet, "ThGraph",
+  [
+      Judgment(
+      "Hom",
+      [
+        Judgment("a", [], TermCon(Typ(1))),
+        Judgment("b", [], TermCon(Typ(2)))
+      ],
+      TypeCon([2,1])
+    )
+  ]
+)
+
+ThLawlessCat = extend(ThGrph, "LawlessCat", [
+  Judgment(
+    "⋅",
+    [Judgment("a",[],TermCon(Typ(2))),
+     Judgment("b",[],TermCon(Typ(3))),
+     Judgment("c",[],TermCon(Typ(4))),
+     Judgment("f",[],TermCon(Typ(4,Trm.([3,2])))),
+     Judgment("g",[],TermCon(Typ(5,Trm.([3,2]))))],
+     TermCon(Typ(5,Trm.([4,2])), [1,0])
+  )
+])
+
+
 
 # Adding depth to terms in context
 #---------------------------------

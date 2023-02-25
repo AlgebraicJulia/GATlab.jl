@@ -34,7 +34,7 @@ ComposeCtx1 = Context(
      TermCon(ThGraph′, :c, TypeInContext((1,1)))], # Ob
 )
 ComposeCtx2 = Context(
-  ComposeCtx1,
+  ThGraph′,
   [TermCon(ComposeCtx1,:f,TypeInContext((1,1), TermInContext.([(0,1),(0,2)]))), # Hom(A,B)
    TermCon(ComposeCtx1,:g,TypeInContext((1,1), TermInContext.([(0,2),(0,3)])))],# Hom(B,C)
 )
