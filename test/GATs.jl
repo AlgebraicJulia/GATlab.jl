@@ -10,10 +10,10 @@ ThGrph = extend(ThSet, "ThGraph",
       Judgment(
       "Hom",
       [
-        Judgment("a", [], TermCon(Typ(1))),
-        Judgment("b", [], TermCon(Typ(2)))
+        Judgment("a", [], TermCon(Typ(0))),
+        Judgment("b", [], TermCon(Typ(1)))
       ],
-      TypeCon([2,1])
+      TypeCon([1,0])
     )
   ]
 )
@@ -21,12 +21,12 @@ ThGrph = extend(ThSet, "ThGraph",
 ThLawlessCat = extend(ThGrph, "LawlessCat", [
   Judgment(
     "⋅",
-    [Judgment("a",[],TermCon(Typ(2))),
-     Judgment("b",[],TermCon(Typ(3))),
-     Judgment("c",[],TermCon(Typ(4))),
-     Judgment("f",[],TermCon(Typ(4,Trm.([3,2])))),
-     Judgment("g",[],TermCon(Typ(5,Trm.([3,2]))))],
-     TermCon(Typ(5,Trm.([4,2])), [1,0])
+    [Judgment("a",[],TermCon(Typ(1))),
+     Judgment("b",[],TermCon(Typ(2))),
+     Judgment("c",[],TermCon(Typ(3))),
+     Judgment("f",[],TermCon(Typ(3,Trm.([2,1])))),
+     Judgment("g",[],TermCon(Typ(4,Trm.([2,1]))))],
+     TermCon(Typ(5,Trm.([4,2])),[1,0])
   )
 ])
 
@@ -131,4 +131,4 @@ f  = TheoryHomExt(f5, ThMonoid, ThNatPlus);
 mctx = Context(ThMonoid,TermCon(ThMonoid,:q,TypeInContext((5,1))))
 # res = f(mctx) # ERROR NOT YET WORKING
 
-end # module 
+end # module
