@@ -1,8 +1,8 @@
 module Parse
-export parse_symexpr, parse_declaration, add_decls, @theory
+export @theory
 
+using ..Lists
 using ..GATs
-using ..GATs: EmptyTheory, rename
 
 using MLStyle
 using StructEquality
@@ -10,7 +10,7 @@ using StructEquality
 @struct_hash_equal struct SymExpr
   head::Symbol
   args::Vector{SymExpr}
-  function SymExpr(head::Symbol, args::Vector{SymExpr}=SymExpr[])
+  function SymExpr(head::Symbol, args::Vector=SymExpr[])
     new(head, args)
   end
 end
@@ -82,7 +82,7 @@ function parse_declbody(e::Expr0)
   end
 end
 
-function parse_declaration(e::Expr)
+function parse_decl(e::Expr)
   @match e begin
     :($body ⊣ [$(bindings...)]) =>
       Declaration(
@@ -100,8 +100,89 @@ function parse_binding(binding::Expr)
   end
 end
 
-function parse_judgement(context::Context, decl::Declaration)
+function lookup_sym(context::Context, sym::Symbol)
+  name = Name(sym)
+  for (i, judgment) in enumerate(reverse(context))
+    if nameof(judgment) == name
+      return i
+    end
+  end
+  throw(KeyError(sym))
+end
 
+function construct_type(context::Context, e::SymExpr)
+  head = lookup_sym(context, e.head)
+  Typ(head, construct_term.(Ref(context), e.args))
+end
+
+function construct_term(context::Context, e::SymExpr)
+  head = lookup_sym(context, e.head)
+  Trm(head, construct_term.(Ref(context), e.args))
+end
+
+function construct_ext(context::Context, symext::Vector{Pair{Symbol, SymExpr}})
+  foldl(
+    (ext, p) -> snoc(
+      ext,
+      Judgment(
+        Name(p[1]),
+        Bwd{Judgment}(),
+        TermCon(construct_type(vcat(context, ext), p[2]))
+      )
+    ),
+    symext;
+    init=Bwd{Judgment}()
+  )
+end
+
+function construct_judgment(context::Context, decl::Declaration)
+  ext = construct_ext(context, decl.context)
+  headctx = vcat(Bwd(context), ext)
+  (name, head) = @match decl.body begin
+    NewTerm(head, args, type) =>
+      (
+        Name(head),
+        TermCon(construct_type(headctx, type), lookup_sym.(Ref(headctx), args))
+      )
+    NewType(head, args) =>
+      (
+        Name(head),
+        TypeCon(lookup_sym.(Ref(headctx), args))
+      )
+    NewAxiom(lhs, rhs, type) =>
+      (
+        Anon(),
+        Axiom(
+          construct_type(headctx, type),
+          construct_term.(Ref(headctx), [lhs, rhs])
+        )
+      )
+  end
+  Judgment(name, ext, head)
+end
+
+function theory_impl(parent::Theory, name::Symbol, lines::Vector)
+  context = foldl(
+    (context, line) -> snoc(context, construct_judgment(context, parse_decl(line))),
+    lines; init=parent.context
+  )
+  Theory(Name(name), context)
+end
+
+macro theory(head, body)
+  (name, parent) = @match head begin
+    :($(name::Symbol) <: $(parent::Symbol)) => (name, parent)
+    _ => error("expected head of @theory macro to be in the form name <: parent")
+  end
+  lines = @match body begin
+    Expr(:block, lines...) => filter(line -> typeof(line) != LineNumberNode, lines)
+    _ => error("expected body of @theory macro to be a block")
+  end
+  esc(
+    quote
+      $name = $(GlobalRef(Parse, :theory_impl))($parent, $(Expr(:quote, name)), $lines)
+    end
+  )
 end
 
 """

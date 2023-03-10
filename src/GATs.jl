@@ -1,7 +1,8 @@
 module GATs
-export Idx, TermCon, TypeCon, Trm, Typ, Axiom, 
-       Theory, Context, Judgment, extend, args
+export Name, Anon, Idx, TermCon, TypeCon, Trm, Typ, Axiom, Theory, Context, Judgment,
+  extend, args, ThEmpty
 
+using ..Lists
 using StructEquality
 
 # Indexing
@@ -20,7 +21,11 @@ struct Literal <: Name
 end
 
 Name(n::String) = Literal(n)
-Name(n::Name) = n 
+Name(n::Name) = n
+Name(n::Symbol) = Literal(string(n))
+
+struct Anon <: Name
+end
 
 const INTMIN = (;init=typemin(Int))
 
@@ -61,6 +66,8 @@ end
 
 Base.:(==)(x::Judgment, y::Judgment) = x.head == y.head && x.ctx == y.ctx 
 Base.hash(x::Judgment, h::UInt64) = hash(x.ctx, hash(x.head, h))
+
+Base.nameof(x::Judgment) = x.name
 
 const Context = AbstractVector{Judgment}
 
@@ -125,7 +132,7 @@ maxind(typecon::TypeCon) = maximum(typecon.args; INTMIN...)
 
 function maxind(axiom::Axiom)
   max(
-    maxind(axiom.typ),
+    maxind(axiom.type),
     maximum(maxind.(axiom.equands); INTMIN...)
   )
 end
@@ -150,6 +157,8 @@ function extend(t::Theory, n, js::AbstractVector{Judgment})
     n,
     vcat(t.context, js)
   )
-end 
+end
+
+const ThEmpty = Theory(Anon(), Bwd{Judgment}())
 
 end # module

@@ -1,7 +1,7 @@
 module Lists
 using StructEquality
 
-export Bwd, Fwd
+export Bwd, snoc, Fwd, cons
 
 """
 An internal data structure for implementing Bwd and Fwd
@@ -53,6 +53,10 @@ AbstractVectors.
   end
 end
 
+function snoc(tail::Bwd{T}, head::T) where {T}
+  Bwd(tail, head)
+end
+
 function Base.size(l::Bwd)
   (_length(l.contents),)
 end
@@ -93,9 +97,16 @@ The head of this list is at index `1`
   function Fwd{T}(cn::Cons{T}) where {T}
     new{T}(cn)
   end
+  function Fwd(cn::Cons{T}) where {T}
+    new{T}(cn)
+  end
   function Fwd{T}(n::Nothing) where {T}
     new{T}(n)
   end
+end
+
+function cons(h::T, t::Fwd{T}) where {T}
+  Fwd(h, t)
 end
 
 function Base.size(l::Fwd)
@@ -148,6 +159,14 @@ end
 
 function Base.iterate(l::Fwd, state=IterInit())
   iterate(l.contents, state)
+end
+
+function Base.reverse(l::Bwd)
+  Fwd(l.contents)
+end
+
+function Base.reverse(l::Fwd)
+  Bwd(l.contents)
 end
 
 function Base.iterate(cn::Cons, state=IterInit())

@@ -11,24 +11,24 @@ using ..GATs, ..Parse
 end
 
 @theory ThGraph <: ThSet begin
-  Hom(a,b)::TYPE ⊣ [(a::Ob, b::Ob)]
+  Hom(a,b)::TYPE ⊣ [a::Ob, b::Ob]
 end
 
 @theory ThLawlessCat <: ThGraph begin
-  (f ⋅ g)::Hom(a,c) ⊣ [(a::Ob, b::Ob, c::Ob), (f::Hom(a,b), g::Hom(b,c))]
+  (f ⋅ g)::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a,b), g::Hom(b,c)]
 end
 
 @theory ThAscCat <: ThLawlessCat begin
-  ((f ⋅ g) ⋅ h == (f ⋅ (g ⋅ h)) :: Hom(a,d)) ⊣ [(a::Ob, b::Ob, c::Ob, d::Ob), (f::Hom(a,b), g::Hom(b,c), h::Hom(c,d))]
+  ((f ⋅ g) ⋅ h == (f ⋅ (g ⋅ h)) :: Hom(a,d)) ⊣ [a::Ob, b::Ob, c::Ob, d::Ob, f::Hom(a,b), g::Hom(b,c), h::Hom(c,d)]
 end
 
 @theory ThIdLawlessCat <: ThAscCat begin
-  id(a)::Hom(a,a) ⊣ [(a::Ob,)]
+  id(a)::Hom(a,a) ⊣ [a::Ob,]
 end
 
 @theory ThCategory <: ThIdLawlessCat begin
-  (id(a) ⋅ f == f :: Hom(a,b)) ⊣ [(a::Ob, b::Ob), (f::Hom(a,b),)]
-  (f ⋅ id(b) == f :: Hom(a,b)) ⊣ [(a::Ob, b::Ob), (f::Hom(a,b),)]
+  (id(a) ⋅ f == f :: Hom(a,b)) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
+  (f ⋅ id(b) == f :: Hom(a,b)) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
 end
 
 # BUG this sends the parser into an infinite loop? 
@@ -37,14 +37,14 @@ end
 # end
 
 @theory ThPreorder <: ThSet begin
-  Leq(a,b)::TYPE ⊣ [(a::Ob, b::Ob)]
+  Leq(a,b)::TYPE ⊣ [a::Ob, b::Ob]
 
   # Preorder axioms are lifted to term constructors in the GAT.
-  refl(A)::Leq(A,A) ⊣ [(A::Ob,)] # ∀ A there is a term reflexive(A) which impliesLeq A,A
-  trans(f, g)::Leq(A,C) ⊣ [(A::Ob, B::Ob, C::Ob),(f::Leq(A,B),g::Leq(B,C))]
+  refl(A)::Leq(A,A) ⊣ [A::Ob,] # ∀ A there is a term reflexive(A) which impliesLeq A,A
+  trans(f, g)::Leq(A,C) ⊣ [A::Ob, B::Ob, C::Ob, f::Leq(A,B),g::Leq(B,C)]
 
   # Axioms of the GAT are equivalences on terms or simplification rules in the logic
-  (f == g :: Leq(A,B)) ⊣ [(A::Ob, B::Ob), (f::Leq(A,B), g::Leq(A,B))]
+  (f == g :: Leq(A,B)) ⊣ [A::Ob, B::Ob, f::Leq(A,B), g::Leq(A,B)]
 end
 
 """
@@ -72,23 +72,23 @@ end
 
 # Abstract algebra
 @theory ThMagma <: ThSet begin
-  (x ∘ y)::Ob ⊣ [(x::Ob, y::Ob)]
+  (x ∘ y)::Ob ⊣ [x::Ob, y::Ob]
 end
 
 @theory ThSemiGroup <: ThMagma begin
-  ((x ∘ y) ∘ z == (x ∘ (y ∘ z)) :: Ob) ⊣ [(x::Ob, y::Ob, z::Ob)]
+  ((x ∘ y) ∘ z == (x ∘ (y ∘ z)) :: Ob) ⊣ [x::Ob, y::Ob, z::Ob]
 end
 
 @theory ThMonoid <: ThSemiGroup begin
   e() :: Ob ⊣ []
-  (e() ∘ x == x :: Ob) ⊣ [(x::Ob,)]
-  (x ∘ e() == x :: Ob) ⊣ [(x::Ob,)]
+  (e() ∘ x == x :: Ob) ⊣ [x::Ob]
+  (x ∘ e() == x :: Ob) ⊣ [x::Ob]
 end
 
 @theory ThGroup <: ThMonoid begin
-  i(x) :: Ob ⊣ [(x::Ob,)]
-  (i(x) ∘ x == e :: Ob) ⊣ [(x::Ob,)]
-  (x ∘ i(x) == e :: Ob) ⊣ [(x::Ob,)]
+  i(x) :: Ob ⊣ [x::Ob]
+  (i(x) ∘ x == e :: Ob) ⊣ [x::Ob]
+  (x ∘ i(x) == e :: Ob) ⊣ [x::Ob]
 end
 
 # Natural numbers 
@@ -96,17 +96,17 @@ end
 @theory ThNat <: ThEmpty begin
   ℕ :: TYPE ⊣ []
   Z() :: ℕ ⊣ []
-  S(n) ::  ℕ ⊣ [(n::ℕ,)]
+  S(n) ::  ℕ ⊣ [n::ℕ]
 end
 
 @theory ThNatPlus <: ThNat begin
-  (x + y)::ℕ ⊣ [(x::ℕ, y::ℕ)]
-  (n + S(m) == S(n+m) :: ℕ) ⊣ [(n::ℕ,m::ℕ)]
+  (x + y)::ℕ ⊣ [x::ℕ, y::ℕ]
+  (n + S(m) == S(n+m) :: ℕ) ⊣ [n::ℕ,m::ℕ]
 end
 
 @theory ThNatPlusTimes <: ThNatPlus begin
-  (x * y)::ℕ ⊣ [(x::ℕ, y::ℕ)]
-  (n * S(m) == ((n * m) + n) :: ℕ) ⊣ [(n::ℕ,m::ℕ)]
+  (x * y)::ℕ ⊣ [x::ℕ, y::ℕ]
+  (n * S(m) == ((n * m) + n) :: ℕ) ⊣ [n::ℕ,m::ℕ]
 end
 
 """
