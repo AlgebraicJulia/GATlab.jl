@@ -1,9 +1,9 @@
-module Theories
+module Categories
 export ThSet, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThPreorder,
         ThMagma,ThSemiGroup,ThMonoid,ThGroup,
         ThNat,ThNatPlus,ThNatPlusTimes
 
-using ..GATs, ..Parse
+using ...Frontend
 
 # Category theory
 @theory ThSet <: ThEmpty begin
@@ -31,10 +31,9 @@ end
   (f ⋅ id(b) == f :: Hom(a,b)) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
 end
 
-# BUG this sends the parser into an infinite loop? 
-# @theory ThThinCategory <: ThCategory begin
-#   (f == g :: Hom(A,B)) ⊣ [(A::Ob, B::Ob), (f::Hom(A,B), g::Hom(A,B))]
-# end
+@theory ThThinCategory <: ThCategory begin
+  (f == g :: Hom(A,B)) ⊣ [A::Ob, B::Ob, f::Hom(A,B), g::Hom(A,B)]
+end
 
 @theory ThPreorder <: ThSet begin
   Leq(a,b)::TYPE ⊣ [a::Ob, b::Ob]
@@ -129,7 +128,5 @@ end
   id(a) = refl(a)
 end 
 """
-
-
 
 end

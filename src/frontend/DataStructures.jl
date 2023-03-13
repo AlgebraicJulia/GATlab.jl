@@ -1,8 +1,8 @@
-module GATs
+module DataStructures
 export Name, Anon, Idx, TermCon, TypeCon, Trm, Typ, Axiom, Theory, Context, Judgment,
-  extend, args, ThEmpty
+  extend, args, arity, ThEmpty, TheoryMap, Composite
 
-using ..Lists
+using ...Util.Lists
 using StructEquality
 
 # Indexing
@@ -69,6 +69,8 @@ Base.hash(x::Judgment, h::UInt64) = hash(x.ctx, hash(x.head, h))
 
 Base.nameof(x::Judgment) = x.name
 
+rename(x::Judgment, n::Name) = Judgment(n, x.ctx, x.head)
+
 const Context = AbstractVector{Judgment}
 
 """
@@ -110,6 +112,14 @@ end
 ctx(x::Judgment) = x.ctx
 name(x::Judgment) = x.name
 
+# Theories
+##########
+
+"""
+This returns the maximum index relative to the base of the context.
+
+If this is positive, this means that the context is not closed.
+"""
 function maxind(c::Context)
   maximum(maxind(j) - i + 1 for (i,j) in enumerate(c); INTMIN...)
 end
@@ -151,7 +161,6 @@ end
 Base.collect(t::Theory) = collect(t.context)
 Base.length(t::Theory) = length(t.context)
 
-
 function extend(t::Theory, n, js::AbstractVector{Judgment})
   Theory(
     n,
@@ -160,5 +169,65 @@ function extend(t::Theory, n, js::AbstractVector{Judgment})
 end
 
 const ThEmpty = Theory(Anon(), Bwd{Judgment}())
+
+# TheoryMaps
+############
+
+"""
+See documentation for TheoryMap.
+"""
+const Composite = Union{Trm, Typ, Nothing}
+
+"""
+A TheoryMap is a morphism between theories. Each judgment in the domain theory
+is sent to a "composite" in the codomain.
+
+I.e., each term constructor is sent to a term, each type constructor is sent to
+a type, and each axiom is sent to nothing (the fact that the axioms are
+preserved is a *property* of the mapping, not a structure, so we don't need to
+write it down; we may need to find proofs later.)
+
+The term that a term constructor is sent to a term in the context given by
+"mapping over" the context of the term constructor using the previous judgment
+mappings. This is a context extension of the codomain theory. So the deBruijn
+indices in this term are implicitly relative to that context extension.
+
+The same thing holds for type constructors.
+
+The mapping from judgments to composites is implicit in the matching up of `dom.context`
+with `composites`. I.e. the judgment at `dom.context[i]` is sent to `composites[i]`.
+"""
+struct TheoryMap
+  dom::Theory
+  codom::Theory
+  composites::AbstractVector{Composite}
+end
+
+"""
+Examples:
+
+double = @theorymap ThNat -> ThNat begin
+  ℕ => ℕ
+  Z => Z
+  S(n) => S(S(n))
+end
+
+double = TheoryMap(
+  ThNat,
+  ThNat,
+  Bwd([
+    Typ(3),
+    Trm(2),
+    Trm(2, [Trm(2, Trm(1))])
+  ])
+)
+
+@theorymap ThCategory -> ThPreorder begin
+  Ob => Ob
+  Hom(a,b) => Leq(a,b)
+  (f ⋅ g) => trans(f, g)
+  id(a) => refl(a)
+end
+"""
 
 end # module

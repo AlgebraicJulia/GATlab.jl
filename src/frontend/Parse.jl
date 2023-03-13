@@ -1,8 +1,8 @@
 module Parse
-export @theory
+export @theory, @theorymap
 
-using ..Lists
-using ..GATs
+using ...Util.Lists
+using ..DataStructures
 
 using MLStyle
 using StructEquality
@@ -14,6 +14,8 @@ using StructEquality
     new(head, args)
   end
 end
+
+head(e::SymExpr) = e.head
 
 abstract type DeclBody end
 
@@ -198,5 +200,69 @@ end
   compose(f,g)::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a,b), g::Hom(b,c)]
 end
 """
+
+function parse_mapping(expr)
+  @match expr begin
+    :($lhs => $rhs) => (parse_symexpr(lhs) => parse_symexpr(rhs))
+    _ => error("illformed line in @gatmap")
+  end
+end
+
+function onlydefault(xs; default=nothing)
+  if length(xs) == 1
+    xs[1]
+  else
+    default
+  end
+end
+
+function theorymap_impl(dom::Theory, codom::Theory, lines::Vector)
+  mappings = parse_mapping.(lines)
+  mappings = Bwd(onlydefault(filter(m -> Name(m[1].head) == j.name, mappings)) for j in dom.context)
+  foldl(zip(mappings, dom.context); init=Bwd{Composite}()) do composites, (mapping, judgment)
+    snoc(composites, make_composite(codom.context, judgment, mapping))
+  end
+end
+
+function make_composite(
+  codom::Context,
+  judgment::Judgment,
+  mapping::Union{Pair{SymExpr, SymExpr}, Nothing}
+)
+  if isnothing(mapping)
+    typeof(judgment.head) == Axiom || error("must provide a mapping for $(judgment.name)")
+    return nothing
+  end
+  lhs, rhs = mapping
+  all(length(arg.args) == 0 for arg in lhs.args) || error("left side of mapping must be a flat expression")
+  length(lhs.args) == arity(judgment.head) || error("wrong number of arguments for $(judgment.name)")
+  names = Dict(zip(judgment.head.args, Name.(head.(lhs.args))))
+  renamed_ctx = Bwd{Judgment}(map(zip(reverse(eachindex(judgment.ctx)), judgment.ctx)) do (i,j)
+    newname = get(names, i, Anon())
+    Judgment(newname, j.ctx, j.head)
+  end)
+  ctx = vcat(codom, renamed_ctx)
+  if typeof(judgment.head) == TermCon
+    construct_term(ctx, rhs)
+  else
+    construct_type(ctx, rhs)
+  end
+end
+
+macro theorymap(head, body)
+  dom, codom = @match head begin
+    Expr(:->, dom, Expr(:block, _, codom)) => (dom, codom)
+    _ => error("expected head of @theorymap to be of the form `dom -> codom`")
+  end
+  lines = @match body begin
+    Expr(:block, lines...) => filter(line -> typeof(line) != LineNumberNode, lines)
+    _ => error("expected body of @theorymap to be a block")
+  end
+  esc(
+    quote
+      $(GlobalRef(Parse, :theorymap_impl))($dom, $codom, $lines)
+    end
+  )
+end
 
 end

@@ -45,6 +45,15 @@ AbstractVectors.
   function Bwd(elts::AbstractVector{T}) where {T}
     foldl(Bwd, elts; init = Bwd{T}())
   end
+  function Bwd{T}(elts::AbstractVector{T}) where {T}
+    foldl(Bwd, elts; init = Bwd{T}())
+  end
+  function Bwd(elts::Base.Generator{T}) where {T}
+    Bwd(collect(elts))
+  end
+  function Bwd{T}(elts::Base.Generator{T}) where {T}
+    Bwd(collect(elts))
+  end
   function Bwd{T}(cn::Cons{T}) where {T}
     new{T}(cn)
   end
@@ -128,10 +137,10 @@ function _getindex(cn::Cons, i::Int)
   end
 end
 
-function _reverse(cn::Cons)
+function _reverse(cn::Cons{T}) where {T}
   cn′ = nothing
   while !isnothing(cn)
-    cn′ = Cons(cn.head, cn′)
+    cn′ = Cons{T}(cn.head, cn′)
     cn = cn.tail
   end
   cn′
