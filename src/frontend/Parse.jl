@@ -219,9 +219,10 @@ end
 function theorymap_impl(dom::Theory, codom::Theory, lines::Vector)
   mappings = parse_mapping.(lines)
   mappings = Bwd(onlydefault(filter(m -> Name(m[1].head) == j.name, mappings)) for j in dom.context)
-  foldl(zip(mappings, dom.context); init=Bwd{Composite}()) do composites, (mapping, judgment)
+  composites = foldl(zip(mappings, dom.context); init=Bwd{Composite}()) do composites, (mapping, judgment)
     snoc(composites, make_composite(codom.context, judgment, mapping))
   end
+  TheoryMap(dom, codom, composites)
 end
 
 function make_composite(

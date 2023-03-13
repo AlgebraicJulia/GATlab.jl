@@ -194,8 +194,19 @@ indices in this term are implicitly relative to that context extension.
 
 The same thing holds for type constructors.
 
-The mapping from judgments to composites is implicit in the matching up of `dom.context`
-with `composites`. I.e. the judgment at `dom.context[i]` is sent to `composites[i]`.
+The mapping from judgments to composites is implicit in the matching up of
+`dom.context` with `composites`. I.e. the judgment at `dom.context[i]` is sent
+to `composites[i]`.
+
+The term/type at `composites[i]` has as an implicit context
+`vcat(codom.context, |dom.context[i].ctx|)`
+where `|Γ|` is the interpretation of the context `Γ` in `dom` in `codom` using
+the TheoryMap, however this implicit context is not stored inside this
+datastructure.
+
+As this is a frontend datastructure, there is almost no consistency checking
+here, and it is very possible to make a TheoryMap that makes no sense.
+Additionally, preservation of equations is not at all checked here.
 """
 struct TheoryMap
   dom::Theory
