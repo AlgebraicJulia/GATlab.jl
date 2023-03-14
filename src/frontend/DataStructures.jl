@@ -2,7 +2,7 @@ module DataStructures
 export Name, Anon, Idx, TermCon, TypeCon, Trm, Typ, Axiom, Theory, Context, Judgment,
   extend, args, arity, ThEmpty, TheoryMap, Composite
 
-using ...Util.Lists
+using ...Util
 using StructEquality
 
 # Indexing
@@ -14,18 +14,6 @@ const Idx = Int
 #######
 
 abstract type InContext end # Trm, Typ
-
-abstract type Name end
-struct Literal <: Name 
-  name::String 
-end
-
-Name(n::String) = Literal(n)
-Name(n::Name) = n
-Name(n::Symbol) = Literal(string(n))
-
-struct Anon <: Name
-end
 
 const INTMIN = (;init=typemin(Int))
 

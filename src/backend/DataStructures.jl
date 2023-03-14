@@ -1,78 +1,49 @@
 module DataStructures
+using StructEquality
 
-struct Intrd{T}
-  id::Int
+using ...Util
+
+const Lvl = Int
+const ArgIdx = Int
+
+@struct_hash_equal struct Trm
+  head::Lvl
+  args::Fwd{Lvl}
 end
 
-struct Registry{T}
-  next::Ref{Int}
-  store::Dict{T, Intrd{T}}
-  lookup::Dict{Intrd{T}, T}
-end
-
-function inter!(registry::Registry{T}, x::T) where {T}
-  if x ∈ keys(store)
-    return store[x]
-  end
-  i = Intrd{T}(registry.next[]++)
-  store[x] = i
-  lookup[i] = x
-  i
-end
-
-struct MultiSet{T}
-  arity::Dict{Intrd{T}, Int}
-end
-
-struct Idx{T}
-  val::Intrd{T}
-  idx::Int
+@struct_hash_equal struct Typ
+  head::Lvl
+  args::Fwd{Lvl}
 end
 
 abstract type JudgmentHead
 
-struct Judgment
+@struct_hash_equal struct Judgment
+  name::Name
   head::JudgmentHead
-  ctx::MultiSet{Judgment}
+  ctx::Fwd{Tuple{Name, Typ}}
 end
 
-const JIdx = Idx{Judgment}
-
-const Context = MultiSet{Judgment}
-
-struct Trm
-  head::JIdx
-  args::Vector{Trm}
-end
-
-struct Typ
-  head::JIdx
-  args::Vector{Trm}
-end
-
-struct TermCon <: JudgmentHead
-  args::Vector{JIdx}
+@struct_hash_equal struct TrmCon <: JudgmentHead
+  args::Fwd{ArgLvl}
   typ::Typ
 end
 
-struct TypeCon <: JudgmentHead
-  args::Vector{JIdx}
+@struct_hash_equal struct TypCon <: JudgmentHead
+  args::Fwd{ArgLvl}
 end
 
-struct Axiom <: JudgmentHead
+@struct_hash_equal struct Axiom <: JudgmentHead
   lhs::Trm
   rhs::Trm
   type::Typ
 end
 
-struct JudgmentNaming
-  namelookup::Dict{JIdx, Tuple{Name, JudgmentNaming}}
-end
+const Context = Fwd{Context}
 
-struct Theory
+@struct_hash_equal struct Theory
   name::Name
   context::Context
-  naming::JudgmentNaming
 end
 
 end
