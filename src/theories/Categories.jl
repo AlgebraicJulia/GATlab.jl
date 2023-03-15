@@ -3,7 +3,7 @@ export ThSet, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThPreorder,
         ThMagma,ThSemiGroup,ThMonoid,ThGroup,
         ThNat,ThNatPlus,ThNatPlusTimes
 
-using ...Frontend
+using ...Syntax
 
 # Category theory
 @theory ThSet <: ThEmpty begin

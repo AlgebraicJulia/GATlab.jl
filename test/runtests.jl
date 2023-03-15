@@ -1,14 +1,17 @@
-using Test 
+using Test
 
-
-@testset "Parse" begin
-  include("Parse.jl")
+@testset "util" begin
+  include("util/tests.jl")
 end
 
-@testset "Visualization" begin
-  include("Visualization.jl")
+@testset "syntax" begin
+  include("syntax/tests.jl")
 end
 
-@testset "GATs" begin
-  include("GATs.jl")
+@testset "logic" begin
+  include("logic/tests.jl")
+end
+
+@testset "theories" begin
+  include("theories/tests.jl")
 end

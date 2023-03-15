@@ -1,7 +1,7 @@
 module Lists
 using StructEquality
 
-export Bwd, snoc, Fwd, cons
+export Bwd, snoc, Fwd, cons, prefixes
 
 """
 An internal data structure for implementing Bwd and Fwd
@@ -15,10 +15,10 @@ and we want to look it up in O(1) instead of O(n)
   head::T
   length::Int
   tail::Union{Cons{T}, Nothing}
-  function Cons(head::T, tail::Union{Cons{T}, Nothing}) where {T}
+  function Cons(head::S, tail::Union{Cons{T}, Nothing}) where {T, S<:T}
     new{T}(head, _length(tail) + 1, tail)
   end
-  function Cons{T}(head::T, tail::Union{Cons{T}, Nothing}) where {T}
+  function Cons{T}(head::S, tail::Union{Cons{T}, Nothing}) where {T, S<:T}
     new{T}(head, _length(tail) + 1, tail)
   end
 end
@@ -97,8 +97,11 @@ The head of this list is at index `1`
   function Fwd{T}() where {T}
     new{T}(nothing)
   end
-  function Fwd(head::T, tail::Fwd{T}) where {T}
-    new{T}(Cons(head, tail.contents))
+  function Fwd(head::S, tail::Fwd{T}) where {T, S<:T}
+    new{T}(Cons{T}(head, tail.contents))
+  end
+  function Fwd{T}(elts::AbstractVector{S}) where {T, S<:T}
+    foldr(Fwd{T}, elts; init = Fwd{T}())
   end
   function Fwd(elts::AbstractVector{T}) where {T}
     foldr(Fwd, elts; init = Fwd{T}())
@@ -115,7 +118,7 @@ The head of this list is at index `1`
 end
 
 function cons(h::T, t::Fwd{T}) where {T}
-  Fwd(h, t)
+  Fwd{T}(h, t)
 end
 
 function Base.size(l::Fwd)
@@ -239,6 +242,17 @@ that is growing here.
 """
 function Base.vcat(ls::Bwd{T}...) where {T}
   foldl(append, ls; init=Bwd{T}())
+end
+
+"""
+Returns a Bwd list of prefixes of the list
+"""
+function prefixes(cn::Bwd{T}) where {T}
+  if !isnothing(cn.contents)
+    snoc(prefixes(cn.tail), cn)
+  else
+    Bwd{Bwd{T}}()
+  end
 end
 
 end

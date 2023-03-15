@@ -2,7 +2,8 @@ module Parse
 export @theory, @theorymap
 
 using ...Util.Lists
-using ..DataStructures
+using ..Frontend
+import ..Backend
 
 using MLStyle
 using StructEquality
@@ -129,7 +130,7 @@ function construct_ext(context::Context, symext::Vector{Pair{Symbol, SymExpr}})
       Judgment(
         Name(p[1]),
         Bwd{Judgment}(),
-        TermCon(construct_type(vcat(context, ext), p[2]))
+        TrmCon(construct_type(vcat(context, ext), p[2]))
       )
     ),
     symext;
@@ -144,12 +145,12 @@ function construct_judgment(context::Context, decl::Declaration)
     NewTerm(head, args, type) =>
       (
         Name(head),
-        TermCon(construct_type(headctx, type), lookup_sym.(Ref(headctx), args))
+        TrmCon(construct_type(headctx, type), lookup_sym.(Ref(headctx), args))
       )
     NewType(head, args) =>
       (
         Name(head),
-        TypeCon(lookup_sym.(Ref(headctx), args))
+        TypCon(lookup_sym.(Ref(headctx), args))
       )
     NewAxiom(lhs, rhs, type) =>
       (
@@ -163,12 +164,12 @@ function construct_judgment(context::Context, decl::Declaration)
   Judgment(name, ext, head)
 end
 
-function theory_impl(parent::Theory, name::Symbol, lines::Vector)
+function theory_impl(parent::Backend.Theory, name::Symbol, lines::Vector)
   context = foldl(
     (context, line) -> snoc(context, construct_judgment(context, parse_decl(line))),
-    lines; init=parent.context
+    lines; init=parent.orig.context
   )
-  Theory(Name(name), context)
+  Backend.Theory(Theory(Name(name), context))
 end
 
 macro theory(head, body)
@@ -243,7 +244,7 @@ function make_composite(
     Judgment(newname, j.ctx, j.head)
   end)
   ctx = vcat(codom, renamed_ctx)
-  if typeof(judgment.head) == TermCon
+  if typeof(judgment.head) == TrmCon
     construct_term(ctx, rhs)
   else
     construct_type(ctx, rhs)
@@ -265,5 +266,11 @@ macro theorymap(head, body)
     end
   )
 end
+
+
+macro term(theory, expr)
+  esc($(GlobalRef(Parse, :term_impl))($theory, $(Expr(:quote, expr))))
+end
+
 
 end

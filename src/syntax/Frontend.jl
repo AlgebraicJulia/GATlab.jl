@@ -1,5 +1,5 @@
-module DataStructures
-export Name, Anon, Idx, TermCon, TypeCon, Trm, Typ, Axiom, Theory, Context, Judgment,
+module Frontend
+export Name, Anon, Idx, TrmCon, TypCon, Trm, Typ, Axiom, Theory, Context, Judgment,
   extend, args, arity, ThEmpty, TheoryMap, Composite
 
 using ...Util
@@ -68,9 +68,9 @@ args - indexes the ctx. I.e. "1" refers to the first term constructor in the
        codom of the context. This subset ought be sufficient to type infer every  
        constant introduced in the context.
 """
-@struct_hash_equal struct TypeCon <: Constructor
+@struct_hash_equal struct TypCon <: Constructor
   args::Vector{Idx}
-  TypeCon(a=Idx[]) = new(a)
+  TypCon(a=Idx[]) = new(a)
 end
 
 """
@@ -79,10 +79,10 @@ A term constructor
 typ  - output type of applying the term constructor
 args - indexes the ctx.
 """
-@struct_hash_equal struct TermCon <: Constructor
+@struct_hash_equal struct TrmCon <: Constructor
   typ::Typ
   args::Vector{Idx}
-  TermCon(t,a=Idx[]) = new(t,a)
+  TrmCon(t,a=Idx[]) = new(t,a)
 end
 
 args(x::Constructor) = x.args
@@ -92,7 +92,7 @@ arity(x::Constructor) = length(args(x))
 equands - the things being equated 
 """
 @struct_hash_equal struct Axiom <: JudgmentHead
-  type::Typ
+  typ::Typ
   equands::Vector{Trm}
   Axiom(t,ts) = new(t,ts)
 end
@@ -119,18 +119,18 @@ function maxind(j::Judgment)
   )
 end
 
-function maxind(termcon::TermCon)
+function maxind(trmcon::TrmCon)
   max(
-    maxind(termcon.typ),
-    maximum(termcon.args; INTMIN...)
+    maxind(trmcon.typ),
+    maximum(trmcon.args; INTMIN...)
   )
 end
 
-maxind(typecon::TypeCon) = maximum(typecon.args; INTMIN...)
+maxind(typcon::TypCon) = maximum(typcon.args; INTMIN...)
 
 function maxind(axiom::Axiom)
   max(
-    maxind(axiom.type),
+    maxind(axiom.typ),
     maximum(maxind.(axiom.equands); INTMIN...)
   )
 end
