@@ -1,5 +1,5 @@
 module Backend
-export Lvl, ArgLvl, Typ, Trm, Judgment, Theory, ThEmpty
+export Lvl, ArgLvl, Typ, Trm, Context, Judgment, Theory, ThEmpty
 
 using StructEquality
 
@@ -19,12 +19,14 @@ end
   args::Vector{Trm}
 end
 
+const Context = Vector{Tuple{Name, Typ}}
+
 abstract type JudgmentHead end
 
 @struct_hash_equal struct Judgment
   name::Name
   head::JudgmentHead
-  ctx::Vector{Tuple{Name, Typ}}
+  ctx::Context
 end
 
 @struct_hash_equal struct TrmCon <: JudgmentHead
