@@ -1,5 +1,5 @@
 module Visualization
-export show_term
+export sequent
 
 using ...Util
 using ..Backend 

@@ -33,7 +33,7 @@ struct Judgment
   ctx::Context
 end
 
-Base.:(==)(x::Judgment,y::Judgment) = x.head == y.head && x.ctx && y.ctx
+Base.:(==)(x::Judgment,y::Judgment) = x.head == y.head && x.ctx == y.ctx
 Base.hash(x::Judgment, h) = hash(x.head, hash(x.ctx, h))
 name(j::Judgment) = j.name
 
@@ -111,6 +111,11 @@ const Composite = Union{Typ, Trm, Nothing}
   dom::Theory
   codom::Theory
   composites::Vector{Composite}
+  function TheoryMap(d,c,cs)
+    lc, ld = length.([composites,dom])
+    lc == ld || error("Bad composite length: $lc != $ld")
+    return new(d,c,cs)
+  end
 end
 
 function TheoryMap(ftm::Frontend.TheoryMap)
@@ -126,5 +131,21 @@ function TheoryMap(ftm::Frontend.TheoryMap)
     end
   )
 end
+
+Base.getindex(t::TheoryMap, i::Int) = t.composites[i]
+Base.collect(t::TheoryMap) = collect(t.composites)
+Base.length(t::TheoryMap) = length(t.composites)
+
+
+"""Map a context in the domain theory into a context of the codomain theory"""
+function (f::TheoryMap)(c::Context)
+  cc = Context() # codom context, will be iteratively built up 
+  for (i,(cname, ctyp)) in enumerate(c)
+    new_typ = error("NOT IMPLEMENTED YET") # convert the i'th context term
+    push!(cc, cname=>new_typ)
+  end
+  return cc
+end 
+
 
 end
