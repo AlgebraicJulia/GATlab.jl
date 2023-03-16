@@ -226,10 +226,6 @@ function theorymap_impl(dom::Backend.Theory, codom::Backend.Theory, lines::Vecto
   Backend.TheoryMap(TheoryMap(dom.orig, codom.orig, composites))
 end
 
-theorymap_impl(dom::Backend.Theory, codom::Backend.Theory, lines::Vector) = 
-  Backend.TheoryMap(theorymap_impl(dom.orig, codom.orig, lines))
-
-
 function make_composite(
   codom::Context,
   judgment::Judgment,

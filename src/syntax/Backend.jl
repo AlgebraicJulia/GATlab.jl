@@ -112,7 +112,7 @@ const Composite = Union{Typ, Trm, Nothing}
   codom::Theory
   composites::Vector{Composite}
   function TheoryMap(d,c,cs)
-    lc, ld = length.([composites,dom])
+    lc, ld = length.([cs,d])
     lc == ld || error("Bad composite length: $lc != $ld")
     return new(d,c,cs)
   end
