@@ -19,7 +19,7 @@ end
   c :: U ⊣ []
 end
 
-eg = EGraph()
+eg = EGraph(M)
 
 i1 = add!(eg, @term M (a * b))
 i2 = add!(eg, @term M c)
@@ -29,5 +29,19 @@ i3 = add!(eg, @term M c * c)
 i4 = add!(eg, @term M c * (a * b))
 
 @test i3 == i4
+
+@theory C <: ThCategory begin
+  x :: Ob ⊣ []
+  y :: Ob ⊣ []
+  z :: Ob ⊣ []
+  f :: Hom(x,y) ⊣ []
+  g :: Hom(y,z) ⊣ []
+end
+
+eg = EGraph(C)
+
+i1 = add!(eg, @term C (f ⋅ g))
+
+@test_throws Exception add!(eg, @term C (g ⋅ f))
 
 end

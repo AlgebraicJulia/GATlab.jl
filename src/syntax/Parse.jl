@@ -270,7 +270,7 @@ end
 function term_impl(theory::Backend.Theory, expr::Expr0)
   Backend.levelize(
     construct_term(theory.orig.context, parse_symexpr(expr)),
-    length(theory.judgments)
+    length(theory.judgments) + 1
   )
 end
 

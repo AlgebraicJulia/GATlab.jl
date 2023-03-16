@@ -2,32 +2,17 @@ module EMatching
 
 # EMatching is the hard part of EGraphs
 #
-# We're going to start with a naive algorithm, similar to backtracking search
-# for homomorphism finding.
+# Here we follow a strategy similar to egg, but modified somewhat for our uses.
 #
-# We have a backtracking state, which is an assignment of variables in the match
-# to eclass ids.
+# We take a pattern, which is a Trm in a Context, and we attempt to find an
+# assignment of an enode to each term in the context.
 #
-# Our pattern is a term in a context.
+# For instance, we might look for the term `(a * b) * c` in the context
+# `[a,b,c::U]` or for the term `f ∘ id(a)` in the context
+# `[a,b::Ob,f::Hom(a,b)]`.
 #
-# The variables are the elements of the context. So a partial assignment of variables
-# to eclass ids is just a vector of Union{Nothing, Id}.
-
-struct Pattern
-  ctx::Context
-  trm::Trm
-end
-
-struct MatchState
-  assignment::Vector{Union{Nothing, Id}}
-end
-
-function ematch(eg::EGraph, pat::Pattern)
-  to_match = [(pat.trm, i) for i in keys(eg.eclasses)]
-  state = MatchState([nothing for i in pat.ctx])
-  while !isempty(to_match)
-    trm, i = pop!(to_match)
-  end
-end
+# Note that not all variables in the context are referenced directly in the
+# term; i.e. `b` is never referenced. Thus, ematching must take into account both
+# terms and types.
 
 end

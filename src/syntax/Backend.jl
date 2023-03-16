@@ -1,5 +1,5 @@
 module Backend
-export Lvl, ArgLvl, Typ, Trm, Context, Judgment, Theory, ThEmpty
+export Lvl, ArgLvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory, ThEmpty
 
 using StructEquality
 
