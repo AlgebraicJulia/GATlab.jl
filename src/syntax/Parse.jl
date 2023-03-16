@@ -217,13 +217,13 @@ function onlydefault(xs; default=nothing)
   end
 end
 
-function theorymap_impl(dom::Theory, codom::Theory, lines::Vector)
+function theorymap_impl(dom::Backend.Theory, codom::Backend.Theory, lines::Vector)
   mappings = parse_mapping.(lines)
-  mappings = Bwd(onlydefault(filter(m -> Name(m[1].head) == j.name, mappings)) for j in dom.context)
-  composites = foldl(zip(mappings, dom.context); init=Bwd{Composite}()) do composites, (mapping, judgment)
-    snoc(composites, make_composite(codom.context, judgment, mapping))
+  mappings = Bwd(onlydefault(filter(m -> Name(m[1].head) == j.name, mappings)) for j in dom.orig.context)
+  composites = foldl(zip(mappings, dom.orig.context); init=Bwd{Composite}()) do composites, (mapping, judgment)
+    snoc(composites, make_composite(codom.orig.context, judgment, mapping))
   end
-  TheoryMap(dom, codom, composites)
+  Backend.TheoryMap(TheoryMap(dom.orig, codom.orig, composites))
 end
 
 theorymap_impl(dom::Backend.Theory, codom::Backend.Theory, lines::Vector) = 

@@ -126,7 +126,7 @@ function TheoryMap(ftm::Frontend.TheoryMap)
       if isnothing(cmpst)
         nothing
       else
-        levelize(cmpst, length(ftm.codom.context) + length(j.ctx) - 1)
+        levelize(cmpst, length(ftm.codom.context) + length(j.ctx) + 1)
       end
     end
   )
