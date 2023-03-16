@@ -86,6 +86,7 @@ function context(eg::EGraph, etrm::ETrm)
   while !isempty(toexpand)
     (typ, etyp) = pop!(toexpand)
     for (argtrm, id) in zip(typ.args, etyp.args)
+      id = find_root!(eg.eqrel, id)
       hd = argtrm.head
       # if this is a variable in the context
       if hd > n

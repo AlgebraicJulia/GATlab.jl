@@ -44,4 +44,8 @@ i1 = add!(eg, @term C (f ⋅ g))
 
 @test_throws Exception add!(eg, @term C (g ⋅ f))
 
+merge!(eg, add!(eg, @term C x), add!(eg, @term C z))
+
+i2 = add!(eg, @term C (g ⋅ f))
+
 end
