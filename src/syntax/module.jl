@@ -5,7 +5,7 @@ using Reexport
 include("Frontend.jl")
 include("Backend.jl")
 include("Parse.jl")
-# include("Visualization.jl")
+include("Visualization.jl")
 
 @reexport using .Backend
 @reexport using .Parse

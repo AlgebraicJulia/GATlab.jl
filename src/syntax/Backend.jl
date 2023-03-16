@@ -9,12 +9,14 @@ using ..Frontend
 const Lvl = Int
 const ArgLvl = Int
 
-@struct_hash_equal struct Trm
+abstract type TrmTyp end 
+
+@struct_hash_equal struct Trm <:TrmTyp
   head::Lvl
   args::Vector{Trm}
 end
 
-@struct_hash_equal struct Typ
+@struct_hash_equal struct Typ <: TrmTyp
   head::Lvl
   args::Vector{Trm}
 end
@@ -22,33 +24,53 @@ end
 const Context = Vector{Tuple{Name, Typ}}
 
 abstract type JudgmentHead end
+abstract type Constructor <: JudgmentHead end 
+args(c::Constructor) = c.args
 
-@struct_hash_equal struct Judgment
+struct Judgment
   name::Name
   head::JudgmentHead
   ctx::Context
 end
 
-@struct_hash_equal struct TrmCon <: JudgmentHead
+Base.:(==)(x::Judgment,y::Judgment) = x.head == y.head && x.ctx && y.ctx
+Base.hash(x::Judgment, h) = hash(x.head, hash(x.ctx, h))
+name(j::Judgment) = j.name
+
+# Args index the CONTEXT of the judgment
+@struct_hash_equal struct TrmCon <: Constructor
   args::Vector{ArgLvl}
   typ::Typ
 end
 
-@struct_hash_equal struct TypCon <: JudgmentHead
+# Args index the CONTEXT of the judgment
+@struct_hash_equal struct TypCon <: Constructor
   args::Vector{ArgLvl}
 end
+
 
 @struct_hash_equal struct Axiom <: JudgmentHead
   typ::Typ
   equands::Vector{Trm}
+  function Axiom(t,e)
+    length(unique(e)) > 1 || error("Axiom must be nontrivial")
+    return new(t,e)
+  end
 end
 
-@struct_hash_equal struct Theory
+struct Theory
   orig::Frontend.Theory
   name::Name
   judgments::Vector{Judgment}
 end
 
+Base.:(==)(x::Theory,y::Theory) = x.judgments == y.judgments
+Base.hash(x::Theory, h) = hash(x.judgments, h)
+Base.getindex(t::Theory,i::Int) = t.judgments[i]
+Base.length(t::Theory) = t.judgments |> length
+
+
+"""Converts de bruijn index to de bruijn level"""
 function levelize(typ::Frontend.Typ, n::Int)
   Typ(n - typ.head, levelize.(typ.args, Ref(n)))
 end

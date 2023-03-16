@@ -13,4 +13,7 @@ Name(n::Symbol) = Literal(string(n))
 struct Anon <: Name
 end
 
+Base.string(n::Literal) = n.name
+Base.string(::Anon) = " "
+
 end
