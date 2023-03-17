@@ -8,13 +8,13 @@ using ..Frontend
 
 struct Lvl
   val::UInt64
-  function Lvl(i::Int; context=false)
+  function Lvl(i::Integer; context=false)
     i > 0 || error("Creating non-positive level $i context $context")
     new(UInt64(i) | (UInt64(context) << 63))
   end
 end
 """N is length of theory"""
-function Lvl(i::Int, n::Int) 
+function Lvl(i::Integer, n::Integer) 
   i > n ? Lvl(i-n; context=true) : Lvl(i)
 end
 
@@ -185,81 +185,41 @@ function TheoryMap(ftm::Frontend.TheoryMap)
   )
 end
 
-Base.getindex(t::TheoryMap, i::Int) = t.composites[i]
+Base.getindex(t::TheoryMap, i::Integer) = t.composites[i]
 Base.collect(t::TheoryMap) = collect(t.composites)
 Base.length(t::TheoryMap) = length(t.composites)
-(t::TheoryMap)(i::Int) = t[i]
+(t::TheoryMap)(i::Integer) = t[i]
 
 """Map a context in the domain theory into a context of the codomain theory"""
-function (f::TheoryMap)(c::Context)
-  cc = Context() # codom context, will be iteratively built up 
-  for (i,(cname, ctyp)) in enumerate(c)
-    new_typ, n_args = f(ctyp.head), f.(ctyp.args)
-    println("i $i cname $cname n_args $n_args new_typ $new_typ")
-    push!(cc, (cname,new_typ))
-  end
-  return cc
-end
+(f::TheoryMap)(c::Context) =  Context([(a,f(b)) for (a,b) in c.ctx])
 
 """
-Suppose dom(f) is [X,Y,Z,P,Q] and codom(f) is [X,ϕ,ψ]
-suppose we have a term: P(a,q(b,c)) ⊢ a::X,b::Y,c::Z
-i.e. 4(6,5(7,8))
+Suppose dom(f) is [X,Y,Z,P,Q] and codom(f) is [XX,ϕ,ψ]
+suppose we have a term: P(a,Q(b,c)) ⊢ a::X,b::Y,c::Z i.e. 4({1},5({2},{3}))
 
-f maps {P(x,y) ⊢ x::X,y::Y} 
-to ϕ(ψ(y),x)
+f maps all sorts to XX
+f maps {P(x,y) ⊢ x::X,y::Y} to ϕ(ψ(y),x) i.e. 2(3({2}),{1})
+and {Q(u,w) ⊢ u::Y,w::Z}    to ψ(w)      i.e. 3({2})
 
-and {q(u,w) ⊢ u::Y,w::Z} to 
-β(w)
+We should our term translate first to ϕ(ψ(y),x)  i.e.  2(3({2}),{1})
 
-We should our term translate first to ϕ(ψ(y),x) 
-3(2(5),4)
+and then substitute x (i.e. {1}) for the mapped first argument 
+y (i.e. 5) for f(q(b,c)) i.e. ϕ(ψ(ψ(c)),x) 2(3(3({3})),{1})
 
-and then substitute x (i.e. 4) for the mapped first argument 
-y (i.e. 5) for f(q(b,c)) i.e. ϕ(ψ(β(c)),x)
-
-
-
+So f(4({1},5({2},{3}))) = 2(3(3({3})),{1})
 """
-function (f::TheoryMap)(t::Trm) 
-  println("APPLYING f to $t")
-  i_d, i_cd = length.([f.dom,f.codom])
-  if t.head > i_d 
-    length(t.args) == 0 || error("Context variables have no args")
-    println("VARIABLE! f($t) = Trm($(t.head - i_d + i_cd))")
-    return Trm(t.head - i_d + i_cd)
-  end 
-  new_trm, n_args = f(t.head), f.(t.args) # in the translated context
-  # the new term is in the context of the term constructor for the head in the codom
-  new_trm_j = f.codom[new_trm.head]
-  new_trm_arg_inds = [findfirst(==(), new_trm.args)]
-  println("new term ctx $(new_trm_j.name) ", new_trm_j.ctx)
-  substitute(new_trm, n_args, i_cd)
-  
-  # println("$t ARGS ", length(n_args), "\n\tn_args $n_args")
-  # found = [findfirst(==(a),new_trm.args) for a in n_args]
-  # if !isempty(found) println("found $found") end
-  # function R(t::Trm) 
-  #   println("FIXING $t w/ head $(t.head)")
-  #   if t.head > i_cd 
-      
-  #     return Trm(i_cd + findfirst(==(t),n_args))
-  #   else 
-  #     Trm(t.head, R.(t.args))
-  #   end 
-  # end
-  # res = R(new_trm)
-  # println("f($t) = $res")
-  # return res
-end 
-
-function substitute(t::Trm, ts::Vector{Trm}, off::Int)
-  println("substituting $t (off $off)\n\t with ts $ts")
-  if t.head - off > 0 
-    return ts[t.head - off ]
-  else 
-    return Trm(t.head, [substitute(a, ts, off) for a in t.args])
+function (f::TheoryMap)(t::TrmTyp)  # e.g. P(a,q(b,c)) i.e. 4({1},5({2},{3}))
+  if is_context(t.head) return t end  
+  new_trm = f(index(t.head)) # e.g. ϕ(ψ(y),x) i.e. 2(3({2}),{1})
+  n_args = f.(t.args) # [{1},3({3})] 
+  old_j = f.dom[t.head]
+  subs = Vector{Union{Nothing,Trm}}(fill(nothing, length(old_j.ctx)))
+  for (i,a) in enumerate(old_j.head.args)
+    subs[index(a)] = n_args[i]
   end
+  return substitute(new_trm, subs)
 end 
 
+substitute(t::T, ts::Vector{Union{Nothing,Trm}}) where {T<:TrmTyp} = 
+  is_context(t.head) ? ts[index(t.head)] : T(t.head, substitute.(t.args, Ref(ts)))
 end

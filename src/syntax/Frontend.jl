@@ -109,7 +109,10 @@ This returns the maximum index relative to the base of the context.
 If this is positive, this means that the context is not closed.
 """
 function maxind(c::Context)
-  maximum(maxind(j) - i + 1 for (i,j) in enumerate(c); INTMIN...)
+  maximum(map(enumerate(c)) do (i,j)
+    mj = maxind(j)
+    mj == typemin(Int) ? mj : mj - i + 1 
+  end; INTMIN...)
 end
 
 function maxind(j::Judgment)
@@ -141,7 +144,8 @@ struct Theory
   name::Name
   context::Context
   function Theory(n,context)
-    maxind(context) <= 0 || error("Bad context: theory $n must be closed")
+    m = maxind(context)
+    m <= 0 || error("Bad context: theory $n must be closed ($m)")
     return new(Name(n),context)
   end
 end

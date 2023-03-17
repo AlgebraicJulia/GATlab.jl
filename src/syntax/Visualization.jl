@@ -123,6 +123,11 @@ function Base.show(io::IO,::MIME"text/plain",s::Sequent)
   title = repeat("-", n) * "  " * s.name
   println(io,join([off_n * numerator, title, off_d * s.judgment,""], "\n"))
 end
+function Base.string(s::Sequent)
+  buf = IOBuffer()
+  show(buf, "text/plain", s)
+  String(take!(buf))
+end
 
 # Convert the i'th judgment into a sequent
 function sequent(t::Theory, i::Int)
