@@ -75,8 +75,7 @@ Fortunately, I don't think we care about any theories with this kind of context
 former.
 """
 function context(eg::EGraph, etrm::ETrm)
-  j = eg.theory.judgments[etrm.head]
-  n = etrm.head - 1
+  j = eg.theory[etrm.head]
   trmcon = j.head
   typeof(trmcon) == TrmCon ||
     error("head of $etrm is not a term constructor")
@@ -85,7 +84,7 @@ function context(eg::EGraph, etrm::ETrm)
   ctx = zeros(Id, length(j.ctx))
   toexpand = Tuple{Typ, ETyp}[]
   for (argidx, id) in zip(trmcon.args, etrm.args)
-    ctx[argidx] = id
+    ctx[index(argidx)] = id
     push!(toexpand, (j.ctx[argidx][2], typof(eg, id)))
   end
   while !isempty(toexpand)
@@ -94,14 +93,14 @@ function context(eg::EGraph, etrm::ETrm)
       id = find_root!(eg.eqrel, id)
       hd = argtrm.head
       # if this is a variable in the context
-      if hd > n
-        if ctx[hd - n] != 0
-          ctx[hd - n] == id ||
+      if is_context(hd)
+        if ctx[index(hd)] != 0
+          ctx[index(hd)] == id ||
             error("contradictory inference of context for $etrm; could not unify $(ctx[hd - n]) and $id")
         else
-          ctx[hd - n] = id
+          ctx[index(hd)] = id
         end
-        push!(toexpand, (j.ctx[hd - n][2], typof(eg, id)))
+        push!(toexpand, (j.ctx[hd][2], typof(eg, id)))
       # if this is a general term
       else
         # TODO: implement maxref
@@ -116,15 +115,15 @@ end
 
 function compute_etyp(eg::EGraph, etrm::ETrm)
   ctx = context(eg, etrm)
-  j = eg.theory.judgments[etrm.head]
-  ETyp(j.head.typ.head, Id[subst(eg, arg, ctx, etrm.head - 1) for arg in j.head.typ.args])
+  j = eg.theory[etrm.head]
+  ETyp(j.head.typ.head, Id[subst(eg, arg, ctx) for arg in j.head.typ.args])
 end
 
-function subst(eg::EGraph, trm::Trm, ctx::Vector{Id}, cutoff::Int)
-  if trm.head > cutoff
-    ctx[trm.head - cutoff]
+function subst(eg::EGraph, trm::Trm, ctx::Vector{Id})
+  if is_context(trm.head)
+    ctx[index(trm.head)]
   else
-    args = Id[subst(eg::EGraph, arg, ctx, cutoff) for arg in trm.args]
+    args = Id[subst(eg::EGraph, arg, ctx) for arg in trm.args]
     add!(eg, ETrm(trm.head, args))
   end
 end

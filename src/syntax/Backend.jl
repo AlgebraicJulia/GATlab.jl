@@ -1,5 +1,5 @@
 module Backend
-export Lvl, ArgLvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory, ThEmpty
+export Lvl, ArgLvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory, ThEmpty, index, is_context
 
 using StructEquality
 
@@ -30,9 +30,12 @@ abstract type TrmTyp end
 @struct_hash_equal struct Trm <:TrmTyp
   head::Lvl
   args::Vector{Trm}
-  function Trm(l,a=[])
+  function Trm(l::Lvl,a=Trm[])
     !is_context(l) || isempty(a) || error("Elements of context are *nullary* type constructors")
     return new(l,a)
+  end
+  function Trm(l::Int,a=Trm[])
+    return new(Lvl(l), a)
   end
 end
 
@@ -176,7 +179,7 @@ function TheoryMap(ftm::Frontend.TheoryMap)
       if isnothing(cmpst)
         nothing
       else
-        levelize(cmpst, length(ftm.codom.context) + length(j.ctx) + 1)
+        levelize(cmpst, length(ftm.codom.context), length(j.ctx))
       end
     end
   )
