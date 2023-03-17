@@ -21,9 +21,7 @@ end
 
 eg = EGraph(M)
 
-println(@term M (a * b))
 i1 = add!(eg, @term M (a * b))
-println(@term M c)
 i2 = add!(eg, @term M c)
 merge!(eg, i1, i2)
 rebuild!(eg)
