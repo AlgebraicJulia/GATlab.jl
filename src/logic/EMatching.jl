@@ -1,5 +1,5 @@
 module EMatching
-export Machine, Instruction, Bind, Compare, Lookup, Scan, Reg, run!
+export Pattern, Machine, Instruction, Bind, Compare, Lookup, Scan, Reg, run!, compile
 
 # EMatching is the hard part of EGraphs
 #
@@ -85,6 +85,13 @@ end
   Scan(out::Reg)
 end
 
+struct Program
+  instructions::Vector{Instruction}
+  subst::Vector{Reg}
+end
+
+run!(m::Machine, eg::EGraph, prog::Program) = run!(m, eg, prog.instructions, prog.subst)
+
 function run!(m::Machine, eg::EGraph, instructions::AbstractVector{Instruction}, subst::Vector{Reg})
   for idx in eachindex(instructions)
     @match instructions[idx] begin
@@ -139,7 +146,7 @@ function run!(m::Machine, eg::EGraph, instructions::AbstractVector{Instruction},
 end
 
 struct Compiler
-  v2r::Dict{Lvl, Id}
+  v2r::Dict{Lvl, Reg}
   free_vars::Vector{Set{Lvl}}
   subtree_size::Vector{Int}
   todo_nodes::Dict{Tuple{Int, Reg}, ETrm}
@@ -148,7 +155,7 @@ struct Compiler
   theory::Theory
   function Compiler(theory::Theory)
     new(
-      Dict{Lvl, Id}(),
+      Dict{Lvl, Reg}(),
       Set{Lvl}[],
       Int[],
       Dict{Tuple{Int, Reg}, ETrm}(),
@@ -162,11 +169,6 @@ end
 struct Pattern
   trm::Trm
   ctx::Context
-end
-
-struct Program
-  instructions::Vector{Instruction}
-  subst::Vector{Reg}
 end
 
 function trm_to_vec!(trm::Trm, vec::Vector{ETrm})
@@ -185,11 +187,11 @@ function load_pattern!(c::Compiler, patvec::Vector{ETrm})
   n = length(patvec)
 
   for etrm in patvec
-    free = Set{Int}()
+    free = Set{Lvl}()
     size = 0
     hd = etrm.head
-    if hd > length(c.theory.judgments)
-      free.insert(etrm)
+    if is_context(hd)
+      push!(free, hd)
     else
       size = 1
       for arg in etrm.args
@@ -197,19 +199,16 @@ function load_pattern!(c::Compiler, patvec::Vector{ETrm})
         size += c.subtree_size[arg]
       end
     end
-    push!(self.free_vars, free)
-    push!(self.subtree_size, size)
+    push!(c.free_vars, free)
+    push!(c.subtree_size, size)
   end
 end
 
-function isvar(c::Compiler, lvl::Lvl)
-  lvl > length(c.theory.judgments)
-end
 
 function add_todo!(c::Compiler, patvec::Vector{ETrm}, id::Id, reg::Reg)
   etrm = patvec[id]
   hd = etrm.head
-  if isvar(c, hd)
+  if is_context(hd)
     @match get(c.v2r, hd, nothing) begin
       nothing => (c.v2r[hd] = reg)
       j => push!(c.instructions, Compare(reg, j))
@@ -217,6 +216,29 @@ function add_todo!(c::Compiler, patvec::Vector{ETrm}, id::Id, reg::Reg)
   else
     c.todo_nodes[(id, reg)] = etrm
   end
+end
+
+# return an element x of xs such that f(x) is maximal
+function maxby(f, xs)
+  if isempty(xs)
+    return nothing
+  end
+  next = iterate(xs)
+  maxfound, state = next
+  maxval = f(maxfound)
+  while true
+    next = iterate(xs, state)
+    if !isnothing(next)
+      x, state = next
+      fx = f(x)
+      if fx > maxval
+        maxfound, maxval = x, fx
+      end
+    else
+      break
+    end
+  end
+  maxfound
 end
 
 # We take the max todo according to this key
@@ -233,11 +255,14 @@ function next!(c::Compiler)
   function key(idreg::Tuple{Id, Reg})
     id = idreg[1]
     n_bound = length(filter(v -> v in keys(c.v2r), c.free_vars[id]))
-    n_free = c.free_vars[id] - n_bound
+    n_free = length(c.free_vars[id]) - n_bound
     (n_free == 0, n_free, -c.subtree_size[id])
   end
 
-  _,k = findmax(key, keys(c.todo_nodes))
+  k = maxby(key, keys(c.todo_nodes))
+  if isnothing(k)
+    return nothing
+  end
   v = c.todo_nodes[k]
   delete!(c.todo_nodes, k)
   (k,v)
@@ -263,7 +288,7 @@ function compile(theory::Theory, pat::Pattern)
 
   next_out = c.next_reg
 
-  add_todo!(c, patvec[])
+  add_todo!(c, patvec, length(patvec), next_out)
 
   while true
     @match next!(c) begin
@@ -274,7 +299,7 @@ function compile(theory::Theory, pat::Pattern)
           push!(
             c.instructions,
             Lookup(
-              Union{ETrm, Reg}[isvar(t) ? c.v2r[t.head] : t for t in extracted],
+              Union{ETrm, Reg}[is_context(t.head) ? c.v2r[t.head] : t for t in extracted],
               reg
             )
           )
@@ -286,7 +311,7 @@ function compile(theory::Theory, pat::Pattern)
             Bind(
               etrm.head,
               reg,
-              out
+              out + 1
             )
           )
           for (i, child) in enumerate(etrm.args)
@@ -297,10 +322,11 @@ function compile(theory::Theory, pat::Pattern)
     end
   end
 
-  c.next_reg = next_out
-
   # for testing, return the compiler
-  c
+  Program(
+    c.instructions,
+    Reg[r for (v,r) in sort([c.v2r...]; by=vr -> index(vr[1]))]
+  )
 end
 
 end
