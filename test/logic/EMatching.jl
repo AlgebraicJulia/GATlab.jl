@@ -15,7 +15,7 @@ end
 
 eg = EGraph(C)
 
-add!(eg, @term C (f ⋅ id(y)))
+id = add!(eg, @term C (f ⋅ id(y)))
 
 compose_lvl = (@term C (f ⋅ h)).head
 id_lvl = (@term C id(x)).head
@@ -24,8 +24,20 @@ instructions = [Scan(Reg(1)), Bind(compose_lvl, Reg(1), Reg(2)), Bind(id_lvl, Re
 
 m = Machine()
 
-run!(m, eg, instructions, [Reg(2), Reg(4)])
+run!(m, eg, instructions, [Reg(4), Reg(2)])
 
-@test m.matches[1] == [add!(eg, @term C f), add!(eg, @term C y)]
+@test m.matches[1] == [add!(eg, @term C y), add!(eg, @term C f)]
+
+Γ = @context ThCategory [x::Ob, y::Ob, f::Hom(x,y)]
+t = @term ThCategory Γ (f ⋅ id(y))
+pat = Pattern(t, Γ)
+prog = compile(ThCategory, pat)
+
+m = Machine()
+
+push!(m.reg, id)
+run!(m, eg, prog)
+
+@test m.matches[1] == [add!(eg, @term C y), add!(eg, @term C f)]
 
 end

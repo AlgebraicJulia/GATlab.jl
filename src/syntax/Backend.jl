@@ -55,7 +55,7 @@ end
 
 struct Context 
   ctx::Vector{Tuple{Name, Typ}}
-  Context(c=[]) = new(c) 
+  Context(c=Tuple{Name, Typ}[]) = new(c)
 end 
 
 Base.getindex(c::Context,i::Lvl) = is_context(i) ? c.ctx[index(i)] : error("$i")
@@ -84,7 +84,7 @@ name(j::Judgment) = j.name
   args::Vector{Lvl}
   typ::Typ
   function TrmCon(a,t)
-    all(is_context, a) || error("Term constructor can only be called on context args")
+    all(is_context, a) || error("Args for term constructor must refer to the context")
     return new(a,t)
   end
 end
@@ -93,7 +93,7 @@ end
 @struct_hash_equal struct TypCon <: Constructor
   args::Vector{Lvl}
   function TypCon(a::AbstractVector{Lvl})
-    all(is_context, a) || error("Type constructor can only be called on context args")
+    all(is_context, a) || error("Args for type constructor must refer to the context")
     return new(a)
   end
 end
@@ -126,11 +126,11 @@ n = theory length
 k = context length
 """
 function levelize(typ::Frontend.Typ, n::Int, k::Int)
-  Typ(Lvl(n + k + 1- typ.head, n), levelize.(typ.args, Ref(n), Ref(k)))
+  Typ(Lvl(n + k + 1 - typ.head, n), levelize.(typ.args, Ref(n), Ref(k)))
 end
 
 function levelize(trm::Frontend.Trm, n::Int, k::Int)
-  Trm(Lvl(n + k + 1- trm.head, n), levelize.(trm.args, Ref(n), Ref(k)))
+  Trm(Lvl(n + k + 1 - trm.head, n), levelize.(trm.args, Ref(n), Ref(k)))
 end
 
 function levelize(typcon::Frontend.TypCon, n::Int, k::Int)
@@ -144,14 +144,24 @@ function levelize(axiom::Frontend.Axiom, n::Int, k::Int)
   Axiom(levelize(axiom.typ, n, k), levelize.(axiom.equands,Ref(n),Ref(k)))
 end
 
-function Theory(ft::Frontend.Theory)
-  judgments = map(enumerate(ft.context)) do (n,j)
-    ctx = map(enumerate(j.ctx)) do (i, j′)
+function levelize(ctx::AbstractVector{Frontend.Judgment}, n::Int)
+  Context(
+    map(enumerate(ctx)) do (i, j′)
       typeof(j′.head) == Frontend.TrmCon && length(j′.ctx) == 0 ||
         error("the context of a judgment should only consist of nullary term constructors")
-      Tuple{Name, Typ}((j′.name, levelize(j′.head.typ, n-1, i-1)))
+      Tuple{Name, Typ}((j′.name, levelize(j′.head.typ, n, i-1)))
     end
-    Judgment(j.name, levelize(j.head, n - 1, length(j.ctx)), Context(ctx))
+  )
+end
+
+function levelize(j::Frontend.Judgment, n::Int)
+  ctx = levelize(j.ctx, n)
+  Judgment(j.name, levelize(j.head, n, length(j.ctx)), ctx)
+end
+
+function Theory(ft::Frontend.Theory)
+  judgments = map(enumerate(ft.context)) do (n,j)
+    levelize(j, n-1)
   end
   Theory(ft, ft.name, judgments)
 end

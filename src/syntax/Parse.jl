@@ -1,5 +1,5 @@
 module Parse
-export @theory, @theorymap, @term
+export @theory, @theorymap, @term, @context
 
 using ...Util.Lists
 using ..Frontend
@@ -268,15 +268,34 @@ macro theorymap(head, body)
   )
 end
 
-function term_impl(theory::Backend.Theory, expr::Expr0)
+function term_impl(theory::Backend.Theory, expr::Expr0; context = Backend.Context())
+  ctx = vcat(theory.orig.context, Bwd(map(p -> Judgment(p[1], Judgment[], TrmCon(Typ(0))), context.ctx)))
   Backend.levelize(
-    construct_term(theory.orig.context, parse_symexpr(expr)),
-    length(theory.judgments), 0
+    construct_term(ctx, parse_symexpr(expr)),
+    length(theory.judgments), length(context)
   )
 end
 
 macro term(theory, expr)
   esc(:($(GlobalRef(Parse, :term_impl))($theory, $(Expr(:quote, expr)))))
+end
+
+macro term(theory, context, expr)
+  esc(:($(GlobalRef(Parse, :term_impl))($theory, $(Expr(:quote, expr)); context=$context)))
+end
+
+function context_impl(theory::Backend.Theory, expr)
+  @match expr begin
+    :([$(bindings...)]) => Backend.levelize(
+      construct_ext(theory.orig.context, parse_binding.(bindings)),
+      length(theory.judgments)
+    )
+    _ => error("expected a list of bindings")
+  end
+end
+
+macro context(theory, expr)
+  esc(:($(GlobalRef(Parse, :context_impl))($theory, $(Expr(:quote, expr)))))
 end
 
 end
