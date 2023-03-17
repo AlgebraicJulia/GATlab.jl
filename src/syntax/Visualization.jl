@@ -1,11 +1,60 @@
 module Visualization
-export sequent
+export sequent, show_term, show_ctx
 
 using ...Util
 using ..Backend 
-using ..Backend: TrmTyp, TypCon, TrmCon, Constructor, Axiom, TheoryMap, args,TrmTyp
+using ..Backend: TrmTyp, TypCon, TrmCon, Constructor, Axiom, TheoryMap, args,TrmTyp, is_context, index
 
 using DataStructures
+
+# Purely combinatorial data
+###########################
+
+function Base.show(io::IO,i::Lvl) 
+  ind = index(i)
+  print(io, is_context(i) ? "{$ind}" : ind)
+end 
+
+function Base.show(io::IO,t::TrmTyp) 
+  print(io, t.head)
+  if !isempty(t.args)
+    print(io, "(")
+    for (i,a) in enumerate(t.args)
+      show(io, a)
+      if i != length(t.args) print(",") end 
+    end 
+    print(io, ")")
+  end
+end 
+
+function Base.show(io::IO,c::Context)
+  print(io,"[")
+  for (i,(a,b)) in enumerate(c.ctx) 
+    print(io, "$(string(a)): "); show(io,  b)
+    if i != length(c) print(io,", ") end 
+  end
+  print(io,"]")
+end
+
+function Base.show(io::IO,c::TrmCon)
+  print(io,"TrmCon([")
+  for (i,a) in enumerate(c.args) 
+    show(io,  a)
+    if i != length(c.args) print(io,",") end 
+  end
+  print(io,"], "); show(io,c.typ)
+  print(io,")")
+end
+
+function Base.show(io::IO,c::TypCon)
+  print(io,"TypCon(")
+  for (i,a) in enumerate(c.args) 
+    show(io, a)
+    if i != length(c.args) print(io,", ") end 
+  end
+  print(io,")")
+end
+
 
 # Types/Terms 
 #############
@@ -16,11 +65,11 @@ i marks where the theory effectively ends (indices higher than this
 refer to the context).
 """
 function show_inctx(th::Theory,c::Context, trm::Trm, i::Int)
-  if trm.head > i
+  if is_context(trm.head)
     isempty(trm.args) || error("Bad term")
-    hed = c[trm.head - i][1]
+    hed = c[trm.head][1]
   else 
-    hed = th.judgments[trm.head].name
+    hed = th[trm.head].name
   end
   a = isempty(trm.args) ? "" : "($(join([show_inctx(th,c,x,i) for x in trm.args],",")))"
   return "$(string(hed))$a"
@@ -29,8 +78,11 @@ end
 """Show a debruijn level type in a theory + context"""
 function show_inctx(th::Theory,c::Context, trm::Typ, i::Int)  
   a = isempty(trm.args) ? "" : "($(join([show_inctx(th,c,x,i) for x in trm.args],",")))"
-  return "$(string(th.judgments[trm.head].name))$a"
+  return "$(string(th[trm.head].name))$a"
 end
+
+show_term(th::Theory, trm::Trm, c::Context=Context()) = let i=length(th);
+  Sequent("", ctx_string(c,th,i),show_inctx(th,c,trm,i)) end
 
 
 # Contexts 
@@ -52,6 +104,7 @@ function ctx_dict(ctx::Context,th::Theory,i)
   return [collect(v) => show_inctx(th,ctx,k,i) for (k,v) in collect(typdict)]
 end 
 
+show_ctx(th::Theory,ctx::Context) = ctx_string(ctx,th,length(th))
 
 # Judgments 
 ###########
@@ -72,8 +125,8 @@ function Base.show(io::IO,::MIME"text/plain",s::Sequent)
 end
 
 # Convert the i'th judgment into a sequent
-function sequent(t::Theory, i ::Int)
-  j, i1 = t[i], i-1
+function sequent(t::Theory, i::Int)
+  j, i1 = t[Lvl(i)], i-1
   name, ctx = string(j.name), j.ctx
   if j.head isa Constructor 
     arg_syms = string.(first.([ctx[a] for a in j.head.args]))
@@ -95,7 +148,7 @@ function Base.show(io::IO, m::MIME"text/plain", t::Theory)
   n = string(t.name)
   n_name = repeat('#',length(string(n)) + 4)
 
-  tys,trs,axs = map([TrmCon,TypCon,Axiom]) do T
+  tys,trs,axs = map([TypCon,TrmCon,Axiom]) do T
     findall(j->j.head isa T, t.judgments)
   end
 
@@ -109,7 +162,7 @@ function Base.show(io::IO, m::MIME"text/plain", t::Theory)
     println(io,"\nAxioms\n======")
     for i in axs show(io,m,sequent(t,i)) end
   end
-end 
+end
 
 
 # Theory morphisms 

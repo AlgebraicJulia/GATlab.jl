@@ -7,8 +7,9 @@ struct Literal <: Name
 end
 
 Name(n::String) = Literal(n)
-Name(n::Name) = n
+Name(n::Char) = Literal(string(n))
 Name(n::Symbol) = Literal(string(n))
+Name(n::Name) = n
 
 struct Anon <: Name
 end

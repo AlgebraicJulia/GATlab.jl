@@ -9,5 +9,6 @@ include("Visualization.jl")
 
 @reexport using .Backend
 @reexport using .Parse
+@reexport using .Visualization
 
 end
