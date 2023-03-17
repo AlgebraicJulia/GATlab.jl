@@ -92,6 +92,7 @@ function parse_decl(e::Expr)
         parse_declbody(body),
         parse_binding.(bindings)
       )
+    body => Declaration(parse_declbody(body), Pair{Symbol, SymExpr}[])
     _ => error("Could not parse declaration $e")
   end
 end

@@ -1,6 +1,7 @@
 module EGraphs
-export EGraph, add!, rebuild!
+export EGraph, ETrm, ETyp, EClass, Id, add!, rebuild!, find!
 
+using MLStyle
 using DataStructures
 using StructEquality
 
@@ -13,10 +14,14 @@ const Id = Int
   args::Vector{Id}
 end
 
+@as_record ETrm
+
 @struct_hash_equal struct ETyp
   head::Lvl
   args::Vector{Id}
 end
+
+@as_record ETyp
 
 const Parents = Dict{ETrm, Id}
 

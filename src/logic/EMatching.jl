@@ -1,4 +1,5 @@
 module EMatching
+export Machine, Instruction, Bind, Compare, Lookup, Scan, Reg, run!
 
 # EMatching is the hard part of EGraphs
 #
@@ -14,5 +15,292 @@ module EMatching
 # Note that not all variables in the context are referenced directly in the
 # term; i.e. `b` is never referenced. Thus, ematching must take into account both
 # terms and types.
+
+using ..EGraphs
+using ...Syntax
+
+using MLStyle
+
+struct Reg
+  idx::Int
+end
+
+@as_record Reg
+
+Base.:+(r::Reg, i::Int) = Reg(r.idx + i)
+
+struct Machine
+  reg::Vector{Id}
+  lookup::Vector{Id}
+  matches::Vector{Vector{Id}}
+  limit::Union{Some{Int}, Nothing}
+  function Machine(;limit=nothing)
+    new(Id[], Id[], Vector{Id}[], limit)
+  end
+end
+
+Base.getindex(m::Machine, r::Reg) = m.reg[r.idx]
+
+Base.setindex!(m::Machine, r::Reg, i::Id) = (m.reg[r.idx] = i)
+
+struct FinishedMatching <: Exception
+end
+
+function submit_match!(m::Machine, subst::Vector{Reg})
+  match = Id[m[r] for r in subst]
+  push!(m.matches, match)
+  if !isnothing(m.limit) && length(m.matches) >= m.limit.value
+    throw(FinishedMatching())
+  end
+end
+
+@data Instruction begin
+  # Iterate through all of the terms in the eclass bound to `i` that have term
+  # constructor `trmcon`.
+  #
+  # For each term, assign the registers past `out` to the arguments of that term,
+  # and run the rest of the instructions.
+  Bind(trmcon::Lvl, i::Reg, out::Reg)
+
+  # Check if the eclass bound to `i` is the same as the eclass bound to `j`
+  Compare(i::Reg, j::Reg)
+
+  # Each element of `term` is either a register or an ETrm where the ids
+  # refer to earlier elements of `term`. Fill out a lookup vector of ids the same
+  # length as `term` by:
+  # - For each Reg, just look up the id in the EGraph
+  # - For each ETrm, look up its arguments in the lookup vector, and then lookup
+  # the completed ETrm in the EGraph
+  #
+  # At the end, put the last id in the lookup vector into `reg`.
+  Lookup(term::Vector{Union{Reg, ETrm}}, reg::Reg)
+
+  # Iterate through every eclass in the egraph.
+  #
+  # For each eclass, assign its id to `out`, truncate the list of registers,
+  # and run the rest of the instructions.
+  #
+  # Note: we can probably get better performance by only iterating through eclasses
+  # with a certain ETyp, or that come from a certain constructor.
+  Scan(out::Reg)
+end
+
+function run!(m::Machine, eg::EGraph, instructions::AbstractVector{Instruction}, subst::Vector{Reg})
+  for idx in eachindex(instructions)
+    @match instructions[idx] begin
+      Bind(trmcon, i, out) => begin
+        eclass = eg.eclasses[find!(eg, m[i])]
+        remaining = @view instructions[idx+1:end]
+        for etrm in eclass.reps
+          if etrm.head != trmcon
+            continue
+          end
+          resize!(m.reg, out.idx - 1)
+          append!(m.reg, etrm.args)
+          run!(m, eg, remaining, subst)
+        end
+        return
+      end
+      Compare(i, j) => begin
+        if find!(eg, m[i]) != find!(eg, m[j])
+          return
+        end
+      end
+      Lookup(term, reg) => begin
+        empty!(m.lookup)
+        for x in trm
+          @match x begin
+            Reg(_) => push!(m.lookup, find!(eg, m[x]))
+            ETrm(head, args) => begin
+              etrm = ETrm(head, Id[m.lookup[i] for i in args])
+              @match get(eg.hashcons, etrm, nothing) begin
+                nothing => return
+                id => push!(m.lookup, id)
+              end
+            end
+          end
+        end
+        if lookup[end] != find!(eg, m[reg])
+          return
+        end
+      end
+      Scan(out) => begin
+        remaining = @view instructions[idx+1:end]
+        for (id, eclass) in eg.eclasses
+          resize!(m.reg, out.idx - 1)
+          push!(m.reg, id)
+          run!(m, eg, remaining, subst)
+        end
+        return
+      end
+    end
+  end
+  submit_match!(m, subst)
+end
+
+struct Compiler
+  v2r::Dict{Lvl, Id}
+  free_vars::Vector{Set{Lvl}}
+  subtree_size::Vector{Int}
+  todo_nodes::Dict{Tuple{Int, Reg}, ETrm}
+  instructions::Vector{Instruction}
+  next_reg::Reg
+  theory::Theory
+  function Compiler(theory::Theory)
+    new(
+      Dict{Lvl, Id}(),
+      Set{Lvl}[],
+      Int[],
+      Dict{Tuple{Int, Reg}, ETrm}(),
+      Instruction[],
+      Reg(1),
+      theory
+    )
+  end
+end
+
+struct Pattern
+  trm::Trm
+  ctx::Context
+end
+
+struct Program
+  instructions::Vector{Instruction}
+  subst::Vector{Reg}
+end
+
+function trm_to_vec!(trm::Trm, vec::Vector{ETrm})
+  ids = Vector{Id}(trm_to_vec!.(trm.args, Ref(vec)))
+  push!(vec, ETrm(trm.head, ids))
+  length(vec)
+end
+
+function vec_to_trm(vec::Vector{ETrm}, id::Id)
+  etrm = vec[id]
+  args = Vector{Trm}(vec_to_term(Ref(vec), etrm.args))
+  Trm(etrm.head, args)
+end
+
+function load_pattern!(c::Compiler, patvec::Vector{ETrm})
+  n = length(patvec)
+
+  for etrm in patvec
+    free = Set{Int}()
+    size = 0
+    hd = etrm.head
+    if hd > length(c.theory.judgments)
+      free.insert(etrm)
+    else
+      size = 1
+      for arg in etrm.args
+        union!(free, c.free_vars[arg])
+        size += c.subtree_size[arg]
+      end
+    end
+    push!(self.free_vars, free)
+    push!(self.subtree_size, size)
+  end
+end
+
+function isvar(c::Compiler, lvl::Lvl)
+  lvl > length(c.theory.judgments)
+end
+
+function add_todo!(c::Compiler, patvec::Vector{ETrm}, id::Id, reg::Reg)
+  etrm = patvec[id]
+  hd = etrm.head
+  if isvar(c, hd)
+    @match get(c.v2r, hd, nothing) begin
+      nothing => (c.v2r[hd] = reg)
+      j => push!(c.instructions, Compare(reg, j))
+    end
+  else
+    c.todo_nodes[(id, reg)] = etrm
+  end
+end
+
+# We take the max todo according to this key
+# - prefer zero free variables
+# - prefer more free variables
+# - prefer smaller
+#
+# Free variables here means variables that are
+# free in the term that have not been bound yet
+# in c.v2r
+#
+# Why? Idk, this is how it works in egg
+function next!(c::Compiler)
+  function key(idreg::Tuple{Id, Reg})
+    id = idreg[1]
+    n_bound = length(filter(v -> v in keys(c.v2r), c.free_vars[id]))
+    n_free = c.free_vars[id] - n_bound
+    (n_free == 0, n_free, -c.subtree_size[id])
+  end
+
+  _,k = findmax(key, keys(c.todo_nodes))
+  v = c.todo_nodes[k]
+  delete!(c.todo_nodes, k)
+  (k,v)
+end
+
+is_ground_now(c::Compiler, id::Id) = all(v ∈ keys(c.v2r) for v in c.free_vars[id])
+
+function extract(patvec::Vector{ETrm}, i::Id)
+  trm = vec_to_trm(patvec, i)
+  vec = ETrm[]
+  trm_to_vec!(trm, vec)
+  vec
+end
+
+# Returns a Program
+function compile(theory::Theory, pat::Pattern)
+  patvec = ETrm[]
+  trm_to_vec!(pat.trm, patvec)
+
+  c = Compiler(theory)
+
+  load_pattern!(c, patvec)
+
+  next_out = c.next_reg
+
+  add_todo!(c, patvec[])
+
+  while true
+    @match next!(c) begin
+      nothing => break
+      ((id, reg), etrm) => begin
+        if is_ground_now(c, id) && (length(etrm.args) != 0)
+          extracted = extract(patvec, id)
+          push!(
+            c.instructions,
+            Lookup(
+              Union{ETrm, Reg}[isvar(t) ? c.v2r[t.head] : t for t in extracted],
+              reg
+            )
+          )
+        else
+          out = next_out
+          next_out += length(etrm.args)
+          push!(
+            c.instructions,
+            Bind(
+              etrm.head,
+              reg,
+              out
+            )
+          )
+          for (i, child) in enumerate(etrm.args)
+            add_todo!(c, patvec, child, out + i)
+          end
+        end
+      end
+    end
+  end
+
+  c.next_reg = next_out
+
+  # for testing, return the compiler
+  c
+end
 
 end
