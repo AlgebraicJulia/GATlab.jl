@@ -151,8 +151,9 @@ end
 find!(eg::EGraph, i::Id) = find_root!(eg.eqrel, i)
 
 function Base.merge!(eg::EGraph, id1::Id, id2::Id)
-  if (i = find!(eg, id1)) == find!(eg, id2)
-    return i
+  id1, id2 = find!.(Ref(eg), (id1, id2))
+  if id1 == id2
+    return id1
   end
 
   id = union!(eg.eqrel, id1, id2)

@@ -28,8 +28,8 @@ run!(m, eg, instructions, [Reg(4), Reg(2)])
 
 @test m.matches[1] == [add!(eg, @term C y), add!(eg, @term C f)]
 
-Γ = @context ThCategory [x::Ob, y::Ob, f::Hom(x,y)]
-t = @term ThCategory Γ (f ⋅ id(y))
+Γ = @context ThCategory [a::Ob, b::Ob, α::Hom(a,b)]
+t = @term ThCategory Γ (α ⋅ id(b))
 pat = Pattern(t, Γ)
 prog = compile(ThCategory, pat)
 

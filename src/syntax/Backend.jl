@@ -31,7 +31,7 @@ abstract type TrmTyp end
   head::Lvl
   args::Vector{Trm}
   function Trm(l::Lvl,a=Trm[])
-    !is_context(l) || isempty(a) || error("Elements of context are *nullary* type constructors")
+    (is_context(l) && !isempty(a)) || error("Elements of context are *nullary* type constructors")
     return new(l,a)
   end
   function Trm(l::Int,a=Trm[])

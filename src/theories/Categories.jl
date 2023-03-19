@@ -23,7 +23,7 @@ end
 end
 
 @theory ThIdLawlessCat <: ThAscCat begin
-  id(a)::Hom(a,a) ⊣ [a::Ob,]
+  id(a)::Hom(a,a) ⊣ [a::Ob]
 end
 
 @theory ThCategory <: ThIdLawlessCat begin
