@@ -39,6 +39,7 @@ struct NewAxiom <: DeclBody
   lhs::SymExpr
   rhs::SymExpr
   type::SymExpr
+  name::Name
 end
 
 @as_record NewAxiom
@@ -76,17 +77,16 @@ function Base.show(io::IO, m::MIME"text/plain", e::SymExpr)
   end
 end
 
-function parse_declbody(e::Expr0)
+function reassociate_decl(e)
   @match e begin
-    :($expr :: TYPE) => NewType(parse_args(expr)...)
-    :($expr :: $type) => NewTerm(parse_args(expr)..., parse_symexpr(type))
-    :($lhs == $rhs :: $type) => NewAxiom(parse_symexpr(lhs), parse_symexpr(rhs), parse_symexpr(type))
-    _ => error("Could not parse declaration head $e")
+    :($name := $lhs == $rhs :: $typ ⊣ $ctx) => :(($name := ($lhs == $rhs :: $typ)) ⊣ $ctx)
+    :($lhs == $rhs :: $typ ⊣ $ctx) => :(($lhs == $rhs :: $typ) ⊣ $ctx)
+    e => e
   end
 end
 
 function parse_decl(e::Expr)
-  @match e begin
+  @match reassociate_decl(e) begin
     :($body ⊣ [$(bindings...)]) =>
       Declaration(
         parse_declbody(body),
@@ -94,6 +94,18 @@ function parse_decl(e::Expr)
       )
     body => Declaration(parse_declbody(body), Pair{Symbol, SymExpr}[])
     _ => error("Could not parse declaration $e")
+  end
+end
+
+function parse_declbody(e::Expr0)
+  @match e begin
+    :($expr :: TYPE) => NewType(parse_args(expr)...)
+    :($expr :: $type) => NewTerm(parse_args(expr)..., parse_symexpr(type))
+    :($lhs == $rhs :: $type) =>
+      NewAxiom(parse_symexpr(lhs), parse_symexpr(rhs), parse_symexpr(type), Anon())
+    :($name := ($lhs == $rhs :: $type)) =>
+      NewAxiom(parse_symexpr(lhs), parse_symexpr(rhs), parse_symexpr(type), Name(name))
+    _ => error("Could not parse declaration head $e")
   end
 end
 
@@ -153,9 +165,9 @@ function construct_judgment(context::Context, decl::Declaration)
         Name(head),
         TypCon(lookup_sym.(Ref(headctx), args))
       )
-    NewAxiom(lhs, rhs, type) =>
+    NewAxiom(lhs, rhs, type, name) =>
       (
-        Anon(),
+        name,
         Axiom(
           construct_type(headctx, type),
           construct_term.(Ref(headctx), [lhs, rhs])
@@ -183,9 +195,11 @@ macro theory(head, body)
     _ => error("expected body of @theory macro to be a block")
   end
   esc(
-    quote
-      $name = $(GlobalRef(Parse, :theory_impl))($parent, $(Expr(:quote, name)), $lines)
-    end
+    Expr(
+      :block,
+      __source__,
+      :($name = $(GlobalRef(Parse, :theory_impl))($parent, $(Expr(:quote, name)), $lines))
+    )
   )
 end
 
