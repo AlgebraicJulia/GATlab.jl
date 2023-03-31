@@ -60,7 +60,7 @@ thin = @theorymap ThCategory -> ThPreorder begin
 end;
 
 ctx = Context([[(Name(x),Typ(Lvl(1))) for x in "αβγ"]...,
-              [(Name(n),Typ(Lvl(2),Trm.(Lvl.(is,Ref(0))))) 
+              [(Name(n),Typ(Lvl(2),Trm.(Lvl.(is; context=true))))
                 for (n,is) in [("f",[1,2]),("g",[2,3])]]...])
 trm = Trm(Lvl(3),Trm.(Lvl.([4,5]; context=true)))
 show_term(ThCategory, trm, ctx)

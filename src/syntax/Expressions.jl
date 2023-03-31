@@ -14,12 +14,6 @@ struct Lvl
   end
 end
 
-"""N is length of theory"""
-function Lvl(i::Integer, n::Integer) 
-  i > n ? Lvl(i-n; context=true) : Lvl(i)
-end
-
-
 const CONTEXT_BIT = UInt64(1) << 63
 
 is_context(i::Lvl) = (i.val & CONTEXT_BIT) != 0
