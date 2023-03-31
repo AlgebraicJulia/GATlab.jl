@@ -1,10 +1,10 @@
-module Backend
-export Lvl, ArgLvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory, ThEmpty, index, is_context
+module Expressions
+export Lvl, ArgLvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory, TheoryMap,
+  ThEmpty, index, is_context, FullContext, lookup, arity
 
 using StructEquality
 
 using ...Util
-using ..Frontend
 
 struct Lvl
   val::UInt64
@@ -13,6 +13,7 @@ struct Lvl
     new(UInt64(i) | (UInt64(context) << 63))
   end
 end
+
 """N is length of theory"""
 function Lvl(i::Integer, n::Integer) 
   i > n ? Lvl(i-n; context=true) : Lvl(i)
@@ -98,6 +99,7 @@ end
   end
 end
 
+arity(f::Constructor) = length(f.args)
 
 @struct_hash_equal struct Axiom <: JudgmentHead
   typ::Typ
@@ -109,7 +111,6 @@ end
 end
 
 struct Theory
-  orig::Frontend.Theory
   name::Name
   judgments::Vector{Judgment}
 end
@@ -120,53 +121,38 @@ Base.getindex(t::Theory,i::Lvl) =
   is_context(i) ? error("Bad index $i") : t.judgments[index(i)]
 Base.length(t::Theory) = t.judgments |> length
 
-
-"""Converts de bruijn index to de bruijn level
-n = theory length
-k = context length
 """
-function levelize(typ::Frontend.Typ, n::Int, k::Int)
-  Typ(Lvl(n + k + 1 - typ.head, n), levelize.(typ.args, Ref(n), Ref(k)))
+The full context for a `Trm` or `Typ` consists of both the list of judgments in
+the theory, and also the list of judgments in the context.
+
+TODO: maybe we should have different terms for "context judgment" and "theory
+judgment"
+"""
+struct FullContext
+  judgments::Vector{Judgment}
+  context::Context
 end
 
-function levelize(trm::Frontend.Trm, n::Int, k::Int)
-  Trm(Lvl(n + k + 1 - trm.head, n), levelize.(trm.args, Ref(n), Ref(k)))
-end
-
-function levelize(typcon::Frontend.TypCon, n::Int, k::Int)
-  TypCon(map(i -> Lvl(n+k+1-i, n), typcon.args))
-end
-
-function levelize(trmcon::Frontend.TrmCon, n::Int, k::Int)
-  TrmCon(map(i -> Lvl(n+k+1-i, n), trmcon.args), levelize(trmcon.typ, n, k))
-end
-function levelize(axiom::Frontend.Axiom, n::Int, k::Int)
-  Axiom(levelize(axiom.typ, n, k), levelize.(axiom.equands,Ref(n),Ref(k)))
-end
-
-function levelize(ctx::AbstractVector{Frontend.Judgment}, n::Int)
-  Context(
-    map(enumerate(ctx)) do (i, j′)
-      typeof(j′.head) == Frontend.TrmCon && length(j′.ctx) == 0 ||
-        error("the context of a judgment should only consist of nullary term constructors")
-      Tuple{Name, Typ}((j′.name, levelize(j′.head.typ, n, i-1)))
-    end
-  )
-end
-
-function levelize(j::Frontend.Judgment, n::Int)
-  ctx = levelize(j.ctx, n)
-  Judgment(j.name, levelize(j.head, n, length(j.ctx)), ctx)
-end
-
-function Theory(ft::Frontend.Theory)
-  judgments = map(enumerate(ft.context)) do (n,j)
-    levelize(j, n-1)
+"""
+Get the `Lvl` corresponding to a Name. This is the most recent judgment with
+that name.
+"""
+function lookup(fc::FullContext, n::Name)
+  i = findlast(nt -> nt[1] == n, fc.context.ctx)
+  if !isnothing(i)
+    return Lvl(i; context=true)
   end
-  Theory(ft, ft.name, judgments)
+  i = findlast(j -> j.name == n, fc.judgments)
+  if !isnothing(i)
+    Lvl(i; context=false)
+  else
+    throw(KeyError(n))
+  end
 end
 
-const ThEmpty = Theory(Frontend.ThEmpty)
+lookup(fc::FullContext, s::Symbol) = lookup(fc, Name(s))
+
+const ThEmpty = Theory(Anon(), Judgment[])
 
 const Composite = Union{Typ, Trm, Nothing}
 
@@ -179,20 +165,6 @@ const Composite = Union{Typ, Trm, Nothing}
     lc == ld || error("Bad composite length: $lc != $ld")
     return new(d,c,cs)
   end
-end
-
-function TheoryMap(ftm::Frontend.TheoryMap)
-  TheoryMap(
-    Theory(ftm.dom),
-    Theory(ftm.codom),
-    map(zip(ftm.dom.context, ftm.composites)) do (j, cmpst)
-      if isnothing(cmpst)
-        nothing
-      else
-        levelize(cmpst, length(ftm.codom.context), length(j.ctx))
-      end
-    end
-  )
 end
 
 Base.getindex(t::TheoryMap, i::Integer) = t.composites[i]

@@ -1,9 +1,8 @@
 module Parse
 export @theory, @theorymap, @term, @context
 
-using ...Util.Lists
-using ..Frontend
-import ..Backend
+using ..Expressions
+using ...Util
 
 using MLStyle
 using StructEquality
@@ -116,73 +115,57 @@ function parse_binding(binding::Expr)
   end
 end
 
-function lookup_sym(context::Context, sym::Symbol)
-  name = Name(sym)
-  for (i, judgment) in enumerate(reverse(context))
-    if nameof(judgment) == name
-      return i
-    end
+function construct_typ(fc::FullContext, e::SymExpr)
+  head = lookup(fc, Name(e.head))
+  Typ(head, construct_trm.(Ref(fc), e.args))
+end
+
+function construct_trm(fc::FullContext, e::SymExpr)
+  head = lookup(fc, Name(e.head))
+  Trm(head, construct_trm.(Ref(fc), e.args))
+end
+
+function construct_context(judgments::Vector{Judgment}, symctx::Vector{Pair{Symbol, SymExpr}})
+  c = Context()
+  fc = FullContext(judgments, c)
+  for (n, symtyp) in symctx
+    push!(c.ctx, (Name(n), construct_typ(fc, symtyp)))
   end
-  throw(KeyError(sym))
+  c
 end
 
-function construct_type(context::Context, e::SymExpr)
-  head = lookup_sym(context, e.head)
-  Typ(head, construct_term.(Ref(context), e.args))
-end
-
-function construct_term(context::Context, e::SymExpr)
-  head = lookup_sym(context, e.head)
-  Trm(head, construct_term.(Ref(context), e.args))
-end
-
-function construct_ext(context::Context, symext::Vector{Pair{Symbol, SymExpr}})
-  foldl(
-    (ext, p) -> snoc(
-      ext,
-      Judgment(
-        Name(p[1]),
-        Bwd{Judgment}(),
-        TrmCon(construct_type(vcat(context, ext), p[2]))
-      )
-    ),
-    symext;
-    init=Bwd{Judgment}()
-  )
-end
-
-function construct_judgment(context::Context, decl::Declaration)
-  ext = construct_ext(context, decl.context)
-  headctx = vcat(Bwd(context), ext)
+function construct_judgment(judgments::Vector{Judgment}, decl::Declaration)
+  context = construct_context(judgments, decl.context)
+  fc = FullContext(judgments, context)
   (name, head) = @match decl.body begin
     NewTerm(head, args, type) =>
       (
         Name(head),
-        TrmCon(construct_type(headctx, type), lookup_sym.(Ref(headctx), args))
+        TrmCon(lookup.(Ref(fc), args), construct_typ(fc, type))
       )
     NewType(head, args) =>
       (
         Name(head),
-        TypCon(lookup_sym.(Ref(headctx), args))
+        TypCon(lookup.(Ref(fc), args))
       )
     NewAxiom(lhs, rhs, type, name) =>
       (
         name,
         Axiom(
-          construct_type(headctx, type),
-          construct_term.(Ref(headctx), [lhs, rhs])
+          construct_typ(fc, type),
+          construct_trm.(Ref(fc), [lhs, rhs])
         )
       )
   end
-  Judgment(name, ext, head)
+  Judgment(name, head, context)
 end
 
-function theory_impl(parent::Backend.Theory, name::Symbol, lines::Vector)
-  context = foldl(
-    (context, line) -> snoc(context, construct_judgment(context, parse_decl(line))),
-    lines; init=parent.orig.context
-  )
-  Backend.Theory(Theory(Name(name), context))
+function theory_impl(parent::Theory, name::Symbol, lines::Vector)
+  judgments = copy(parent.judgments)
+  for line in lines
+    push!(judgments, construct_judgment(judgments, parse_decl(line)))
+  end
+  Theory(Name(name), judgments)
 end
 
 macro theory(head, body)
@@ -232,17 +215,17 @@ function onlydefault(xs; default=nothing)
   end
 end
 
-function theorymap_impl(dom::Backend.Theory, codom::Backend.Theory, lines::Vector)
+function theorymap_impl(dom::Theory, codom::Theory, lines::Vector)
   mappings = parse_mapping.(lines)
-  mappings = Bwd(onlydefault(filter(m -> Name(m[1].head) == j.name, mappings)) for j in dom.orig.context)
-  composites = foldl(zip(mappings, dom.orig.context); init=Bwd{Composite}()) do composites, (mapping, judgment)
-    snoc(composites, make_composite(codom.orig.context, judgment, mapping))
+  mappings = [onlydefault(filter(m -> Name(m[1].head) == j.name, mappings)) for j in dom.judgments]
+  composites = map(zip(mappings, dom.judgments)) do (mapping, judgment)
+    make_composite(codom, judgment, mapping)
   end
-  Backend.TheoryMap(TheoryMap(dom.orig, codom.orig, composites))
+  TheoryMap(dom, codom, composites)
 end
 
 function make_composite(
-  codom::Context,
+  codom::Theory,
   judgment::Judgment,
   mapping::Union{Pair{SymExpr, SymExpr}, Nothing}
 )
@@ -254,15 +237,15 @@ function make_composite(
   all(length(arg.args) == 0 for arg in lhs.args) || error("left side of mapping must be a flat expression")
   length(lhs.args) == arity(judgment.head) || error("wrong number of arguments for $(judgment.name)")
   names = Dict(zip(judgment.head.args, Name.(head.(lhs.args))))
-  renamed_ctx = Bwd{Judgment}(map(zip(reverse(eachindex(judgment.ctx)), judgment.ctx)) do (i,j)
-    newname = get(names, i, Anon())
-    Judgment(newname, j.ctx, j.head)
+  renamed_ctx = Context(map(enumerate(judgment.ctx.ctx)) do (i,nt)
+    newname = get(names, Lvl(i; context=true), Anon())
+    (newname, nt[2])
   end)
-  ctx = vcat(codom, renamed_ctx)
+  fc = FullContext(codom.judgments, renamed_ctx)
   if typeof(judgment.head) == TrmCon
-    construct_term(ctx, rhs)
+    construct_trm(fc, rhs)
   else
-    construct_type(ctx, rhs)
+    construct_typ(fc, rhs)
   end
 end
 
@@ -282,12 +265,8 @@ macro theorymap(head, body)
   )
 end
 
-function term_impl(theory::Backend.Theory, expr::Expr0; context = Backend.Context())
-  ctx = vcat(theory.orig.context, Bwd(map(p -> Judgment(p[1], Judgment[], TrmCon(Typ(0))), context.ctx)))
-  Backend.levelize(
-    construct_term(ctx, parse_symexpr(expr)),
-    length(theory.judgments), length(context)
-  )
+function term_impl(theory::Theory, expr::Expr0; context = Context())
+  construct_trm(FullContext(theory.judgments, context), parse_symexpr(expr))
 end
 
 macro term(theory, expr)
@@ -298,12 +277,9 @@ macro term(theory, context, expr)
   esc(:($(GlobalRef(Parse, :term_impl))($theory, $(Expr(:quote, expr)); context=$context)))
 end
 
-function context_impl(theory::Backend.Theory, expr)
+function context_impl(theory::Theory, expr)
   @match expr begin
-    :([$(bindings...)]) => Backend.levelize(
-      construct_ext(theory.orig.context, parse_binding.(bindings)),
-      length(theory.judgments)
-    )
+    :([$(bindings...)]) => construct_context(theory.judgments, parse_binding.(bindings))
     _ => error("expected a list of bindings")
   end
 end

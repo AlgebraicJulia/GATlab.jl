@@ -2,8 +2,8 @@ module Visualization
 export sequent, show_term, show_ctx
 
 using ...Util
-using ..Backend 
-using ..Backend: TrmTyp, TypCon, TrmCon, Constructor, Axiom, TheoryMap, args,TrmTyp, is_context, index
+using ..Expressions
+using ..Expressions: TrmTyp, TypCon, TrmCon, Constructor, Axiom, TheoryMap, args,TrmTyp, is_context, index
 
 using DataStructures
 
