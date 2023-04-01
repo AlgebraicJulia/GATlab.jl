@@ -2,11 +2,15 @@ module Syntax
 
 using Reexport
 
-include("Expressions.jl")
+include("Theories.jl")
+include("TheoryMaps.jl")
+include("Pushouts.jl")
 include("Parse.jl")
 include("Visualization.jl")
 
-@reexport using .Expressions
+@reexport using .Theories
+@reexport using .TheoryMaps
+@reexport using .Pushouts
 @reexport using .Parse
 @reexport using .Visualization
 

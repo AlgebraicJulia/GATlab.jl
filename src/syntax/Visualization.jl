@@ -2,8 +2,9 @@ module Visualization
 export sequent, show_term, show_ctx
 
 using ...Util
-using ..Expressions
-using ..Expressions: TrmTyp, TypCon, TrmCon, Constructor, Axiom, TheoryMap, args,TrmTyp, is_context, index
+using ..Theories
+using ..Theories: TrmTyp, TypCon, TrmCon, Constructor, Axiom, args,TrmTyp, is_context, index
+using ..TheoryMaps
 
 using DataStructures
 
@@ -71,15 +72,16 @@ function show_inctx(th::Theory,c::Context, trm::Trm, i::Int)
   else 
     hed = th[trm.head].name
   end
-  a = isempty(trm.args) ? "" : "($(join([show_inctx(th,c,x,i) for x in trm.args],",")))"
-  return "$(string(hed))$a"
+  a = String[show_inctx(th,c,x,i) for x in trm.args]
+  return call_args(hed, a)
 end
 
 """Show a debruijn level type in a theory + context"""
 function show_inctx(th::Theory,c::Context, trm::Typ, i::Int)  
-  a = isempty(trm.args) ? "" : "($(join([show_inctx(th,c,x,i) for x in trm.args],",")))"
-  return "$(string(th[trm.head].name))$a"
+  a = String[show_inctx(th,c,x,i) for x in trm.args]
+  return call_args(th[trm.head].name,a)
 end
+
 
 show_term(th::Theory, trm::Trm, c::Context=Context()) = let i=length(th);
   Sequent("", ctx_string(c,th,i),show_inctx(th,c,trm,i)) end
@@ -132,19 +134,27 @@ end
 # Convert the i'th judgment into a sequent
 function sequent(t::Theory, i::Int)
   j, i1 = t[Lvl(i)], i-1
-  name, ctx = string(j.name), j.ctx
+  name, ctx = j.name, j.ctx
   if j.head isa Constructor 
     arg_syms = string.(first.([ctx[a] for a in j.head.args]))
     typ = j.head isa TrmCon ? ": $(show_inctx(t, ctx,j.head.typ,i1))" : ": TYPE"
-    arg = isempty(arg_syms) ? "" : "($(join(arg_syms, ",")))"
-    return Sequent("$name introduction", ctx_string(ctx,t,i1), "$(name)$arg $typ")
+    return Sequent("$name introduction", ctx_string(ctx,t,i1), call_args(name,arg_syms)*" $typ")
   else # AXIOM
     eqs = join([show_inctx(t,ctx,x,i1) for x in j.head.equands], " = ")
     typ = show_inctx(t, ctx, j.head.typ, i1)
-    return Sequent(name, ctx_string(ctx,t,i1), "$eqs : $typ")  
+    return Sequent(string(name), ctx_string(ctx,t,i1), "$eqs : $typ")  
   end 
 end 
 
+function call_args(n::Name,args::Vector{String})
+  sn = string(n)
+  if isempty(args) return sn
+  elseif length(args) == 2 && Meta.isbinaryoperator(Symbol(sn))
+    return "($(args[1]) $(sn) $(args[2]))"
+  else 
+    return "$sn($(join(args,",")))"
+  end
+end
 
 # Theories
 ##########
