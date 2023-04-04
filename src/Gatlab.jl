@@ -9,12 +9,15 @@ include("syntax/module.jl")
 
 include("logic/module.jl")
 
+include("models/module.jl")
+
 # A "standard library" of GATs.
 include("stdlib/module.jl")
 
 @reexport using .Util
 @reexport using .Syntax
 @reexport using .Logic
+@reexport using .Models
 @reexport using .Stdlib
 
 end # module Gatlab
