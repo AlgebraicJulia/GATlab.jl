@@ -2,6 +2,7 @@ module Parse
 export @theory, @theorymap, @term, @context
 
 using ..Theories
+using ..TheoryMaps
 using ...Util
 
 using MLStyle

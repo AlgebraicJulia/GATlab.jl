@@ -1,4 +1,4 @@
-module Theories
+module Stdlib
 
 using Reexport
 

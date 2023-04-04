@@ -12,6 +12,6 @@ end
   include("logic/tests.jl")
 end
 
-@testset "theories" begin
-  include("theories/tests.jl")
+@testset "stdlib" begin
+  include("stdlib/tests.jl")
 end
