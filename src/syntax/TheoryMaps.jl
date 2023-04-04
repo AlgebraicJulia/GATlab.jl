@@ -21,8 +21,6 @@ codom(f::AbsTheoryMap) = f.codom
     end 
 end
 
-
-
 const Composite = Union{Typ, Trm, Nothing}
 
 @struct_hash_equal struct TheoryMap <: AbsTheoryMap

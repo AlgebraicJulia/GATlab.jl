@@ -1,4 +1,4 @@
-module Interface
+module ModelInterface
 export AbstractTheory, theory, Model, checkvalidity, typarg, ap
 
 """
@@ -52,7 +52,7 @@ abstract type Model{T <: AbstractTheory} end
 Meant to be overloaded as
 
 ```julia
-checkvalidity(m::Model{T}, ::Var{i}, x) where {T <: AbstractTheory} = ...
+checkvalidity(m::Model{T}, ::Val{i}, x) where {T <: AbstractTheory} = ...
 ```
 
 where:
@@ -74,13 +74,13 @@ function checkvalidity end
 """
 If not otherwise specified, we assume that a given value is not valid.
 """
-checkvalidity(::Model{<:AbstractTheory}, ::Var, _) = false
+checkvalidity(::Model{<:AbstractTheory}, ::Val, _) = false
 
 """
 Meant to be overloaded as
 
 ```julia
-typarg(m::Model{T}, ::Var{i}, ::Var{j}, x) where {T <: AbstractTheory} = ...
+typarg(m::Model{T}, ::Val{i}, ::Val{j}, x) where {T <: AbstractTheory} = ...
 ```
 
 where:
@@ -110,7 +110,7 @@ function typarg end
 Meant to be overloaded as
 
 ```julia
-ap(m::Model{T}, ::Var{i}, xs...)
+ap(m::Model{T}, ::Val{i}, xs...)
 ```
 
 where:

@@ -11,6 +11,8 @@ include("logic/module.jl")
 
 include("models/module.jl")
 
+include("dsl/module.jl")
+
 # A "standard library" of GATs.
 include("stdlib/module.jl")
 
@@ -18,6 +20,7 @@ include("stdlib/module.jl")
 @reexport using .Syntax
 @reexport using .Logic
 @reexport using .Models
+@reexport using .Dsl
 @reexport using .Stdlib
 
 end # module Gatlab

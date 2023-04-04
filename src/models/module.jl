@@ -1,7 +1,9 @@
 module Models
 
-include("Interface.jl")
+using Reexport
 
-@reexport using .Interface
+include("ModelInterface.jl")
+
+@reexport using .ModelInterface
 
 end

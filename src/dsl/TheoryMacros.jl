@@ -1,120 +1,13 @@
-module Parse
+module TheoryMacros
 export @theory, @theorymap, @term, @context
 
-using ..Theories
-using ..TheoryMaps
+using MLStyle
+
+using ...Models
+using ...Syntax
 using ...Util
 
-using MLStyle
-using StructEquality
-
-@struct_hash_equal struct SymExpr
-  head::Symbol
-  args::Vector{SymExpr}
-  function SymExpr(head::Symbol, args::Vector=SymExpr[])
-    new(head, args)
-  end
-end
-
-head(e::SymExpr) = e.head
-
-abstract type DeclBody end
-
-struct NewTerm <: DeclBody
-  head::Symbol
-  args::Vector{Symbol}
-  type::SymExpr
-end
-
-@as_record NewTerm
-
-struct NewType <: DeclBody
-  head::Symbol
-  args::Vector{Symbol}
-end
-
-@as_record NewType
-
-struct NewAxiom <: DeclBody
-  lhs::SymExpr
-  rhs::SymExpr
-  type::SymExpr
-  name::Name
-end
-
-@as_record NewAxiom
-
-struct Declaration
-  body::DeclBody
-  context::Vector{Pair{Symbol, SymExpr}}
-end
-
-const Expr0 = Union{Symbol, Expr}
-
-function parse_args(e::Expr0)
-  @match e begin
-    (name::Symbol) => (name, Expr0[])
-    :($(name::Symbol)($(args...))) => (name, Expr0[args...])
-    _ => error("Could not parse $e as an application of a head to arguments")
-  end
-end
-
-function parse_symexpr(e::Expr0)
-  (name, args) = parse_args(e)
-  SymExpr(name, parse_symexpr.(args))
-end
-
-function Base.show(io::IO, m::MIME"text/plain", e::SymExpr)
-  print(io, string(e.head))
-  if length(e.args) != 0
-    print(io, "(")
-    for arg in e.args[1:end-1]
-      show(io, m, arg)
-      print(io, ",")
-    end
-    show(io, m, e.args[end])
-    print(io, ")")
-  end
-end
-
-function reassociate_decl(e)
-  @match e begin
-    :($name := $lhs == $rhs :: $typ ⊣ $ctx) => :(($name := ($lhs == $rhs :: $typ)) ⊣ $ctx)
-    :($lhs == $rhs :: $typ ⊣ $ctx) => :(($lhs == $rhs :: $typ) ⊣ $ctx)
-    e => e
-  end
-end
-
-function parse_decl(e::Expr)
-  @match reassociate_decl(e) begin
-    :($body ⊣ [$(bindings...)]) =>
-      Declaration(
-        parse_declbody(body),
-        parse_binding.(bindings)
-      )
-    body => Declaration(parse_declbody(body), Pair{Symbol, SymExpr}[])
-    _ => error("Could not parse declaration $e")
-  end
-end
-
-function parse_declbody(e::Expr0)
-  @match e begin
-    :($expr :: TYPE) => NewType(parse_args(expr)...)
-    :($expr :: $type) => NewTerm(parse_args(expr)..., parse_symexpr(type))
-    :($lhs == $rhs :: $type) =>
-      NewAxiom(parse_symexpr(lhs), parse_symexpr(rhs), parse_symexpr(type), Anon())
-    :($name := ($lhs == $rhs :: $type)) =>
-      NewAxiom(parse_symexpr(lhs), parse_symexpr(rhs), parse_symexpr(type), Name(name))
-    _ => error("Could not parse declaration head $e")
-  end
-end
-
-function parse_binding(binding::Expr)
-  @match binding begin
-    :($(head::Symbol)::$(type::Expr0)) => (head => parse_symexpr(type))
-    _ => error("could not parse binding $binding")
-  end
-end
+using ..Parsing
 
 function construct_typ(fc::FullContext, e::SymExpr)
   head = lookup(fc, Name(e.head))
@@ -169,6 +62,8 @@ function theory_impl(parent::Theory, name::Symbol, lines::Vector)
   Theory(Name(name), judgments)
 end
 
+theory_impl(parent::Type{<:AbstractTheory}, name::Symbol, lines::Vector) = theory_impl(theory(parent), name, lines)
+
 macro theory(head, body)
   (name, parent) = @match head begin
     :($(name::Symbol) <: $(parent::Symbol)) => (name, parent)
@@ -178,28 +73,21 @@ macro theory(head, body)
     Expr(:block, lines...) => filter(line -> typeof(line) != LineNumberNode, lines)
     _ => error("expected body of @theory macro to be a block")
   end
+  tmp = gensym(:theory)
   esc(
     Expr(
       :block,
+      :(const $tmp = $(GlobalRef(TheoryMacros, :theory_impl))(
+         $parent,
+         $(Expr(:quote, name)),
+         $lines
+      )),
       __source__,
-      :($name = $(GlobalRef(Parse, :theory_impl))($parent, $(Expr(:quote, name)), $lines))
+      :(struct $name <: $(GlobalRef(ModelInterface, :AbstractTheory)) end),
+      :($(GlobalRef(ModelInterface, :theory))(::$name) = $tmp)
     )
   )
 end
-
-"""
-@theory ThSet <: Empty begin
-  Ob::TYPE ⊣ []
-end
-
-@theory ThGraph <: ThSet begin
-  Hom(x,y)::TYPE ⊣ [a::Ob, b::Ob]
-end
-
-@theory LawlessCategory <: Graph begin
-  compose(f,g)::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a,b), g::Hom(b,c)]
-end
-"""
 
 function parse_mapping(expr)
   @match expr begin
@@ -224,6 +112,9 @@ function theorymap_impl(dom::Theory, codom::Theory, lines::Vector)
   end
   TheoryMap(dom, codom, composites)
 end
+
+theorymap_impl(dom::Type{<:AbstractTheory}, codom::Type{<:AbstractTheory}, lines::Vector) =
+    theorymap_impl(theory(dom), theory(codom), lines)
 
 function make_composite(
   codom::Theory,
@@ -261,7 +152,7 @@ macro theorymap(head, body)
   end
   esc(
     quote
-      $(GlobalRef(Parse, :theorymap_impl))($dom, $codom, $lines)
+      $(GlobalRef(TheoryMacros, :theorymap_impl))($dom, $codom, $lines)
     end
   )
 end
@@ -270,12 +161,15 @@ function term_impl(theory::Theory, expr::Expr0; context = Context())
   construct_trm(FullContext(theory.judgments, context), parse_symexpr(expr))
 end
 
+term_impl(intheory::Type{<:AbstractTheory}, expr::Expr0; context = Context()) =
+  term_impl(theory(intheory), expr, context)
+
 macro term(theory, expr)
-  esc(:($(GlobalRef(Parse, :term_impl))($theory, $(Expr(:quote, expr)))))
+  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory, $(Expr(:quote, expr)))))
 end
 
 macro term(theory, context, expr)
-  esc(:($(GlobalRef(Parse, :term_impl))($theory, $(Expr(:quote, expr)); context=$context)))
+  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory, $(Expr(:quote, expr)); context=$context)))
 end
 
 function context_impl(theory::Theory, expr)
@@ -286,7 +180,8 @@ function context_impl(theory::Theory, expr)
 end
 
 macro context(theory, expr)
-  esc(:($(GlobalRef(Parse, :context_impl))($theory, $(Expr(:quote, expr)))))
+  esc(:($(GlobalRef(TheoryMacros, :context_impl))($theory, $(Expr(:quote, expr)))))
 end
+
 
 end

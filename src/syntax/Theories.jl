@@ -1,6 +1,6 @@
 module Theories
 export Lvl, ArgLvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory, TheoryMap,
-  ThEmpty, index, is_context, FullContext, lookup, arity, judgments, rename
+  empty_theory, index, is_context, FullContext, lookup, arity, judgments, rename
 
 using StructEquality
 
@@ -148,7 +148,7 @@ end
 
 lookup(fc::FullContext, s::Symbol) = lookup(fc, Name(s))
 
-const ThEmpty = Theory(Anon(), Judgment[])
+const empty_theory = Theory(Anon(), Judgment[])
 
 
 end

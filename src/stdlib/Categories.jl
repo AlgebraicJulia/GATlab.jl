@@ -1,9 +1,15 @@
 module Categories
-export ThSet, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThPreorder,
+export ThEmpty, ThSet, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThPreorder,
         ThMagma,ThSemiGroup,ThMonoid,ThGroup,
         ThNat,ThNatPlus,ThNatPlusTimes
 
-using ...Syntax
+using ...Dsl
+using ...Models
+using ...Syntax: empty_theory
+
+struct ThEmpty <: AbstractTheory end
+
+ModelInterface.theory(::ThEmpty) = empty_theory
 
 # Category theory
 @theory ThSet <: ThEmpty begin
