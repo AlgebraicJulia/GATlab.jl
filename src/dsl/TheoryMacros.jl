@@ -83,8 +83,8 @@ macro theory(head, body)
          $lines
       )),
       __source__,
-      :(struct $name <: $(GlobalRef(ModelInterface, :AbstractTheory)) end),
-      :($(GlobalRef(ModelInterface, :theory))(::$name) = $tmp)
+      :(struct $name <: $(GlobalRef(Theories, :AbstractTheory)) end),
+      :($(GlobalRef(Theories, :theory))(::$name) = $tmp)
     )
   )
 end
@@ -162,7 +162,7 @@ function term_impl(theory::Theory, expr::Expr0; context = Context())
 end
 
 term_impl(intheory::Type{<:AbstractTheory}, expr::Expr0; context = Context()) =
-  term_impl(theory(intheory), expr, context)
+  term_impl(theory(intheory), expr; context)
 
 macro term(theory, expr)
   esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory, $(Expr(:quote, expr)))))
@@ -172,9 +172,10 @@ macro term(theory, context, expr)
   esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory, $(Expr(:quote, expr)); context=$context)))
 end
 
-function context_impl(theory::Theory, expr)
+function context_impl(T::Type{<:AbstractTheory}, expr)
+  T = theory(T)
   @match expr begin
-    :([$(bindings...)]) => construct_context(theory.judgments, parse_binding.(bindings))
+    :([$(bindings...)]) => construct_context(T.judgments, parse_binding.(bindings))
     _ => error("expected a list of bindings")
   end
 end

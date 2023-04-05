@@ -278,11 +278,11 @@ function extract(patvec::Vector{ETrm}, i::Id)
 end
 
 # Returns a Program
-function compile(theory::Theory, pat::Pattern)
+function compile(T::Type{<:AbstractTheory}, pat::Pattern)
   patvec = ETrm[]
   trm_to_vec!(pat.trm, patvec)
 
-  c = Compiler(theory)
+  c = Compiler(theory(T))
 
   load_pattern!(c, patvec)
 

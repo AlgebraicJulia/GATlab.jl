@@ -1,6 +1,6 @@
 module Parsing
 
-export Expr0, SymExpr, NewTerm, NewType, NewAxiom, Declaration, parse_decl, parse_symexpr, parse_bindings, head
+export Expr0, SymExpr, NewTerm, NewType, NewAxiom, Declaration, parse_decl, parse_symexpr, parse_binding, head
 
 using ...Util
 

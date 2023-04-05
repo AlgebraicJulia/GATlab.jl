@@ -5,12 +5,14 @@ module Dsl
 
 using Reexport
 
+include("Overloads.jl")
 include("Parsing.jl")
 include("TheoryMacros.jl")
+include("ContextMaps.jl")
 include("ModelImplementations.jl")
-include("Overloads.jl")
 
 @reexport using .TheoryMacros
+@reexport using .ContextMaps
 @reexport using .ModelImplementations
 
 end

@@ -46,6 +46,10 @@ struct EGraph
   end
 end
 
+function EGraph(T::Type{<:AbstractTheory})
+  EGraph(theory(T))
+end
+
 function canonicalize!(eg::EGraph, etrm::ETrm)
   ETrm(etrm.head, find_root!.(Ref(eg.eqrel), etrm.args))
 end

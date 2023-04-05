@@ -1,6 +1,7 @@
 module Theories
-export Lvl, ArgLvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory, TheoryMap,
-  empty_theory, index, is_context, FullContext, lookup, arity, judgments, rename
+export Lvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory,
+  AbstractTheory, theory, empty_theory, ThEmpty, index, is_context, FullContext,
+  lookup, arity, judgments, rename
 
 using StructEquality
 
@@ -150,5 +151,36 @@ lookup(fc::FullContext, s::Symbol) = lookup(fc, Name(s))
 
 const empty_theory = Theory(Anon(), Judgment[])
 
+"""
+A type-level signifier for a particular theory, used to control dispatch
+and to pass around theory objects (which can't be type parameters) at
+the type level.
+
+Structs which subtype `AbstractTheory` should always be singletons, and
+have `theory` defined on them.
+"""
+abstract type AbstractTheory end
+
+"""
+Meant to be overloaded as
+
+```julia
+theory(::T) = ...
+```
+
+where `T` is a singleton struct subtyping `AbstractTheory`
+
+Returns the @ref(Theory) associated to `T`.
+"""
+function theory end
+
+"""
+A convenience overload of `theory`
+"""
+theory(T::Type{<:AbstractTheory}) = theory(T())
+
+struct ThEmpty <: AbstractTheory end
+
+theory(::ThEmpty) = empty_theory
 
 end

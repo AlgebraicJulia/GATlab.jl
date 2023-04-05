@@ -1,33 +1,8 @@
 module ModelInterface
-export AbstractTheory, theory, Model, checkvalidity, typarg, ap
 
-"""
-A type-level signifier for a particular theory, used to control dispatch
-and to pass around theory objects (which can't be type parameters) at
-the type level.
+using ...Syntax
 
-Structs which subtype `AbstractTheory` should always be singletons, and
-have `theory` defined on them.
-"""
-abstract type AbstractTheory end
-
-"""
-Meant to be overloaded as
-
-```julia
-theory(::T) = ...
-```
-
-where `T` is a singleton struct subtyping `AbstractTheory`
-
-Returns the @ref(Theory) associated to `T`.
-"""
-function theory end
-
-"""
-A convenience overload of `theory`
-"""
-theory(T::Type{<:AbstractTheory}) = theory(T())
+export Model, checkvalidity, typarg, ap
 
 """
 An element of `Model{T}` represents a model of the theory `T`.
