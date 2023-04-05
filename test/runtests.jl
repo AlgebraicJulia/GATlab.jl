@@ -15,3 +15,7 @@ end
 @testset "stdlib" begin
   include("stdlib/tests.jl")
 end
+
+@testset "models" begin
+  include("models/tests.jl")
+end

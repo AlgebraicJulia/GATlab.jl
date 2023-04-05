@@ -1,5 +1,5 @@
 module Names
-export Name, Literal, Anon
+export Name, StrLit, SymLit, Anon
 
 """
 Names are used to label parts of a GAT.

@@ -17,7 +17,7 @@ ModelInterface.theory(::ThEmpty) = empty_theory
 end
 
 @theory ThGraph <: ThSet begin
-  Hom(a,b)::TYPE ⊣ [a::Ob, b::Ob]
+  Hom(dom,codom)::TYPE ⊣ [dom::Ob, codom::Ob]
 end
 
 @theory ThLawlessCat <: ThGraph begin
