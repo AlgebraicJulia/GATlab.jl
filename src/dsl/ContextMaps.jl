@@ -60,7 +60,7 @@ function context_map_impl(
     Expr(:block, lines...) => filter(line -> typeof(line) != LineNumberNode, lines)
     _ => error("expected body of @context_map macro to be a block")
   end
-  values_by_name = Dict{Name, Trm}(parse_line(T, dom, line) for line in lines)
+  values_by_name = Dict{Name, Trm}(parse_line(T, codom, line) for line in lines)
   KleisliContextMap(
     dom,
     codom,
