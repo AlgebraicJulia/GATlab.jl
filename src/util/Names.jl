@@ -33,4 +33,6 @@ Base.string(n::StrLit) = n.name
 Base.string(n::SymLit) = string(n.name)
 Base.string(::Anon) = "_"
 
+Base.show(n::SymLit) = string(n)
+
 end

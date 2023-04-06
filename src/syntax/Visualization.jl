@@ -138,7 +138,7 @@ function sequent(t::Theory, i::Int)
   if j.head isa Constructor 
     arg_syms = string.(first.([ctx[a] for a in j.head.args]))
     typ = j.head isa TrmCon ? ": $(show_inctx(t, ctx,j.head.typ,i1))" : ": TYPE"
-    return Sequent("$name introduction", ctx_string(ctx,t,i1), call_args(name,arg_syms)*" $typ")
+    return Sequent("$(show(name)) introduction", ctx_string(ctx,t,i1), call_args(name,arg_syms)*" $typ")
   else # AXIOM
     eqs = join([show_inctx(t,ctx,x,i1) for x in j.head.equands], " = ")
     typ = show_inctx(t, ctx, j.head.typ, i1)
