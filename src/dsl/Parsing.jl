@@ -1,6 +1,7 @@
 module Parsing
 
-export Expr0, SymExpr, NewTerm, NewType, NewAxiom, Declaration, parse_decl, parse_symexpr, parse_binding, head
+export Expr0, SymExpr, NewTerm, NewType, NewAxiom, Declaration, parse_decl,
+  parse_symexpr, parse_bindings, head
 
 using ...Util
 
@@ -93,7 +94,7 @@ function parse_decl(e::Expr)
     :($body ⊣ [$(bindings...)]) =>
       Declaration(
         parse_declbody(body),
-        parse_binding.(bindings)
+        parse_bindings(bindings)
       )
     body => Declaration(parse_declbody(body), Pair{Symbol, SymExpr}[])
     _ => error("Could not parse declaration $e")
@@ -112,12 +113,22 @@ function parse_declbody(e::Expr0)
   end
 end
 
-function parse_binding(binding::Expr0)
-  @match binding begin
-    :($(head::Symbol)::$(type::Expr0)) => (head => parse_symexpr(type))
-    (head::Symbol) => (head => SymExpr(Default(), SymExpr[]))
-    _ => error("could not parse binding $binding")
+function parse_bindings(bindings::AbstractVector)
+  result = Pair{Name, SymExpr}{}
+  for binding in bindings
+    @match binding begin
+      :($(head::Symbol)::$(type::Expr0)) =>
+        push!(result, Name(head) => parse_symexpr(type))
+      :(($heads...,)::$(type::Expr0)) => begin
+        type_expr = parse_symexpr(type)
+        append!(result, map(head -> Name(head) => type_expr, heads))
+      end
+      :($(head::Symbol)) =>
+        push!(result, Name(head) => SymExpr(Name(:default)))
+      _ => error("could not parse binding $binding")
+    end
   end
+  result
 end
 
 end
