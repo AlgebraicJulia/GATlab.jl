@@ -78,6 +78,6 @@ end
 
 TheoryMacros.construct_context(judgments::Vector{Judgment}, ctx::Context) = ctx
 TheoryMacros.construct_context(judgments::Vector{Judgment}, exprs::Vector{Expr0}) =
-  construct_context(judgments, parse_binding.(exprs))
+  construct_context(judgments, parse_bindings(exprs))
 
 end

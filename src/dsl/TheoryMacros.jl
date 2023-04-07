@@ -235,7 +235,7 @@ end
 function context_impl(T::Type{<:AbstractTheory}, expr)
   T = gettheory(T)
   @match expr begin
-    :([$(bindings...)]) => construct_context(T.judgments, parse_binding.(bindings))
+    :([$(bindings...)]) => construct_context(T.judgments, parse_bindings(bindings))
     _ => error("expected a list of bindings")
   end
 end
