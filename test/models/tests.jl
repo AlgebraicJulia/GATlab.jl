@@ -19,7 +19,7 @@ module FinSetImpl
 using ..ModelTests: FinSet, FinFunction
 
 check(::FinSet) = true
-check(::FinFunction) = true
+check(f::FinFunction) = length(f.values) == f.dom.n && all(f.values[x] ∈ 1:f.codom.n for x in 1:f.dom.n)
 
 dom(f::FinFunction) = f.dom
 codom(f::FinFunction) = f.codom
