@@ -1,5 +1,5 @@
 module Categories
-export ThSet, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThPreorder,
+export ThClass, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThPreorder,
         ThMagma, ThSemiGroup, ThMonoid, ThGroup,
         ThNat, ThNatPlus, ThNatPlusTimes
 
@@ -7,11 +7,11 @@ using ...Dsl
 using ...Syntax: ThEmpty
 
 # Category theory
-@theory ThSet <: ThEmpty begin
+@theory ThClass <: ThEmpty begin
   Ob::TYPE ⊣ []
 end
 
-@theory ThGraph <: ThSet begin
+@theory ThGraph <: ThClass begin
   Hom(dom,codom)::TYPE ⊣ [dom::Ob, codom::Ob]
 end
 
@@ -36,7 +36,7 @@ end
   thineq := f == g :: Hom(A,B) ⊣ [A::Ob, B::Ob, f::Hom(A,B), g::Hom(A,B)]
 end
 
-@theory ThPreorder <: ThSet begin
+@theory ThPreorder <: ThClass begin
   Leq(a,b)::TYPE ⊣ [a::Ob, b::Ob]
 
   # Preorder axioms are lifted to term constructors in the GAT.
@@ -69,29 +69,7 @@ Defining ThMonotoneMap via pushout (+ morphisms MMdom and MMcodom)
 end
 """
 
-
-# Abstract algebra
-@theory ThMagma <: ThSet begin
-  (x ∘ y)::Ob ⊣ [x::Ob, y::Ob]
-end
-
-@theory ThSemiGroup <: ThMagma begin
-  ((x ∘ y) ∘ z == (x ∘ (y ∘ z)) :: Ob) ⊣ [x::Ob, y::Ob, z::Ob]
-end
-
-@theory ThMonoid <: ThSemiGroup begin
-  e() :: Ob ⊣ []
-  (e() ∘ x == x :: Ob) ⊣ [x::Ob]
-  (x ∘ e() == x :: Ob) ⊣ [x::Ob]
-end
-
-@theory ThGroup <: ThMonoid begin
-  i(x) :: Ob ⊣ [x::Ob]
-  (i(x) ∘ x == e :: Ob) ⊣ [x::Ob]
-  (x ∘ i(x) == e :: Ob) ⊣ [x::Ob]
-end
-
-# Natural numbers 
+# Natural numbers
 
 @theory ThNat <: ThEmpty begin
   ℕ :: TYPE ⊣ []

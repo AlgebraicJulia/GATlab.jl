@@ -8,9 +8,9 @@ using MLStyle
 using StructEquality
 
 @struct_hash_equal struct SymExpr
-  head::Symbol
+  head::Name
   args::Vector{SymExpr}
-  function SymExpr(head::Symbol, args::Vector=SymExpr[])
+  function SymExpr(head::Name, args::Vector=SymExpr[])
     new(head, args)
   end
 end
@@ -20,7 +20,7 @@ head(e::SymExpr) = e.head
 abstract type DeclBody end
 
 struct NewTerm <: DeclBody
-  head::Symbol
+  head::Name
   args::Vector{Symbol}
   type::SymExpr
 end
@@ -28,7 +28,7 @@ end
 @as_record NewTerm
 
 struct NewType <: DeclBody
-  head::Symbol
+  head::Name
   args::Vector{Symbol}
 end
 
@@ -52,8 +52,8 @@ const Expr0 = Union{Symbol, Expr}
 
 function parse_args(e::Expr0)
   @match e begin
-    (name::Symbol) => (name, Expr0[])
-    :($(name::Symbol)($(args...))) => (name, Expr0[args...])
+    (name::Symbol) => (Name(name), Expr0[])
+    :($(name::Symbol)($(args...))) => (Name(name), Expr0[args...])
     _ => error("Could not parse $e as an application of a head to arguments")
   end
 end
@@ -76,16 +76,20 @@ function Base.show(io::IO, m::MIME"text/plain", e::SymExpr)
   end
 end
 
-function reassociate_decl(e)
+function normalize_decl(e)
   @match e begin
     :($name := $lhs == $rhs :: $typ ⊣ $ctx) => :(($name := ($lhs == $rhs :: $typ)) ⊣ $ctx)
     :($lhs == $rhs :: $typ ⊣ $ctx) => :(($lhs == $rhs :: $typ) ⊣ $ctx)
+    :(($lhs == $rhs :: $typ) ⊣ $ctx) => :(($lhs == $rhs :: $typ) ⊣ $ctx)
+    :($lhs == $rhs ⊣ $ctx) => :(($lhs == $rhs :: default) ⊣ $ctx)
+    :($trmcon :: $typ ⊣ $ctx) => :(($trmcon :: $typ) ⊣ $ctx)
+    :($trmcon ⊣ $ctx) => :(($trmcon :: default) ⊣ $ctx)
     e => e
   end
 end
 
 function parse_decl(e::Expr)
-  @match reassociate_decl(e) begin
+  @match normalize_decl(e) begin
     :($body ⊣ [$(bindings...)]) =>
       Declaration(
         parse_declbody(body),
@@ -108,9 +112,10 @@ function parse_declbody(e::Expr0)
   end
 end
 
-function parse_binding(binding::Expr)
+function parse_binding(binding::Expr0)
   @match binding begin
     :($(head::Symbol)::$(type::Expr0)) => (head => parse_symexpr(type))
+    (head::Symbol) => (head => SymExpr(Default(), SymExpr[]))
     _ => error("could not parse binding $binding")
   end
 end
