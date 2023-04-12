@@ -1,7 +1,7 @@
 module Algebra
 
 @theory ThSet <: ThEmpty begin
-  @default::TYPE
+  default::TYPE
 end
 
 @theory ThMagma <: ThClass begin
