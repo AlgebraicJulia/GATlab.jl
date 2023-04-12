@@ -31,15 +31,15 @@ end
   a ⋅ b == b ⋅ a ⊣ [a,b]
 end
 
-# @theory ThAb <: ThMonoid begin
-#   using ThGroup
-#   using ThCMonoid
-# end
+@theory ThAb <: ThMonoid begin
+  using ThGroup
+  using ThCMonoid
+end
 
-# @theory ThRing <: ThSet begin
-#   using ThAb: ⋅ as +, e as 0
-#   using ThMonoid
-#   a ⋅ (b + c) == (a ⋅ b) + (a ⋅ c) ⊣ [a,b,c]
-# end
+@theory ThRing <: ThSet begin
+  using ThAb: ⋅ as +, e as 0
+  using ThMonoid
+  a ⋅ (b + c) == (a ⋅ b) + (a ⋅ c) ⊣ [a,b,c]
+end
 
 end

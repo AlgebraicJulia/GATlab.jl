@@ -54,15 +54,52 @@ function construct_judgment(judgments::Vector{Judgment}, decl::Declaration)
   Judgment(name, head, context)
 end
 
-function theory_impl(parent::Theory, name::Symbol, lines::Vector)
-  judgments = copy(parent.judgments)
+function theory_impl(precursor::Theory, name::Symbol, lines::Vector)
+  judgments = copy(precursor.judgments)
   for line in lines
     push!(judgments, construct_judgment(judgments, parse_decl(line)))
   end
   Theory(Name(name), judgments)
 end
 
-theory_impl(parent::Type{<:AbstractTheory}, name::Symbol, lines::Vector) = theory_impl(theory(parent), name, lines)
+theory_impl(precursor::Type{<:AbstractTheory}, name::Symbol, lines::Vector) =
+  theory_impl(theory(precursor), name, lines)
+
+function rename_by(t::Theory, renamings::Dict{Name,Name})
+  by_int = Dict{Int,Name}()
+  for (i,j) in enumerate(t.judgments)
+    if j.name ∈ keys(renamings)
+      by_int[i] = renamings[j.name]
+    end
+  end
+  by_int
+end
+
+function theory_precursor(
+  parent::Type{<:AbstractTheory},
+  usings::Vector{Tuple{DataType, Dict{Name,Name}}}
+)
+  parent = theory(parent)
+  cur = parent
+  incl = collect(1:length(parent.judgments))
+  for (T, renamings) in usings
+    t = theory(T)
+    cur = pushout(
+      Anon(),
+      TheoryIncl(parent, cur, incl),
+      TheoryIncl(parent, t, incl);
+      rename_c=rename_by(t, renamings)
+    )[1]
+  end
+  cur
+end
+
+function parse_rename(rename::Expr)
+  @match rename begin
+    Expr(:as, Expr(:., lhs), rhs) => (Name(lhs) => Name(rhs))
+    _ => error("invalid renaming syntax")
+  end
+end
 
 macro theory(head, body)
   (name, parent) = @match head begin
@@ -70,17 +107,40 @@ macro theory(head, body)
     _ => error("expected head of @theory macro to be in the form name <: parent")
   end
   lines = @match body begin
-    Expr(:block, lines...) => filter(line -> typeof(line) != LineNumberNode, lines)
+    Expr(:block, lines...) => lines
     _ => error("expected body of @theory macro to be a block")
   end
+  judgments = Expr[]
+  usings = Tuple{Expr0, Dict{Name,Name}}[]
+  for line in lines
+    @match line begin
+      (::LineNumberNode) => nothing
+      Expr(:using, Expr(:., T)) => push!(usings, (T, Dict{Name,Name}()))
+      Expr(:using, Expr(:(:), Expr(:., T), renames...)) =>
+        push!(usings, (T, Dict{Name,Name}(parse_rename.(renames))))
+      l => push!(judgments, l)
+    end
+  end
+  # we use :ref instead of :vect so that we construct a vector of the proper
+  # type when there are no using statements
+  usings = Expr(
+    :ref,
+    Tuple{DataType, Dict{Name,Name}},
+    [Expr(:tuple, T, renames) for (T, renames) in usings]...
+  )
+  precursor = gensym(:precursor)
   tmp = gensym(:theory)
   esc(
     Expr(
       :block,
+      :(const $precursor = $(GlobalRef(TheoryMacros, :theory_precursor))(
+        $parent,
+        $usings
+      )),
       :(const $tmp = $(GlobalRef(TheoryMacros, :theory_impl))(
-         $parent,
+         $precursor,
          $(Expr(:quote, name)),
-         $lines
+         $judgments
       )),
       __source__,
       :(struct $name <: $(GlobalRef(Theories, :AbstractTheory)) end),
