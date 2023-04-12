@@ -25,6 +25,7 @@ Name(n::String) = StrLit(n)
 Name(n::Char) = StrLit(string(n))
 Name(n::Symbol) = n == :default ? Default() : SymLit(n)
 Name(n::Name) = n
+Name(i::Int)= SymLit(Symbol(i))
 
 struct Anon <: Name
 end

@@ -1,7 +1,7 @@
 module Theories
 export Lvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory,
   AbstractTheory, theory, empty_theory, ThEmpty, index, is_context, FullContext,
-  lookup, arity, judgments, rename
+  lookup, arity, judgments, rename, getname
 
 using StructEquality
 
@@ -73,7 +73,7 @@ end
 
 Base.:(==)(x::Judgment,y::Judgment) = x.head == y.head && x.ctx == y.ctx
 Base.hash(x::Judgment, h) = hash(x.head, hash(x.ctx, h))
-name(j::Judgment) = j.name
+getname(j::Judgment) = j.name
 rename(j::Judgment, n::Name) = Judgment(n, j.head, j.ctx)
 
 # Args index the CONTEXT of the judgment
