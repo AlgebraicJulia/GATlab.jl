@@ -1,5 +1,5 @@
 module Names
-export Name, StrLit, SymLit, Anon
+export Name, StrLit, SymLit, Anon, Default
 
 """
 Names are used to label parts of a GAT.
@@ -23,7 +23,7 @@ end
 
 Name(n::String) = StrLit(n)
 Name(n::Char) = StrLit(string(n))
-Name(n::Symbol) = SymLit(n)
+Name(n::Symbol) = n == :default ? Default() : SymLit(n)
 Name(n::Name) = n
 
 struct Anon <: Name
@@ -34,5 +34,10 @@ Base.string(n::SymLit) = string(n.name)
 Base.string(::Anon) = "_"
 
 Base.show(n::SymLit) = string(n)
+
+struct Default <: Name
+end
+
+Base.string(::Default) = "_"
 
 end

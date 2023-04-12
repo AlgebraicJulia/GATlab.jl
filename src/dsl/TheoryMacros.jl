@@ -10,12 +10,12 @@ using ...Util
 using ..Parsing
 
 function construct_typ(fc::FullContext, e::SymExpr)
-  head = lookup(fc, Name(e.head))
+  head = lookup(fc, e.head)
   Typ(head, construct_trm.(Ref(fc), e.args))
 end
 
 function construct_trm(fc::FullContext, e::SymExpr)
-  head = lookup(fc, Name(e.head))
+  head = lookup(fc, e.head)
   Trm(head, construct_trm.(Ref(fc), e.args))
 end
 
@@ -34,12 +34,12 @@ function construct_judgment(judgments::Vector{Judgment}, decl::Declaration)
   (name, head) = @match decl.body begin
     NewTerm(head, args, type) =>
       (
-        Name(head),
+        head,
         TrmCon(lookup.(Ref(fc), args), construct_typ(fc, type))
       )
     NewType(head, args) =>
       (
-        Name(head),
+        head,
         TypCon(lookup.(Ref(fc), args))
       )
     NewAxiom(lhs, rhs, type, name) =>
