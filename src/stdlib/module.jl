@@ -2,10 +2,10 @@ module Stdlib
 
 using Reexport
 
-include("Categories.jl")
-include("Algebra.jl")
+include("theories/module.jl")
+include("models/module.jl")
 
-@reexport using .Categories
-@reexport using .Algebra
+@reexport using .StdTheories
+@reexport using .StdModels
 
 end

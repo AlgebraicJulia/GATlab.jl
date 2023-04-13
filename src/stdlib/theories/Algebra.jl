@@ -1,8 +1,8 @@
 module Algebra
 export ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing, ThCRing
 
-using ...Dsl
-using ...Syntax: ThEmpty
+using ....Dsl
+using ....Syntax: ThEmpty
 
 @theory ThSet <: ThEmpty begin
   default::TYPE
