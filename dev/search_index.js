@@ -1,0 +1,3 @@
+var documenterSearchIndex = {"docs":
+[{"location":"api/#Library-Reference","page":"Library Reference","title":"Library Reference","text":"","category":"section"},{"location":"api/","page":"Library Reference","title":"Library Reference","text":"Modules = [Gatlab]","category":"page"},{"location":"#Gatlab.jl","page":"Gatlab.jl","title":"Gatlab.jl","text":"","category":"section"},{"location":"","page":"Gatlab.jl","title":"Gatlab.jl","text":"CurrentModule = Gatlab","category":"page"},{"location":"","page":"Gatlab.jl","title":"Gatlab.jl","text":"Gatlab.jl is a Julia library for...","category":"page"}]
+}
