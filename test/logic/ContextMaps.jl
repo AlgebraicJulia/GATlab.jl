@@ -12,7 +12,7 @@ end
 @test length(f.dom) == 3
 @test index(f.values[3].head) == 3
 
-g = @context_map ThCategory [a,b::Ob, f::Hom(a,b)] [c,d::Ob, f::Hom(c,d)] begin
+g = @context_map ThCategory [(a,b)::Ob, f::Hom(a,b)] [(c,d)::Ob, f::Hom(c,d)] begin
   a = c
   b = d
   f = f

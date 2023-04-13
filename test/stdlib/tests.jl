@@ -32,8 +32,8 @@ end
 end
 @theory T3 <: ThEmpty begin
   A::TYPE ⊣ []
-  u(x, y, z)::A ⊣ [x,y,z::A]
-  u(x, y, z) == u(y, z, x) :: A ⊣ [x,y,z::A]
+  u(x, y, z)::A ⊣ [(x,y,z)::A]
+  u(x, y, z) == u(y, z, x) :: A ⊣ [(x,y,z)::A]
 end
 
 tst = @theorymap T1 -> T2 begin

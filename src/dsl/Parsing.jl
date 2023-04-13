@@ -114,17 +114,17 @@ function parse_declbody(e::Expr0)
 end
 
 function parse_bindings(bindings::AbstractVector)
-  result = Pair{Name, SymExpr}{}
+  result = Pair{Symbol, SymExpr}[]
   for binding in bindings
     @match binding begin
       :($(head::Symbol)::$(type::Expr0)) =>
-        push!(result, Name(head) => parse_symexpr(type))
-      :(($heads...,)::$(type::Expr0)) => begin
+        push!(result, head => parse_symexpr(type))
+      :(($(heads...),)::$(type::Expr0)) => begin
         type_expr = parse_symexpr(type)
-        append!(result, map(head -> Name(head) => type_expr, heads))
+        append!(result, map(head -> head => type_expr, heads))
       end
       :($(head::Symbol)) =>
-        push!(result, Name(head) => SymExpr(Name(:default)))
+        push!(result, head => SymExpr(Name(:default)))
       _ => error("could not parse binding $binding")
     end
   end
