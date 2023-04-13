@@ -47,7 +47,7 @@ struct EGraph
 end
 
 function EGraph(T::Type{<:AbstractTheory})
-  EGraph(theory(T))
+  EGraph(gettheory(T))
 end
 
 function canonicalize!(eg::EGraph, etrm::ETrm)

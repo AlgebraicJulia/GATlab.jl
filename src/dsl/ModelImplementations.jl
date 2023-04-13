@@ -16,7 +16,7 @@ macro simple_model(T, name, mod)
 end
 
 function simple_model_impl(T::Type{<:AbstractTheory}, name::Symbol, mod::Module)
-  t = theory(T)
+  t = gettheory(T)
   Expr(:block,
     simple_model_checks(t, name, mod)...,
     simple_model_typargs(t, name, mod)...,

@@ -282,7 +282,7 @@ function compile(T::Type{<:AbstractTheory}, pat::Pattern)
   patvec = ETrm[]
   trm_to_vec!(pat.trm, patvec)
 
-  c = Compiler(theory(T))
+  c = Compiler(gettheory(T))
 
   load_pattern!(c, patvec)
 

@@ -63,7 +63,7 @@ function theory_impl(precursor::Theory, name::Symbol, lines::Vector)
 end
 
 theory_impl(precursor::Type{<:AbstractTheory}, name::Symbol, lines::Vector) =
-  theory_impl(theory(precursor), name, lines)
+  theory_impl(gettheory(precursor), name, lines)
 
 function rename_by(t::Theory, renamings::Dict{Name,Name})
   by_int = Dict{Int,Name}()
@@ -79,11 +79,11 @@ function theory_precursor(
   parent::Type{<:AbstractTheory},
   usings::Vector{Tuple{DataType, Dict{Name,Name}}}
 )
-  parent = theory(parent)
+  parent = gettheory(parent)
   cur = parent
   incl = collect(1:length(parent.judgments))
   for (T, renamings) in usings
-    t = theory(T)
+    t = gettheory(T)
     cur = pushout(
       Anon(),
       TheoryIncl(parent, cur, incl),
@@ -144,7 +144,7 @@ macro theory(head, body)
       )),
       __source__,
       :(struct $name <: $(GlobalRef(Theories, :AbstractTheory)) end),
-      :($(GlobalRef(Theories, :theory))(::$name) = $tmp)
+      :($(GlobalRef(Theories, :gettheory))(::$name) = $tmp)
     )
   )
 end
@@ -174,7 +174,7 @@ function theorymap_impl(dom::Theory, codom::Theory, lines::Vector)
 end
 
 theorymap_impl(dom::Type{<:AbstractTheory}, codom::Type{<:AbstractTheory}, lines::Vector) =
-    theorymap_impl(theory(dom), theory(codom), lines)
+    theorymap_impl(gettheory(dom), gettheory(codom), lines)
 
 function make_composite(
   codom::Theory,
@@ -222,7 +222,7 @@ function term_impl(theory::Theory, expr::Expr0; context = Context())
 end
 
 term_impl(intheory::Type{<:AbstractTheory}, expr::Expr0; context = Context()) =
-  term_impl(theory(intheory), expr; context)
+  term_impl(gettheory(intheory), expr; context)
 
 macro term(theory, expr)
   esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory, $(Expr(:quote, expr)))))
@@ -233,7 +233,7 @@ macro term(theory, context, expr)
 end
 
 function context_impl(T::Type{<:AbstractTheory}, expr)
-  T = theory(T)
+  T = gettheory(T)
   @match expr begin
     :([$(bindings...)]) => construct_context(T.judgments, parse_binding.(bindings))
     _ => error("expected a list of bindings")
