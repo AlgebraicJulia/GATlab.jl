@@ -1,14 +1,14 @@
 using Documenter
 using Literate
 
-@info "Loading AlgebraicTemplate"
-using AlgebraicTemplate
+@info "Loading Gatlab"
+using Gatlab
 
 # Set Literate.jl config if not being compiled on recognized service.
 config = Dict{String,String}()
 if !(haskey(ENV, "GITHUB_ACTIONS") || haskey(ENV, "GITLAB_CI"))
-  config["nbviewer_root_url"] = "https://nbviewer.jupyter.org/github/AlgebraicJulia/AlgebraicTemplate.jl/blob/gh-pages/dev"
-  config["repo_root_url"] = "https://github.com/AlgebraicJulia/AlgebraicTemplate.jl/blob/main/docs"
+  config["nbviewer_root_url"] = "https://nbviewer.jupyter.org/github/AlgebraicJulia/Gatlab.jl/blob/gh-pages/dev"
+  config["repo_root_url"] = "https://github.com/AlgebraicJulia/Gatlab.jl/blob/main/docs"
 end
 
 const literate_dir = joinpath(@__DIR__, "..", "examples")
@@ -29,13 +29,13 @@ end
 
 @info "Building Documenter.jl docs"
 makedocs(
-  modules=[AlgebraicTemplate],
+  modules=[Gatlab],
   format=Documenter.HTML(),
-  sitename="AlgebraicTemplate.jl",
+  sitename="Gatlab.jl",
   doctest=false,
   checkdocs=:none,
   pages=Any[
-    "AlgebraicTemplate.jl"=>"index.md",
+    "Gatlab.jl"=>"index.md",
     # "Examples"=>Any[
     #   "examples/test_example/test_example.md",
     # ],
@@ -46,6 +46,6 @@ makedocs(
 @info "Deploying docs"
 deploydocs(
   target="build",
-  repo="github.com/AlgebraicJulia/AlgebraicTemplate.jl.git",
+  repo="github.com/AlgebraicJulia/Gatlab.jl.git",
   branch="gh-pages"
 )
