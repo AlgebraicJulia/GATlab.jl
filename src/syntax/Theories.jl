@@ -1,6 +1,6 @@
 module Theories
 export Lvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory,
-  AbstractTheory, theory, empty_theory, ThEmpty, index, is_context, FullContext,
+  AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context, FullContext,
   lookup, arity, judgments, rename, getname
 
 using StructEquality
