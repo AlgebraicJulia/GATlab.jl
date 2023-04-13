@@ -1,5 +1,5 @@
 # Library Reference
 
 ```@autodocs
-Modules = [AlgebraicTemplate]
+Modules = [Gatlab]
 ```

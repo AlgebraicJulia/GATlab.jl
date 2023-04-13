@@ -1,7 +1,7 @@
-# AlgebraicTemplate.jl
+# Gatlab.jl
 
 ```@meta
-CurrentModule = AlgebraicTemplate
+CurrentModule = Gatlab
 ```
 
-`AlgebraicTemplate.jl` is a Julia library for...
+`Gatlab.jl` is a Julia library for...
