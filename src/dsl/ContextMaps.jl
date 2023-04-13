@@ -51,7 +51,7 @@ function context_map_impl(
   codom::Union{Context, Vector{Expr0}},
   body::Expr
 )
-  T = theory(T)
+  T = gettheory(T)
   dom = construct_context(T.judgments, dom)
   codom = construct_context(T.judgments, codom)
   body.head == :block ||

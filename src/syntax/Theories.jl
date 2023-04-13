@@ -165,22 +165,22 @@ abstract type AbstractTheory end
 Meant to be overloaded as
 
 ```julia
-theory(::T) = ...
+gettheory(::T) = ...
 ```
 
 where `T` is a singleton struct subtyping `AbstractTheory`
 
 Returns the @ref(Theory) associated to `T`.
 """
-function theory end
+function gettheory end
 
 """
 A convenience overload of `theory`
 """
-theory(T::Type{<:AbstractTheory}) = theory(T())
+gettheory(T::Type{<:AbstractTheory}) = gettheory(T())
 
 struct ThEmpty <: AbstractTheory end
 
-theory(::ThEmpty) = empty_theory
+gettheory(::ThEmpty) = empty_theory
 
 end
