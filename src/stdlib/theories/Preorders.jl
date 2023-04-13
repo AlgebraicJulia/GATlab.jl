@@ -1,4 +1,9 @@
-module Preorder
+module Preorders
+export ThPreorder
+
+using ....Dsl
+using ....Syntax: ThEmpty
+using ..Categories
 
 @theory ThPreorder <: ThClass begin
   Leq(a,b)::TYPE ⊣ [a::Ob, b::Ob]

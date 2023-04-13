@@ -1,4 +1,8 @@
 module Naturals
+export ThNat, ThNatPlus, ThNatPlusTimes
+
+using ....Dsl
+using ....Syntax: ThEmpty
 
 # Natural numbers
 

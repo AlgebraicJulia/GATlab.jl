@@ -1,5 +1,9 @@
 module Lenses
 
+using ....Syntax
+using ....Models
+using ...StdTheories
+
 struct SimpleArena
   pos::Context
   dir::Context
