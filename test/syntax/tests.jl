@@ -1,11 +1,8 @@
-using Revise
-using Gatlab 
+module TestSyntax
 
-overlap = ThSet 
+using Test
+using Gatlab
 
-f = TheoryIncl(ThSet,ThGroup,[1])
-g = TheoryIncl(ThSet,ThMonoid,[1])
+# todo
 
-prering = pushout(Name("PreRing"), f,g, rename_c=Dict{Int,Name}(2 => Name(:+), 4 => Name(Symbol("0"))))
-
-prering[1]
+end
