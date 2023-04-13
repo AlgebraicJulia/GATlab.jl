@@ -1,4 +1,5 @@
 module Algebra
+export ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing, ThCRing
 
 using ...Dsl
 using ...Syntax: ThEmpty
@@ -37,9 +38,23 @@ end
 end
 
 @theory ThRing <: ThSet begin
-  using ThAb: ⋅ as +, e as 0
-  using ThMonoid
-  a ⋅ (b + c) == (a ⋅ b) + (a ⋅ c) ⊣ [a,b,c]
+  using ThAb: ⋅ as +, i as -, e as 0
+  using ThMonoid: ⋅ as *, e as 1
+  a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
+end
+
+@theory ThCRing <: ThRing begin
+  a * b == b * a ⊣ [a,b]
+end
+
+@theory ThRig <: ThSet begin
+  using ThCMonoid: ⋅ as +, e as 0
+  using ThMonoid: ⋅ as *, e as 1
+  a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
+end
+
+@theory ThCRig <: ThRig begin
+  a * b == b * a ⊣ [a,b]
 end
 
 end
