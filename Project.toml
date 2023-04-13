@@ -1,6 +1,6 @@
 name = "Gatlab"
 uuid = "f0ffcf3b-d13a-433e-917c-cc44ccf5ead2"
-authors = ["Owen Lynch <root@owenlynch.org>"]
+authors = ["AlgebraicJulia Developers"]
 version = "0.1.0"
 
 [deps]
