@@ -8,3 +8,6 @@ DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 MLStyle = "d8e11817-5142-5d16-987a-aa16d5891078"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 StructEquality = "6ec83bb0-ed9f-11e9-3b4c-2b04cb4e219c"
+
+[compat]
+Reexport = "1"
