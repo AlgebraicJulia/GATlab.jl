@@ -1,5 +1,5 @@
 module ContextMaps
-export ContextMap, KleisliContextMap, substitute
+export ContextMap, KleisliContextMap, substitute, substitute_all, reindex
 
 using ...Syntax
 
@@ -57,5 +57,17 @@ end
 function id(ctx::Context)
   KleisliContextMap(ctx, ctx, Trm[Trm(Lvl(i; context=true)) for i in 1:length(ctx)])
 end
+
+function reindex(t::Trm, n::Int)
+  if iscontext(t.head)
+    Trm(t.head + n, t.args)
+  else
+    Trm(t.head, reindex.(t.args, Ref(n)))
+  end
+end
+
+# function kleisli_coproduct(ts::AbstractVector{Trm}, ts′::AbstractVector{Trm})
+#   vcat(ts, reindex(ts′, length(ts)))
+# end
 
 end
