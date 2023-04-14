@@ -1,6 +1,9 @@
 module Lenses
 
+export SimpleArena, SimpleKleisliLens, compose
+
 using ....Syntax
+using ....Logic
 using ....Models
 using ...StdTheories
 
@@ -23,7 +26,15 @@ end
 struct SimpleKleisliLensC{T<:AbstractTheory} <: Model{ThStrictMonCat}
 end
 
-module SimpleKleisliLensImpl
+# Either{A,A} -> A
+# Left(a) |-> a
+# Right(a) |-> a
+
+#module SimpleKleisliLensImpl
+
+function codiag(c::Context)
+  vcat(id_values(c), id_values(c))
+end
 
 """
 l₁ = (f, f#)
@@ -44,18 +55,20 @@ g : E -> B
 f# : B -> A + D
 g# : D -> C + F
 
-h = g ⋅ f
+       g      f
+h = E ---> C ---> A
 
         f#        1_A+g#             1_A + f + 1_F              ∇_A + 1_F
 h# = B --> A + D -------> A + C + F ---------------> A + A + F -----------> A + F
 """
 function compose(l₁::SimpleKleisliLens{T}, l₂::SimpleKleisliLens{T}) where {T <: AbstractTheory}
-  expose = substitute_all(l₁.expose, l₂.expose)
+  expose = substitute_all(l₂.expose, l₁.expose)
+  A_n = length(l₁.dom.pos)
   update = substitute_all(
     l₁.update,
-    coproduct(id(l₁.dom.pos), l₂.update),
-    coproduct(id(l₁.dom.pos), l₁.expose, id(l₂.codom.dir)),
-    coproduct(collapse(l₁.dom.pos), id(l₂.codom.dir))
+    coproduct_values(id_values(l₁.dom.pos), l₂.update, A_n),
+    coproduct_values(id_values(l₁.dom.pos), coproduct_values(l₁.expose, id_values(l₂.codom.dir), A_n), A_n),
+    coproduct_values(codiag(l₁.dom.pos), id_values(l₂.codom.dir), A_n)
   )
   SimpleKleisliLens{T}(
     l₁.dom,
@@ -65,6 +78,6 @@ function compose(l₁::SimpleKleisliLens{T}, l₂::SimpleKleisliLens{T}) where {
   )
 end
 
-end
+#end
 
 end
