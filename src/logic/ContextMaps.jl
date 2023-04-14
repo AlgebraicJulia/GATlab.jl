@@ -1,5 +1,5 @@
 module ContextMaps
-export ContextMap, KleisliContextMap
+export ContextMap, KleisliContextMap, substitute
 
 using ...Syntax
 
@@ -28,21 +28,30 @@ function compose(f::KleisliContextMap, g::KleisliContextMap)
   KleisliContextMap(
     f.dom,
     g.codom,
-    Trm[substitute(t, g) for t in f.values]
+    substitute_all(f.values, g.values)
   )
 end
 
 """
+We assume that values is the values part of a KleisliContextMap `f`.
+
+There are times when we have `values`, but we don't have the KleisliContextMap,
+so it's worth exposing this method directly.
+
 Assuming `t` is a term in the context `f.dom`, this produces a term in the
 context `f.codom` by substituting each of the variables in `t` with the
 corresponding term in `f.codom`.
 """
-function substitute(t::Trm, f::KleisliContextMap)
+function substitute(t::Trm, values::AbstractVector{Trm})
   if iscontext(t.head)
-    f.values[index(t.head)]
+    values[index(t.head)]
   else
-    Trm(t.head, substitute.(t.args, Ref(f)))
+    Trm(t.head, substitute.(t.args, Ref(values)))
   end
+end
+
+function substitute_all(ts::AbstractVector{Trm}, values::AbstractVector{Trm})
+  Trm[substitute(t, values) for t in ts]
 end
 
 function id(ctx::Context)
