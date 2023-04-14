@@ -36,6 +36,21 @@ sir = SimpleKleisliLens{ThRing}(
     update.values
 )
 
+sir = @lens ThRing begin
+  dom = [s,i,r] | [ds,di,dr]
+  codom = [s,i,r] | [β, γ]
+  expose = begin
+    s = s
+    i = i
+    r = r
+  end
+  update = begin
+    ds = -(β * s * i)
+    di = β * s * i - γ * i
+    dr = γ * i
+  end
+end
+
 
 expose′ = @context_map ThRing [] [s,i,r] begin
 end
