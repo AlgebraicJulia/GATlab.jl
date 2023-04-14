@@ -21,6 +21,8 @@ is_context(i::Lvl) = (i.val & CONTEXT_BIT) != 0
 
 index(i::Lvl) = i.val & (CONTEXT_BIT - 1)
 
+Base.:(+)(i::Lvl, j::Int) = Lvl(i.val + UInt64(j))
+
 abstract type TrmTyp end 
 
 @struct_hash_equal struct Trm <:TrmTyp

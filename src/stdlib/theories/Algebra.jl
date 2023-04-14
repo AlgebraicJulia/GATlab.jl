@@ -38,8 +38,8 @@ end
 end
 
 @theory ThRing <: ThSet begin
-  using ThAb: ⋅ as +, i as -, e as 0
-  using ThMonoid: ⋅ as *, e as 1
+  using ThAb: ⋅ as +, i as -, e as zero
+  using ThMonoid: ⋅ as *, e as one
   a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
 end
 
@@ -48,8 +48,8 @@ end
 end
 
 @theory ThRig <: ThSet begin
-  using ThCMonoid: ⋅ as +, e as 0
-  using ThMonoid: ⋅ as *, e as 1
+  using ThCMonoid: ⋅ as +, e as zero
+  using ThMonoid: ⋅ as *, e as one
   a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
 end
 

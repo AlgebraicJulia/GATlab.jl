@@ -1,7 +1,8 @@
 module ContextMaps
-export ContextMap, KleisliContextMap, substitute, substitute_all, reindex
+export ContextMap, KleisliContextMap, substitute, substitute_all, coproduct, coproduct_values, reindex, id_values
 
 using ...Syntax
+using ...Util
 
 abstract type ContextMap end
 
@@ -43,7 +44,7 @@ context `f.codom` by substituting each of the variables in `t` with the
 corresponding term in `f.codom`.
 """
 function substitute(t::Trm, values::AbstractVector{Trm})
-  if iscontext(t.head)
+  if is_context(t.head)
     values[index(t.head)]
   else
     Trm(t.head, substitute.(t.args, Ref(values)))
@@ -54,16 +55,47 @@ function substitute_all(ts::AbstractVector{Trm}, values::AbstractVector{Trm})
   Trm[substitute(t, values) for t in ts]
 end
 
+function substitute_all(fvals, gvals, hvalses...)
+  foldl([fvals, gvals, hvalses...]) do ts, values
+    substitute_all(ts, values)
+  end
+end
+
 function id(ctx::Context)
-  KleisliContextMap(ctx, ctx, Trm[Trm(Lvl(i; context=true)) for i in 1:length(ctx)])
+  KleisliContextMap(ctx, ctx, id_values(ctx))
+end
+
+function id_values(ctx::Context)
+  Trm[Trm(Lvl(i; context=true)) for i in 1:length(ctx)]
 end
 
 function reindex(t::Trm, n::Int)
-  if iscontext(t.head)
+  if is_context(t.head)
     Trm(t.head + n, t.args)
   else
     Trm(t.head, reindex.(t.args, Ref(n)))
   end
+end
+
+function reindex(t::Typ, n::Int)
+  Typ(t.head, reindex.(t.args, Ref(n)))
+end
+
+function coproduct(c1::Context, c2::Context)
+  n = length(c1.ctx)
+  Context(vcat(c1.ctx, Tuple{Name, Typ}[(name, reindex(t, n)) for (name,t) in c2.ctx]))
+end
+
+function coproduct(f::KleisliContextMap, g::KleisliContextMap)
+  KleisliContextMap(
+    coproduct(f.dom, g.dom),
+    coproduct(f.codom, g.codom),
+    coproduct_values(f.values, g.values, length(f.codom))
+  )
+end
+
+function coproduct_values(fvals::AbstractVector{Trm}, gvals::AbstractVector{Trm}, n::Int)
+  vcat(fvals, reindex.(gvals, Ref(n)))
 end
 
 # function kleisli_coproduct(ts::AbstractVector{Trm}, ts′::AbstractVector{Trm})
