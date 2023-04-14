@@ -10,9 +10,11 @@ include("Parsing.jl")
 include("TheoryMacros.jl")
 include("ContextMaps.jl")
 include("ModelImplementations.jl")
+include("LensMacros.jl")
 
 @reexport using .TheoryMacros
 @reexport using .ContextMaps
 @reexport using .ModelImplementations
+@reexport using .LensMacros
 
 end

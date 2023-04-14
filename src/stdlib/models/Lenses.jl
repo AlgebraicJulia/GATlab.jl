@@ -78,6 +78,58 @@ function compose(l₁::SimpleKleisliLens{T}, l₂::SimpleKleisliLens{T}) where {
   )
 end
 
+function mcompose(a₁::SimpleArena{T}, a₂::SimpleArena{T}) where {T <: AbstractTheory}
+  SimpleArena{T}(
+    coproduct(a₁.pos, a₂.pos),
+    coproduct(a₁.dir, a₂.dir)
+  )
+end
+
+function permute(ctxs::Vector{Context}, permutation::Vector{Int})
+  values = Trm[]
+  for i in permutation
+    c = ctxs[ctxs]
+    offset = length(values)
+    append!(values, Trm[Trm(Lvl(i + offset; context=true)) for i in 1:length(c)])
+  end
+end
+
+"""
+l₁ = (f, f#)
+l₂ = (g, g#)
+
+l = l₁ ⋅ l₂
+
+l = (h, h#)
+
+    f#
+B1 <-- D1
+    f
+A1 --> C1
+
+    g#
+B2 <-- D2
+    g
+A2 --> C2
+
+             f + g
+h = C1 + C2 -------> A1 + A2
+
+              f# + g#                          1_A1 + σ_{D_1,A_2} + 1_D2
+h# = B1 + B2 ---------> (A1 + D1) + (A2 + D2) ----------------------------> (A1 + A2) + (D1 + D2)
+"""
+function mcompose(l₁::SimpleKleisliLens{T}, l₂::SimpleKleisliLens{T}) where {T <: AbstractTheory}
+  SimpleKleisliLens{T}(
+    coproduct(l₁.dom, l₂.dom),
+    coproduct(l₁.codom, l₂.codom),
+    coproduct_values(l₁.expose, l₂.expose, length(l₁.dom.pos)),
+    substitute_all(
+      coproduct_values(l₁.update, l₂.update, length(l₁.dom.dir)),
+      permute([l₁.dom.pos, l₁.codom.dir, l₂.dom.pos, l₂.codom.dir], [1,3,2,4])
+    )
+  )
+end
+
 #end
 
 end
