@@ -40,6 +40,7 @@ makedocs(
     #   "examples/test_example/test_example.md",
     # ],
     "Library Reference"=>"api.md",
+    "Standard Library"=>"stdlib.md",
   ]
 )
 
