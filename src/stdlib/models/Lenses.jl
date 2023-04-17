@@ -3,9 +3,9 @@ module Lenses
 export SimpleArena, SimpleKleisliLens, compose
 
 using ....Syntax
-using ....Logic
 using ....Models
 using ...StdTheories
+using ..ContextMaps
 
 struct SimpleArena{T<:AbstractTheory}
   pos::Context

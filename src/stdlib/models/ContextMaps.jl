@@ -1,8 +1,8 @@
 module ContextMaps
 export ContextMap, KleisliContextMap, substitute, substitute_all, coproduct, coproduct_values, reindex, id_values
 
-using ...Syntax
-using ...Util
+using ....Syntax
+using ....Util
 
 abstract type ContextMap end
 
@@ -32,6 +32,8 @@ function compose(f::KleisliContextMap, g::KleisliContextMap)
     substitute_all(f.values, g.values)
   )
 end
+
+module ContextMapImpl
 
 """
 We assume that values is the values part of a KleisliContextMap `f`.
@@ -96,6 +98,8 @@ end
 
 function coproduct_values(fvals::AbstractVector{Trm}, gvals::AbstractVector{Trm}, n::Int)
   vcat(fvals, reindex.(gvals, Ref(n)))
+end
+
 end
 
 # function kleisli_coproduct(ts::AbstractVector{Trm}, ts′::AbstractVector{Trm})
