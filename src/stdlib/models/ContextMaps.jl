@@ -1,6 +1,7 @@
 module ContextMaps
-export interpret, interpret_term, show_context_map
+export interpret, interpret_term, show_context_map, KleisliContextMap
 
+using ...StdTheories
 using ....Syntax
 using ....Models
 using ....Util
@@ -104,6 +105,18 @@ function show_context_map(io::IO, theory::Theory, dom::Context, codom::Context, 
     print(io, string(name))
     print(io, " = ")
     println(io, show_term(theory, val, codom).judgment)
+  end
+end
+
+struct KleisliContextMap <: TypedHom{Impl.Ob, Impl.Hom}
+  dom::Impl.Ob
+  codom::Impl.Ob
+  morphism::Impl.Hom
+  function KleisliContextMap(
+    dom::Impl.Ob, codom::Impl.Ob,
+    morphism::Impl.Hom
+  )
+    new(dom, codom, morphism)
   end
 end
 
