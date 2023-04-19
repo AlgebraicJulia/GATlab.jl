@@ -1,5 +1,5 @@
 module ContextMaps
-export interpret, interpret_term
+export interpret, interpret_term, show_context_map
 
 using ....Syntax
 using ....Models
@@ -96,6 +96,14 @@ function interpret_term(m::Model, t::Trm, xs::Tuple)
     xs[index(t.head)]
   else
     ap(m, Val(Int(index(t.head))), interpret_term.(Ref(m), t.args, Ref(xs))...)
+  end
+end
+
+function show_context_map(io::IO, theory::Theory, dom::Context, codom::Context, f::Impl.Hom)
+  for ((name,_), val) in zip(dom.ctx, f)
+    print(io, string(name))
+    print(io, " = ")
+    println(io, show_term(theory, val, codom).judgment)
   end
 end
 

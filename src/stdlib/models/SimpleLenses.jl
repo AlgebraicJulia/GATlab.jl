@@ -169,4 +169,17 @@ Categories.compose(f::SimpleKleisliLens{T}, g::SimpleKleisliLens{T}) where {T<:A
     )
   )
 
+function Base.show(io::IO, l::SimpleKleisliLens{T}) where {T<:AbstractTheory}
+  theory = gettheory(T)
+  println(io, "dom: ", l.dom)
+  println(io, "codom: ", l.codom)
+
+  println(io, "expose: ")
+  show_context_map(io, theory, l.codom.pos, l.dom.pos, l.morphism.expose)
+  println(io)
+  println(io, "update: ")
+  show_context_map(io, theory, l.dom.dir, Impl.CM.mcompose(l.dom.pos, l.codom.dir), l.morphism.update)
+  println(io)
+end
+
 end
