@@ -1,7 +1,7 @@
 module Parsing
 
 export Expr0, SymExpr, NewTerm, NewType, NewAxiom, Declaration, parse_decl,
-  parse_symexpr, parse_bindings, head
+  parse_symexpr, parse_bindings, head, getlines
 
 using ...Util
 
@@ -129,6 +129,13 @@ function parse_bindings(bindings::AbstractVector)
     end
   end
   result
+end
+
+function getlines(e::Expr)
+  @match e begin
+    Expr(:block, lines...) => Vector{Expr}(filter(line -> typeof(line) != LineNumberNode, lines))
+    _ => error("expected a block, got: $e")
+  end
 end
 
 end

@@ -1,14 +1,15 @@
-module ContextMaps
+module ContextMapMacros
 export @context_map
 
 using MLStyle
-using ..Parsing
-using ..TheoryMacros
-using ..TheoryMacros: term_impl, construct_context
-using ...Syntax
-using ...Logic
-using ...Models
-using ...Util
+
+using ....Dsl.Parsing
+using ....Dsl.TheoryMacros
+using ....Dsl.TheoryMacros: term_impl, construct_context
+using ....Syntax
+using ....Logic
+using ....Models
+using ....Util
 
 """
 Usage:
@@ -25,15 +26,15 @@ end
 end
 
 (not supported yet)
-@context_map ThGroup [x,y,z] [::U] begin
-  x * y * z * inv(x)
+@context_map ThGroup [x,y,z] [out] begin
+  out = x * y * z * inv(x)
 end
 """
 macro context_map(T, dom, codom, body)
   dom = parse_ctx(dom)
   codom = parse_ctx(codom)
   esc(:(
-    $(GlobalRef(ContextMaps, :context_map_impl))($T, $dom, $codom, $(QuoteNode(body)))
+    $(GlobalRef(ContextMapMacros, :context_map_impl))($T, $dom, $codom, $(QuoteNode(body)))
   ))
 end
 
@@ -51,21 +52,20 @@ function context_map_impl(
   codom::Union{Context, Vector{Expr0}},
   body::Expr
 )
-  T = gettheory(T)
-  dom = construct_context(T.judgments, dom)
-  codom = construct_context(T.judgments, codom)
-  body.head == :block ||
-    error("expected a block to be passed in as the last argument to @context_map")
-  lines = @match body begin
-    Expr(:block, lines...) => filter(line -> typeof(line) != LineNumberNode, lines)
-    _ => error("expected body of @context_map macro to be a block")
-  end
-  values_by_name = Dict{Name, Trm}(parse_line(T, codom, line) for line in lines)
+  theory = gettheory(T)
+  dom = construct_context(theory.judgments, dom)
+  codom = construct_context(theory.judgments, codom)
+  lines = getlines(body)
   KleisliContextMap(
     dom,
     codom,
-    Trm[values_by_name[name] for (name,_) in dom.ctx]
+    construct_context_map(dom, codom, lines)
   )
+end
+
+function construct_context_map(theory::Theory, dom::Context, codom::Context, lines::Vector{Expr})
+  values_by_name = Dict{Name, Trm}(parse_line(theory, codom, line) for line in lines)
+  Trm[values_by_name[name] for (name,_) in dom.ctx]
 end
 
 function parse_line(T::Theory, ctx::Context, line)

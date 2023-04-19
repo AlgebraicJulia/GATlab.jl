@@ -11,34 +11,9 @@ R³ <--- R²
 R³ ---> R³
 """
 
-expose = @context_map ThRing [s,i,r] [s,i,r] begin
-    s = s
-    i = i
-    r = r
-end
-
-update = @context_map ThRing [ds, di, dr] [s, i, r, β, γ] begin
-    ds = -(β * s * i)
-    di = β * s * i - γ * i
-    dr = γ * i
-end
-
-sir = SimpleKleisliLens{ThRing}(
-    SimpleArena{ThRing}(
-        (@context ThRing [s,i,r]),
-        (@context ThRing [ds, di, dr])
-    ),
-    SimpleArena{ThRing}(
-        (@context ThRing [s,i,r]),
-        (@context ThRing [β, γ]),
-    ),
-    expose.values,
-    update.values
-)
-
 sir = @lens ThRing begin
-  dom = [s,i,r] | [ds,di,dr]
-  codom = [s,i,r] | [β, γ]
+  dom = [s, i, r] | [ds, di, dr]
+  codom = [s, i, r] | [β, γ]
   expose = begin
     s = s
     i = i
@@ -51,42 +26,31 @@ sir = @lens ThRing begin
   end
 end
 
-
-expose′ = @context_map ThRing [] [s,i,r] begin
-end
-
-update′ = @context_map ThRing [β, γ] [s,i,r] begin
+const_params = @lens ThRing begin
+  dom = [s, i, r] | [β, γ]
+  codom = [] | []
+  expose = begin
+  end
+  update = begin
     β = one
     γ = one + one
+  end
 end
 
-const_params = SimpleKleisliLens{ThRing}(
-    SimpleArena{ThRing}(
-        (@context ThRing [s,i,r]),
-        (@context ThRing [β, γ])
-    ),
-    SimpleArena{ThRing}(
-        (@context ThRing []),
-        (@context ThRing [])
-    ),
-    expose′.values,
-    update′.values
-)
+composed = compose(sir, const_params)
 
+# # Periodic Beta System
 
-compose(sir, const_params)
-# Periodic Beta System
+# expose₁ = @context_map ThRing [β, γ] [β,γ] begin
+#    β = β
+#    γ = γ
+# end
 
-expose₁ = @context_map ThRing [β, γ] [β,γ] begin
-   β = β
-   γ = γ
-end
+# # β₀ = 0.5
 
-# β₀ = 0.5
-
-update₁ = @context_map ThRing [dβ, dγ] [β, γ, β₀] begin
-    dβ = -(β - β₀)
-    dγ = 0
-end
+# update₁ = @context_map ThRing [dβ, dγ] [β, γ, β₀] begin
+#     dβ = -(β - β₀)
+#     dγ = 0
+# end
 
 end
