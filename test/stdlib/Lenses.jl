@@ -20,8 +20,8 @@ sir = @lens ThRing begin
     r = r
   end
   update = begin
-    ds = -(β * s * i)
-    di = β * s * i - γ * i
+    ds = -β * (s * i)
+    di = β * (s * i) + (- γ) * i
     dr = γ * i
   end
 end
@@ -38,6 +38,7 @@ const_params = @lens ThRing begin
 end
 
 composed = compose(sir, const_params)
+println(composed)
 
 # # Periodic Beta System
 
