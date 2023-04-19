@@ -1,7 +1,8 @@
 module Categories
 export ThClass, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThPreorder,
         ThMagma, ThSemiGroup, ThMonoid, ThGroup,
-        ThNat, ThNatPlus, ThNatPlusTimes
+        ThNat, ThNatPlus, ThNatPlusTimes,
+        compose, id, TypedHom
 
 using ....Dsl
 using ....Syntax: ThEmpty
@@ -35,5 +36,29 @@ end
 @theory ThThinCategory <: ThCategory begin
   thineq := f == g :: Hom(A,B) ⊣ [A::Ob, B::Ob, f::Hom(A,B), g::Hom(A,B)]
 end
+
+function compose end
+
+function id end
+
+# function compose(c::Model, f, g)
+#   ap(c, Val{@trmidx ThCategory :(⋅)}(), f, g)
+# end
+
+# function id(c::Model, x)
+#   ap(c, Val{@trmidx ThCategory id}(), x)
+# end
+
+"""
+Any implementor of TypedHom{Ob, Hom} should have precisely the fields
+
+- dom::Ob
+- codom::Ob
+- morphism::Hom
+
+The reason this is not a struct is that we want to be able to control
+the name of the type.
+"""
+abstract type TypedHom{Ob, Hom} end
 
 end

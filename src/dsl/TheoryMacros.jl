@@ -28,6 +28,13 @@ function construct_context(judgments::Vector{Judgment}, symctx::Vector{Pair{Symb
   c
 end
 
+function construct_context(judgments::Vector{Judgment}, ctxexpr::Expr)
+  @match ctxexpr begin
+    :([$(bindings...)]) => construct_context(judgments, parse_bindings(bindings))
+    _ => error("expected a context of the form [bindings...], got: $ctxexpr")
+  end
+end
+
 function construct_judgment(judgments::Vector{Judgment}, decl::Declaration)
   context = construct_context(judgments, decl.context)
   fc = FullContext(judgments, context)
@@ -206,10 +213,7 @@ macro theorymap(head, body)
     Expr(:->, dom, Expr(:block, _, codom)) => (dom, codom)
     _ => error("expected head of @theorymap to be of the form `dom -> codom`")
   end
-  lines = @match body begin
-    Expr(:block, lines...) => filter(line -> typeof(line) != LineNumberNode, lines)
-    _ => error("expected body of @theorymap to be a block")
-  end
+  lines = getlines(body)
   esc(
     quote
       $(GlobalRef(TheoryMacros, :theorymap_impl))($dom, $codom, $lines)

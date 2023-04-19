@@ -1,4 +1,4 @@
-module ModelImplementations
+module ModelMacros
 export @simple_model
 
 using ...Syntax
@@ -10,7 +10,7 @@ macro simple_model(T, name, mod)
     Expr(:block,
       __source__,
       :(struct $name <: $(GlobalRef(ModelInterface, :Model)){$T} end),
-      :(eval($(GlobalRef(ModelImplementations, :simple_model_impl))($T, $(QuoteNode(name)), $mod)))
+      :(eval($(GlobalRef(ModelMacros, :simple_model_impl))($T, $(QuoteNode(name)), $mod)))
     )
   )
 end

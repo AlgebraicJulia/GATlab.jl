@@ -8,13 +8,9 @@ using Reexport
 include("Overloads.jl")
 include("Parsing.jl")
 include("TheoryMacros.jl")
-include("ContextMaps.jl")
-include("ModelImplementations.jl")
-include("LensMacros.jl")
+include("ModelMacros.jl")
 
 @reexport using .TheoryMacros
-@reexport using .ContextMaps
-@reexport using .ModelImplementations
-@reexport using .LensMacros
+@reexport using .ModelMacros
 
 end
