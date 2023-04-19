@@ -3,6 +3,7 @@ export @context_map
 
 using MLStyle
 
+using ..ContextMaps
 using ....Dsl.Parsing
 using ....Dsl.TheoryMacros
 using ....Dsl.TheoryMacros: term_impl, construct_context
@@ -59,7 +60,7 @@ function context_map_impl(
   KleisliContextMap(
     dom,
     codom,
-    construct_context_map(dom, codom, lines)
+    construct_context_map(theory, dom, codom, lines)
   )
 end
 

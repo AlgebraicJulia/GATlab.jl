@@ -38,7 +38,10 @@ const_params = @lens ThRing begin
 end
 
 composed = compose(sir, const_params)
-println(composed)
+
+@test length(composed.codom.pos) == 0
+@test length(composed.morphism.expose) == 0
+@test length(composed.morphism.update) == 3
 
 # # Periodic Beta System
 
