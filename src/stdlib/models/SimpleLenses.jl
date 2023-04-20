@@ -89,11 +89,12 @@ end
 
 function permute(ctxs::Vector{Context}, permutation::Vector{Int})
   values = Trm[]
-  for i in permutation
-    c = ctxs[ctxs]
+  for idx in permutation
+    c = ctxs[idx]
     offset = length(values)
     append!(values, Trm[Trm(Lvl(i + offset; context=true)) for i in 1:length(c)])
   end
+  values
 end
 
 """
@@ -122,7 +123,7 @@ h# = B1 + B2 ---------> (A1 + D1) + (A2 + D2) ----------------------------> (A1 
 """
 function mcompose(AB₁::Arena{T}, AB₂::Arena{T}, CD₁::Arena{T}, CD₂::Arena{T},
                   f::Lens{T}, g::Lens{T}) where {T <: AbstractTheory}
-  A₁, A₁ = AB₁.pos, AB₂.pos
+  A₁, A₂ = AB₁.pos, AB₂.pos
   B₁ = AB₁.dir
   D₁, D₂ = CD₁.dir, CD₂.dir
   Lens{T}(
@@ -167,6 +168,13 @@ Categories.compose(f::SimpleKleisliLens{T}, g::SimpleKleisliLens{T}) where {T<:A
       f.morphism,
       g.morphism
     )
+  )
+
+Monoidal.mcompose(f::SimpleKleisliLens{T}, g::SimpleKleisliLens{T}) where {T<:AbstractTheory} =
+  SimpleKleisliLens{T}(
+    Impl.mcompose(f.dom, g.dom),
+    Impl.mcompose(f.codom, g.codom),
+    Impl.mcompose(f.dom, g.dom, f.codom, g.codom, f.morphism, g.morphism)
   )
 
 function Base.show(io::IO, l::SimpleKleisliLens{T}) where {T<:AbstractTheory}

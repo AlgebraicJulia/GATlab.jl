@@ -1,5 +1,5 @@
 module Monoidal
-export ThLawlessMonCat, ThCoherencelessMonCat, ThStrictMonCat
+export ThLawlessMonCat, ThCoherencelessMonCat, ThStrictMonCat, mcompose
 
 using ..Categories
 using ....Dsl
@@ -30,5 +30,7 @@ end
   I ⊗ A == A :: Ob ⊣ [A::Ob]
   A ⊗ I == A :: Ob ⊣ [A::Ob]
 end
+
+function mcompose end
 
 end
