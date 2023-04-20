@@ -121,6 +121,4 @@ composed = compose(sir_and_periodic, wiring)
 @test length(composed.morphism.expose) == 3
 @test length(composed.morphism.update) == 5
 
-println(composed)
-
 end
