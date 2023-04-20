@@ -93,4 +93,20 @@ composedₕ = compose(sir, const_paramsₕ)
 #     dγ = 0
 # end
 
+periodic_params = @lens ThRing begin
+  dom = [β, γ] | [dβ, dγ]
+  codom = [] | [β₀, kᵦ, γ₀, kᵧ]
+  expose = begin
+
+  end
+  update = begin
+    dβ = -kᵦ*(β - β₀)
+    dγ = -kᵧ*(γ - γ₀)
+  end
+end
+
+# This should error because 5 != 4
+composed = compose(sir, periodic_params)
+
+
 end
