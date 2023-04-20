@@ -91,12 +91,25 @@ function mcompose(a₁::Arena{T}, a₂::Arena{T}) where {T <: AbstractTheory}
   )
 end
 
+"""
+Produces a function from ∑_i ctxs[permutation[i]] to ∑_i ctxs[i]
+"""
 function permute(ctxs::Vector{Context}, permutation::Vector{Int})
-  values = Trm[]
-  for idx in permutation
-    c = ctxs[idx]
-    offset = length(values)
-    append!(values, Trm[Trm(Lvl(i + offset; context=true)) for i in 1:length(c)])
+  n = length(permutation)
+  N = sum(length(ctx) for ctx in ctxs)
+  values = Array{Trm}(undef, N)
+  beginnings = Array{Int}(undef, n)
+  idx = 1
+  for i in 1:n
+    beginnings[permutation[i]] = idx
+    idx += length(ctxs[permutation[i]])
+  end
+  idx = 1
+  for i in 1:n
+    k = length(ctxs[permutation[i]])
+    b = beginnings[i]
+    values[b:(b+k-1)] .= [Trm(Lvl(l; context=true)) for l in idx:(idx+k-1)]
+    idx += k
   end
   values
 end
@@ -133,7 +146,7 @@ function mcompose(AB₁::Arena{T}, AB₂::Arena{T}, CD₁::Arena{T}, CD₂::Aren
   Lens{T}(
     CM.mcompose(f.expose, g.expose, length(A₁)),
     CM.compose(
-      CM.mcompose(f.update, g.update, length(B₁)),
+      CM.mcompose(f.update, g.update, length(A₁) + length(D₁)),
       permute([A₁, D₁, A₂, D₂], [1,3,2,4])
     )
   )
