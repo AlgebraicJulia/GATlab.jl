@@ -109,4 +109,44 @@ end
 composed = compose(sir, periodic_params)
 
 
+
+sir = @lens ThRing begin
+  dom = [s, i, r, β, γ] | [ds, di, dr, dβ, dγ]
+  codom = [s, i, r, β, γ] | [dβ, dγ]
+  expose = begin
+    s = s
+    i = i
+    r = r
+    β = β
+    γ = γ
+  end
+  update = begin
+    ds = -β * (s * i)
+    di = β * (s * i) + (- γ) * i
+    dr = γ * i
+    dβ = dβ
+    dγ = dγ
+  end
+end
+periodic_params = @lens ThRing begin
+  dom = [s, i, r, β, γ] | [dβ, dγ]
+  codom = [i, β, γ] | [β₀, kᵦ, γ₀, kᵧ]
+  expose = begin
+    i = i
+    β = β
+    γ = γ
+  end
+  update = begin
+    dβ = -kᵦ*(β - β₀)
+    dγ = -kᵧ*(γ - γ₀)
+  end
+end
+
+composed = compose(sir, periodic_params)
+
+@test length(composed.codom.pos) == 3
+@test length(composed.morphism.expose) == 3
+@test length(composed.morphism.update) == 5
+
+
 end
