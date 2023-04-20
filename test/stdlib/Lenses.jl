@@ -11,7 +11,7 @@ R³ <--- R²
 R³ ---> R³
 """
 
-sir = @lens ThRing begin
+sir = @lens ThElementary begin
   dom = [s, i, r] | [ds, di, dr]
   codom = [s, i, r] | [β, γ]
   expose = begin
@@ -26,7 +26,7 @@ sir = @lens ThRing begin
   end
 end
 
-const_params = @lens ThRing begin
+const_params = @lens ThElementary begin
   dom = [s, i, r] | [β, γ]
   codom = [] | []
   expose = begin
@@ -43,7 +43,7 @@ composed = compose(sir, const_params)
 @test length(composed.morphism.expose) == 0
 @test length(composed.morphism.update) == 3
 
-lotka_voltera = @lens ThRing begin
+lotka_voltera = @lens ThElementary begin
   dom = [wolf, sheep] | [dwolf, dsheep]
   codom = [wolf, sheep] | [graze, predation, death]
   expose = begin
@@ -61,7 +61,7 @@ sir_lv = mcompose(sir, lotka_voltera)
 @test length(sir_lv.dom.pos) == 5
 @test length(sir_lv.codom.dir) == 5
 
-const_paramsₕ = @lens ThRing begin
+const_paramsₕ = @lens ThElementary begin
   dom = [s, i, r] | [β, γ]
   codom = [h] | []
   expose = begin
@@ -81,7 +81,7 @@ composedₕ = compose(sir, const_paramsₕ)
 
 # # Periodic Beta System
 
-periodic_params = @lens ThRing begin
+periodic_params = @lens ThElementary begin
   dom = [β, γ] | [dβ, dγ]
   codom = [β, γ] | [β₀, kᵦ, γ₀, kᵧ]
   expose = begin
@@ -94,10 +94,9 @@ periodic_params = @lens ThRing begin
   end
 end
 
-# This should error because 5 != 4
 sir_and_periodic = mcompose(sir, periodic_params)
 
-wiring = @lens ThRing begin
+wiring = @lens ThElementary begin
   dom = [s, i, r, β, γ] | [β, γ, β₀, kᵦ, γ₀, kᵧ]
   codom = [s, i, r] | [β₀, kᵦ, γ₀, kᵧ]
   expose = begin
