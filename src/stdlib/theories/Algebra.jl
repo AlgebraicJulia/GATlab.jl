@@ -1,6 +1,6 @@
 module Algebra
 export ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing,
-ThCRing, ThRig, ThCRig, ThElementary
+  ThCRing, ThRig, ThCRig, ThElementary
 
 using ....Dsl
 using ....Syntax: ThEmpty
