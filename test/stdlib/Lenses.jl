@@ -81,72 +81,46 @@ composedₕ = compose(sir, const_paramsₕ)
 
 # # Periodic Beta System
 
-# expose₁ = @context_map ThRing [β, γ] [β,γ] begin
-#    β = β
-#    γ = γ
-# end
-
-# # β₀ = 0.5
-
-# update₁ = @context_map ThRing [dβ, dγ] [β, γ, β₀] begin
-#     dβ = -(β - β₀)
-#     dγ = 0
-# end
-
 periodic_params = @lens ThRing begin
   dom = [β, γ] | [dβ, dγ]
-  codom = [] | [β₀, kᵦ, γ₀, kᵧ]
+  codom = [β, γ] | [β₀, kᵦ, γ₀, kᵧ]
   expose = begin
-
+    β = β
+    γ = γ
   end
   update = begin
-    dβ = -kᵦ*(β - β₀)
-    dγ = -kᵧ*(γ - γ₀)
+    dβ = -kᵦ*(β + (-β₀))
+    dγ = -kᵧ*(γ + (-γ₀))
   end
 end
 
 # This should error because 5 != 4
-composed = compose(sir, periodic_params)
+sir_and_periodic = mcompose(sir, periodic_params)
 
-
-
-sir = @lens ThRing begin
-  dom = [s, i, r, β, γ] | [ds, di, dr, dβ, dγ]
-  codom = [s, i, r, β, γ] | [dβ, dγ]
+wiring = @lens ThRing begin
+  dom = [s, i, r, β, γ] | [β, γ, β₀, kᵦ, γ₀, kᵧ]
+  codom = [s, i, r] | [β₀, kᵦ, γ₀, kᵧ]
   expose = begin
     s = s
     i = i
     r = r
-    β = β
-    γ = γ
   end
   update = begin
-    ds = -β * (s * i)
-    di = β * (s * i) + (- γ) * i
-    dr = γ * i
-    dβ = dβ
-    dγ = dγ
-  end
-end
-periodic_params = @lens ThRing begin
-  dom = [s, i, r, β, γ] | [dβ, dγ]
-  codom = [i, β, γ] | [β₀, kᵦ, γ₀, kᵧ]
-  expose = begin
-    i = i
     β = β
     γ = γ
-  end
-  update = begin
-    dβ = -kᵦ*(β - β₀)
-    dγ = -kᵧ*(γ - γ₀)
+    β₀ = β₀
+    kᵦ = kᵦ
+    γ₀ = γ₀
+    kᵧ = kᵧ
   end
 end
 
-composed = compose(sir, periodic_params)
+composed = compose(sir_and_periodic, wiring)
 
 @test length(composed.codom.pos) == 3
 @test length(composed.morphism.expose) == 3
 @test length(composed.morphism.update) == 5
 
+println(composed)
 
 end
