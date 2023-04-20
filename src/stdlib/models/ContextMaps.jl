@@ -88,11 +88,11 @@ end
 
 end
 
-function interpret(m::Model, f::Impl.Hom, xs::Tuple)
-  tuple(interpret_term.(Ref(m), f, Ref(xs))...)
+function interpret(m::Model, f::Impl.Hom, xs)
+  [interpret_term.(Ref(m), f, Ref(xs))...]
 end
 
-function interpret_term(m::Model, t::Trm, xs::Tuple)
+function interpret_term(m::Model, t::Trm, xs)
   if is_context(t.head)
     xs[index(t.head)]
   else
