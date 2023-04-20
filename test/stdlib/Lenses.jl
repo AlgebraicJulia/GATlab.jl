@@ -43,6 +43,24 @@ composed = compose(sir, const_params)
 @test length(composed.morphism.expose) == 0
 @test length(composed.morphism.update) == 3
 
+lotka_voltera = @lens ThRing begin
+  dom = [wolf, sheep] | [dwolf, dsheep]
+  codom = [wolf, sheep] | [graze, predation, death]
+  expose = begin
+    wolf = wolf
+    sheep = sheep
+  end
+  update = begin
+    dwolf = -(death * wolf) + predation * (wolf * sheep)
+    dsheep = - predation * (wolf * sheep) + graze * sheep
+  end
+end
+
+sir_lv = mcompose(sir, lotka_voltera)
+
+@test length(sir_lv.dom.pos) == 5
+@test length(sir_lv.codom.dir) == 5
+
 # # Periodic Beta System
 
 # expose₁ = @context_map ThRing [β, γ] [β,γ] begin
