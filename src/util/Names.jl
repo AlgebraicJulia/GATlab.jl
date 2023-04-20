@@ -43,6 +43,8 @@ Base.string(n::StrLit) = n.name
 Base.string(n::SymLit) = string(n.name)
 Base.string(::Anon) = "_"
 
+Base.Symbol(n::SymLit) = n.name
+
 Base.show(n::SymLit) = string(n)
 
 @struct_hash_equal struct Default <: Name
