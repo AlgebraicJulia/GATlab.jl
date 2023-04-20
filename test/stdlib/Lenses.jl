@@ -61,6 +61,24 @@ sir_lv = mcompose(sir, lotka_voltera)
 @test length(sir_lv.dom.pos) == 5
 @test length(sir_lv.codom.dir) == 5
 
+const_paramsₕ = @lens ThRing begin
+  dom = [s, i, r] | [β, γ]
+  codom = [h] | []
+  expose = begin
+    h = i * (one + one + one)
+  end
+  update = begin
+    β = one
+    γ = one + one
+  end
+end
+
+composedₕ = compose(sir, const_paramsₕ)
+
+@test length(composedₕ.codom.pos) == 1
+@test length(composedₕ.morphism.expose) == 1
+@test length(composedₕ.morphism.update) == 3
+
 # # Periodic Beta System
 
 # expose₁ = @context_map ThRing [β, γ] [β,γ] begin
