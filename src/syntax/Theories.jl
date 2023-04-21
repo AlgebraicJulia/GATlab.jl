@@ -7,7 +7,7 @@ using StructEquality
 
 using ...Util
 
-struct Lvl
+@struct_hash_equal struct Lvl
   val::UInt64
   function Lvl(i::Integer; context=false)
     i > 0 || error("Creating non-positive level $i context $context")
@@ -51,7 +51,7 @@ should point at a type constructor judgment.
 end
 
 
-struct Context 
+@struct_hash_equal struct Context
   ctx::Vector{Tuple{Name, Typ}}
   Context(c=Tuple{Name, Typ}[]) = new(c)
 end 

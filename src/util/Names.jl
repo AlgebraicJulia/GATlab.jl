@@ -1,6 +1,8 @@
 module Names
 export Name, StrLit, SymLit, Anon, Default
 
+using StructEquality
+
 """
 Names are used to label parts of a GAT.
 
@@ -9,7 +11,7 @@ internally.
 """
 abstract type Name end
 
-struct StrLit <: Name
+@struct_hash_equal struct StrLit <: Name
   name::String
 end
 
@@ -17,7 +19,7 @@ end
 We have a symbol wrapper because we get symbols from parsing, and it
 is faster to compare symbols than it is to compare strings.
 """
-struct SymLit <: Name
+@struct_hash_equal struct SymLit <: Name
   name::Symbol
 end
 
@@ -27,7 +29,7 @@ Name(n::Symbol) = n == :default ? Default() : SymLit(n)
 Name(n::Name) = n
 Name(i::Int)= SymLit(Symbol(i))
 
-struct Anon <: Name
+@struct_hash_equal struct Anon <: Name
 end
 
 Base.string(n::StrLit) = n.name
@@ -36,7 +38,7 @@ Base.string(::Anon) = "_"
 
 Base.show(n::SymLit) = string(n)
 
-struct Default <: Name
+@struct_hash_equal struct Default <: Name
 end
 
 Base.string(::Default) = "_"
