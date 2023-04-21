@@ -1,8 +1,8 @@
 module TestSerialization
 
 using Test
-
 using Gatlab
+import JSON
 
 periodic_params = @lens ThRing begin
   dom = [β, γ] | [dβ, dγ]
