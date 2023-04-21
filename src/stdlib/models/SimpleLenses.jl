@@ -6,6 +6,8 @@ using ....Models
 using ....Syntax
 using ..ContextMaps
 
+using StructEquality
+
 module Impl
 
 using .....Syntax
@@ -13,9 +15,11 @@ using .....Models
 using ....StdTheories
 using ...ContextMaps
 
+using StructEquality
+
 const CM = ContextMaps.Impl
 
-struct Arena{T<:AbstractTheory}
+@struct_hash_equal struct Arena{T<:AbstractTheory}
   pos::Context
   dir::Context
 end
@@ -26,7 +30,7 @@ const Ob = Arena
 expose is a Kleisli map from codom.pos to dom.pos
 update is a Kleisli map from dom.dir to dom.pos + codom.dir
 """
-struct Lens{T<:AbstractTheory}
+@struct_hash_equal struct Lens{T<:AbstractTheory}
   expose::Vector{Trm}
   update::Vector{Trm}
 end
@@ -137,7 +141,7 @@ end
 
 end
 
-struct SimpleKleisliLens{T<:AbstractTheory} <: TypedHom{Impl.Arena{T}, Impl.Lens{T}}
+@struct_hash_equal struct SimpleKleisliLens{T<:AbstractTheory} <: TypedHom{Impl.Arena{T}, Impl.Lens{T}}
   dom::Impl.Arena{T}
   codom::Impl.Arena{T}
   morphism::Impl.Lens{T}
