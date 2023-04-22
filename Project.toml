@@ -12,6 +12,7 @@ StructEquality = "6ec83bb0-ed9f-11e9-3b4c-2b04cb4e219c"
 
 [compat]
 DataStructures = "0.18"
+JSON = "0.21"
 MLStyle = "0.4"
 Reexport = "1"
 StructEquality = "2"
