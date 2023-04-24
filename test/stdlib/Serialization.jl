@@ -5,15 +5,15 @@ using Gatlab
 import JSON
 
 periodic_params = @lens ThRing begin
-  dom = [β, γ] | [dβ, dγ]
+  dom = [β, γ] | [:d(β), :d(γ)]
   codom = [β, γ] | [β₀, kᵦ, γ₀, kᵧ]
   expose = begin
     β = β
     γ = γ
   end
   update = begin
-    dβ = -kᵦ*(β + (-β₀))
-    dγ = -kᵧ*(γ + (-γ₀))
+    :d(β) = -kᵦ*(β + (-β₀))
+    :d(γ) = -kᵧ*(γ + (-γ₀))
   end
 end
 
