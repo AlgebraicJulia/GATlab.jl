@@ -64,7 +64,10 @@ function context_map_impl(
   )
 end
 
-function construct_context_map(theory::Theory, dom::Context, codom::Context, lines::Vector{Expr})
+function construct_context_map(
+  theory::Theory, dom::Context,
+  codom::Context, lines::Vector{Expr}
+)
   values_by_name = Dict{Name, Trm}(parse_line(theory, codom, line) for line in lines)
   Trm[values_by_name[name] for (name,_) in dom.ctx]
 end

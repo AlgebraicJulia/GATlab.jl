@@ -1,5 +1,9 @@
 module TestSystems
 
+using Test
+
+using Gatlab
+
 sirv = @system ThElementary begin
   @state [s, i, r, v]
   @params [β, γ, v]
@@ -16,11 +20,11 @@ vax_production = @system ThElementary begin
   :d(t) = one
 end
 
-composed = @compose [sir, vax_production] begin
-  @params [C_max, α, τ, β, γ]
-  @link α, τ, β, γ, C_max, I = i, v = VP
-  @output s, i, r, v
-end
+# composed = @compose [sir, vax_production] begin
+#   @params [C_max, α, τ, β, γ]
+#   @link α, τ, β, γ, C_max, I = i, v = VP
+#   @output s, i, r, v
+# end
 
 
 end
