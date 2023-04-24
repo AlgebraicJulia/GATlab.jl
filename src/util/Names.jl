@@ -1,5 +1,5 @@
 module Names
-export Name, StrLit, SymLit, Anon, Default
+export Name, StrLit, SymLit, Anon, Default, Annotated
 
 using StructEquality
 

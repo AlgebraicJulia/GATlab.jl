@@ -76,6 +76,14 @@ function show_json(io::StructuralContext, s::StandardSerialization, name::Anon)
   end_object(io)
 end
 
+function show_json(io::StructuralContext, s::StandardSerialization, name::Annotated)
+  begin_object(io)
+  show_pair(io, s, :type => "Annotated")
+  show_pair(io, s, :annotation => name.annotation)
+  show_pair(io, s, :value => name.name)
+  end_object(io)
+end
+
 function show_json(io::StructuralContext, s::StandardSerialization, f::KleisliContextMap)
   begin_object(io)
   show_pair(io, s, :dom => f.dom)
@@ -122,6 +130,7 @@ function parse_json(d::Dict, ::Type{Name})
     "StrLit" => StrLit(d["value"])
     "Default" => Default()
     "Anon" => Anon()
+    "Annotated" => Annotated(Symbol(d["annotation"]), parse_json(d["value"], Name))
   end
 end
 
