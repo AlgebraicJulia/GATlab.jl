@@ -1,5 +1,6 @@
 module Algebra
-export ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing, ThCRing
+export ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing,
+ThCRing, ThRig, ThCRig, ThElementary
 
 using ....Dsl
 using ....Syntax: ThEmpty
@@ -55,6 +56,14 @@ end
 
 @theory ThCRig <: ThRig begin
   a * b == b * a ⊣ [a,b]
+end
+
+@theory ThElementary <: ThCRing begin
+  sin(x) ⊣ [x]
+  cos(x) ⊣ [x]
+  tan(x) ⊣ [x]
+  exp(x) ⊣ [x]
+  sigmoid(x) ⊣ [x]
 end
 
 end

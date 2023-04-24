@@ -1,7 +1,7 @@
 module Parsing
 
 export Expr0, SymExpr, NewTerm, NewType, NewAxiom, Declaration, parse_decl,
-  parse_symexpr, parse_bindings, head, getlines
+  parse_symexpr, parse_bindings, head, getlines, parse_name
 
 using ...Util
 
@@ -65,6 +65,11 @@ function parse_args(e::Expr0)
     :($(name::Symbol)($(args...))) => (Name(name), Expr0[args...])
     :($(ann::QuoteNode)($(name::Symbol))) => (Name(name; annotation=ann.value), Expr0[])
     :($(ann::QuoteNode)($(name::Symbol))($(args...))) => (Name(name; annotation=ann.value), Expr0[args...])
+    Expr(:block, _...) => begin
+      lines = getlines(e)
+      length(lines) == 1 || error("only one expression allowed in a block")
+      parse_args(lines[1])
+    end
     _ => error("Could not parse $e as an application of a head to arguments")
   end
 end
@@ -143,7 +148,7 @@ end
 
 function getlines(e::Expr)
   @match e begin
-    Expr(:block, lines...) => Vector{Expr}(filter(line -> typeof(line) != LineNumberNode, lines))
+    Expr(:block, lines...) => Vector{Any}(filter(line -> typeof(line) != LineNumberNode, lines))
     _ => error("expected a block, got: $e")
   end
 end

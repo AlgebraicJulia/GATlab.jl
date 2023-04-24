@@ -6,10 +6,11 @@ using Gatlab
 
 sirv = @system ThElementary begin
   @state [s, i, r, v]
-  @params [β, γ, v]
-  :d(s) = - β * (s * i)
+  @params [β, γ, VP]
+  :d(s) = - β * (s * i) + (-v) * s
   :d(i) = β * (s * i) + (-γ * i)
-  :d(i) = -γ * i
+  :d(r) = -γ * i
+  :d(v) = VP * s
 end
 
 vax_production = @system ThElementary begin
@@ -20,11 +21,12 @@ vax_production = @system ThElementary begin
   :d(t) = one
 end
 
-# composed = @compose [sir, vax_production] begin
-#   @params [C_max, α, τ, β, γ]
-#   @link α, τ, β, γ, C_max, I = i, v = VP
-#   @output s, i, r, v
-# end
+@test sirv.dom.dir == @context ThElementary [:d(s), :d(i), :d(r), :d(v)]
 
+update_codom = ContextMaps.Impl.mcompose(sirv.dom.pos, sirv.codom.dir)
+
+@test sirv.morphism.update[4] == @term ThElementary update_codom (VP * s)
+
+@test vax_production.morphism.expose == ContextMaps.Impl.id(vax_production.dom.pos)
 
 end
