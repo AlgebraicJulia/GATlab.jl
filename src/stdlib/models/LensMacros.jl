@@ -1,5 +1,5 @@
 module LensMacros
-export @lens
+export @lens, @system
 
 using MLStyle
 
@@ -23,15 +23,26 @@ macro lens(theory, body)
   esc(Expr(:call, lens_impl, Expr(:parameters, to_param.(getlines(body))...), theory))
 end
 
-function lens_impl(T::Type{<:AbstractTheory}; dom::Expr, codom::Expr, expose::Expr, update::Expr)
+function construct_arena(T::Type{<:AbstractTheory}, bar_expr::Expr)
   theory = gettheory(T)
-  function make_arena(e::Expr)
-    pos, dir = @match e begin
-      :($pos | $dir) => construct_context.(Ref(theory.judgments), (pos, dir))
-    end
-    SimpleArena{T}(pos, dir)
+  pos, dir = @match bar_expr begin
+    :($pos | $dir) => construct_context.(Ref(theory.judgments), (pos, dir))
   end
-  dom, codom = make_arena.([dom, codom])
+  SimpleArena{T}(pos, dir)
+end
+
+function lens_impl(T::Type{<:AbstractTheory};
+                   dom::Expr, codom::Expr, expose::Expr, update::Expr)
+  dom, codom = construct_arena.(Ref(T), [dom, codom])
+  construct_lens(T, dom, codom, expose, update)
+end
+
+function construct_lens(
+  ::Type{T},
+  dom::SimpleArena{T}, codom::SimpleArena{T},
+  expose::Expr, update::Expr
+) where {T<:AbstractTheory}
+  theory = gettheory(T)
   expose = construct_context_map(theory, codom.pos, dom.pos, getlines(expose))
   update = construct_context_map(theory, dom.dir, ContextMaps.Impl.mcompose(dom.pos, codom.dir), getlines(update))
   SimpleKleisliLens{T}(
@@ -39,6 +50,40 @@ function lens_impl(T::Type{<:AbstractTheory}; dom::Expr, codom::Expr, expose::Ex
     codom,
     expose,
     update
+  )
+end
+
+macro system(theory, body)
+  esc(Expr(:call, system_impl, theory, getlines(body)))
+end
+
+function system_impl(T::Type{<:AbstractTheory}, lines::Vector)
+  theory = gettheory(T)
+  state = nothing
+  params = nothing
+  body = Expr0[]
+  for line in lines
+    @match line begin
+      :(@state $ctx) => (state = ctx)
+      :(@params $ctx) => (params = ctx)
+      e => push!(e, body)
+    end
+  end
+  dom_pos = construct_context(theory.judgments, state)
+  dom_dir = Context(
+    map(dom_pos.ctx) do (name, type)
+      (Annotated(:d, name), type)
+    end)
+  codom_pos = dom_pos
+  codom_dir = construct_context(theory.judgments, params)
+  SimpleKleisliLens{T}(
+    SimpleArena{T}(dom_pos, dom_dir),
+    SimpleArena{T}(codom_pos, codom_dir),
+    ContextMaps.Impl.id(dom_pos),
+    construct_context_map(
+      theory, dom_dir,
+      ContextMaps.Impl.mcompose(dom_pos, codom_dir), body
+    )
   )
 end
 
