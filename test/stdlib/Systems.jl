@@ -1,6 +1,6 @@
 module TestSystems
 
-sirv = @system ThRing begin
+sirv = @system ThElementary begin
   @state [s, i, r, v]
   @params [β, γ, v]
   :d(s) = - β * (s * i)
