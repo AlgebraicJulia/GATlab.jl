@@ -70,7 +70,7 @@ end
 @struct_hash_equal struct Context
   ctx::Vector{Tuple{Name, Typ}}
   Context(c=Tuple{Name, Typ}[]) = new(c)
-end 
+end
 
 Base.getindex(c::Context,i::Lvl) = is_context(i) ? c.ctx[index(i)] : error("$i")
 Base.collect(c::Context) = collect(c.ctx)
@@ -176,6 +176,9 @@ Base.getindex(t::Theory,i::Lvl) =
 Base.length(t::Theory) = t.judgments |> length
 judgments(t::Theory) = t.judgments
 
+Context(T::Theory, c::AbstractVector{<:Name}) = 
+  Context([(v,Typ(lookup(T, Default()))) for v in c])
+
 """
 The full context for a `Trm` or `Typ` consists of both the list of judgments in
 the theory, and also the list of judgments in the context.
@@ -205,6 +208,7 @@ function lookup(fc::FullContext, n::Name)
   end
 end
 
+lookup(t::Theory, n::Name) = lookup(FullContext(t.judgments,Context()), n)
 lookup(fc::FullContext, s::Symbol) = lookup(fc, Name(s))
 
 const empty_theory = Theory(Anon(), Judgment[])
