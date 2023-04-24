@@ -11,6 +11,7 @@ include("FinMatrices.jl")
 include("SliceCategories.jl")
 include("Rigs.jl")
 include("MTKInterop.jl")
+include("Petri.jl")
 
 @reexport using .ContextMaps
 @reexport using .ContextMapMacros
@@ -20,6 +21,7 @@ include("MTKInterop.jl")
 @reexport using .FinMatrices
 @reexport using .SliceCategories
 @reexport using .Rigs
+@reexport using .Petri
 @reexport using .MTKInterop
 
 end
