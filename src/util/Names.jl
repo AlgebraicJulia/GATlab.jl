@@ -23,11 +23,18 @@ is faster to compare symbols than it is to compare strings.
   name::Symbol
 end
 
+@struct_hash_equal struct Annotated <: Name
+  annotation::Symbol
+  name::Name
+end
+
 Name(n::String) = StrLit(n)
 Name(n::Char) = StrLit(string(n))
 Name(n::Symbol) = n == :default ? Default() : SymLit(n)
 Name(n::Name) = n
 Name(i::Int)= SymLit(Symbol(i))
+
+Name(n; annotation::Symbol) = Annotated(annotation, Name(n))
 
 @struct_hash_equal struct Anon <: Name
 end

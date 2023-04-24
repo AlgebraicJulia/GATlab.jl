@@ -46,15 +46,25 @@ end
 
 struct Declaration
   body::DeclBody
-  context::Vector{Pair{Symbol, SymExpr}}
+  context::Vector{Pair{Name, SymExpr}}
 end
 
 const Expr0 = Union{Symbol, Expr}
+
+function parse_name(e::Expr0)
+  @match e begin
+    (name::Symbol) => Name(name)
+    :($(ann::QuoteNode)($(name::Symbol))) => Name(name; annotation=ann.value)
+    _ => error("Could not parse $e as a name")
+  end
+end
 
 function parse_args(e::Expr0)
   @match e begin
     (name::Symbol) => (Name(name), Expr0[])
     :($(name::Symbol)($(args...))) => (Name(name), Expr0[args...])
+    :($(ann::QuoteNode)($(name::Symbol))) => (Name(name; annotation=ann.value), Expr0[])
+    :($(ann::QuoteNode)($(name::Symbol))($(args...))) => (Name(name; annotation=ann.value), Expr0[args...])
     _ => error("Could not parse $e as an application of a head to arguments")
   end
 end
@@ -114,17 +124,17 @@ function parse_declbody(e::Expr0)
 end
 
 function parse_bindings(bindings::AbstractVector)
-  result = Pair{Symbol, SymExpr}[]
+  result = Pair{Name, SymExpr}[]
   for binding in bindings
     @match binding begin
-      :($(head::Symbol)::$(type::Expr0)) =>
-        push!(result, head => parse_symexpr(type))
       :(($(heads...),)::$(type::Expr0)) => begin
         type_expr = parse_symexpr(type)
-        append!(result, map(head -> head => type_expr, heads))
+        append!(result, map(head -> parse_name(head) => type_expr, heads))
       end
-      :($(head::Symbol)) =>
-        push!(result, head => SymExpr(Name(:default)))
+      :($head::$(type::Expr0)) =>
+        push!(result, parse_name(head) => parse_symexpr(type))
+      :($head) =>
+        push!(result, parse_name(head) => SymExpr(Name(:default)))
       _ => error("could not parse binding $binding")
     end
   end

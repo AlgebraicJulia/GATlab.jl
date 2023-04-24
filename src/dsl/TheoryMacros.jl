@@ -19,11 +19,11 @@ function construct_trm(fc::FullContext, e::SymExpr)
   Trm(head, construct_trm.(Ref(fc), e.args))
 end
 
-function construct_context(judgments::Vector{Judgment}, symctx::Vector{Pair{Symbol, SymExpr}})
+function construct_context(judgments::Vector{Judgment}, symctx::Vector{Pair{Name, SymExpr}})
   c = Context()
   fc = FullContext(judgments, c)
   for (n, symtyp) in symctx
-    push!(c.ctx, (Name(n), construct_typ(fc, symtyp)))
+    push!(c.ctx, (n, construct_typ(fc, symtyp)))
   end
   c
 end
