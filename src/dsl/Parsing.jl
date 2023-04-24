@@ -7,11 +7,12 @@ using ...Util
 
 using MLStyle
 using StructEquality
+using ...Syntax
 
 @struct_hash_equal struct SymExpr
   head::Name
-  args::Vector{SymExpr}
-  function SymExpr(head::Name, args::Vector=SymExpr[])
+  args::Vector{Union{Trm, SymExpr}}
+  function SymExpr(head::Name, args::Vector=Union{Trm,SymExpr}[])
     new(head, args)
   end
 end
@@ -61,10 +62,10 @@ end
 
 function parse_args(e::Expr0)
   @match e begin
-    (name::Symbol) => (Name(name), Expr0[])
-    :($(name::Symbol)($(args...))) => (Name(name), Expr0[args...])
-    :($(ann::QuoteNode)($(name::Symbol))) => (Name(name; annotation=ann.value), Expr0[])
-    :($(ann::QuoteNode)($(name::Symbol))($(args...))) => (Name(name; annotation=ann.value), Expr0[args...])
+    (name::Symbol) => (Name(name), Union{Trm, Expr0}[])
+    :($(name::Symbol)($(args...))) => (Name(name), Union{Trm, Expr0}[args...])
+    :($(ann::QuoteNode)($(name::Symbol))) => (Name(name; annotation=ann.value), Union{Trm, Expr0}[])
+    :($(ann::QuoteNode)($(name::Symbol))($(args...))) => (Name(name; annotation=ann.value), Union{Trm, Expr0}[args...])
     Expr(:block, _...) => begin
       lines = getlines(e)
       length(lines) == 1 || error("only one expression allowed in a block")
@@ -73,6 +74,8 @@ function parse_args(e::Expr0)
     _ => error("Could not parse $e as an application of a head to arguments")
   end
 end
+
+parse_symexpr(e::Trm) = e
 
 function parse_symexpr(e::Expr0)
   (name, args) = parse_args(e)

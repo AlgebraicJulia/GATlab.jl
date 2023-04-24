@@ -14,6 +14,8 @@ function construct_typ(fc::FullContext, e::SymExpr)
   Typ(head, construct_trm.(Ref(fc), e.args))
 end
 
+construct_trm(::FullContext, t::Trm) = t
+
 function construct_trm(fc::FullContext, e::SymExpr)
   head = lookup(fc, e.head)
   Trm(head, construct_trm.(Ref(fc), e.args))
@@ -221,7 +223,7 @@ macro theorymap(head, body)
   )
 end
 
-function term_impl(theory::Theory, expr::Expr0; context = Context())
+function term_impl(theory::Theory, expr::Union{Trm,Expr0}; context = Context())
   construct_trm(FullContext(theory.judgments, context), parse_symexpr(expr))
 end
 
