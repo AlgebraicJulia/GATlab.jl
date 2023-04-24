@@ -38,7 +38,7 @@ end
 
 wiring = @lens ThElementary begin
   dom = [S, I, R, V, C, VP] | [β, γ, v, C_max, α, τ, I]
-  codom = [] | [C_max, α, β, γ, τ]
+  codom = [S, I, R, V] | [C_max, α, β, γ, τ]
   expose = begin
     S = S
     I = I
