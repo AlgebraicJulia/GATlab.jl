@@ -4,6 +4,7 @@ export @lens, @system
 using MLStyle
 
 using ....Syntax
+using ....Util
 
 using ....Dsl.Parsing
 using ....Dsl.TheoryMacros: construct_context
@@ -61,18 +62,21 @@ function system_impl(T::Type{<:AbstractTheory}, lines::Vector)
   theory = gettheory(T)
   state = nothing
   params = nothing
-  body = Expr0[]
+  body = Expr[]
   for line in lines
     @match line begin
-      :(@state $ctx) => (state = ctx)
-      :(@params $ctx) => (params = ctx)
-      e => push!(e, body)
+      # the $_ matches the linenumbernode inserted in every macro expansion
+      :(@state $_ $ctx) => (state = ctx)
+      :(@params $_ $ctx) => (params = ctx)
+      e => push!(body, e)
     end
   end
+  state != nothing || error("state not provided to @system macro")
+  params != nothing || error("params not provided to @system macro")
   dom_pos = construct_context(theory.judgments, state)
   dom_dir = Context(
     map(dom_pos.ctx) do (name, type)
-      (Annotated(:d, name), type)
+      (Name(name; annotation=:d), type)
     end)
   codom_pos = dom_pos
   codom_dir = construct_context(theory.judgments, params)
