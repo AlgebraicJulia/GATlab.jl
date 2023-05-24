@@ -7,11 +7,11 @@ export Model, checkvalidity, typarg, ap
 """
 An element of `Model{T}` represents a model of the theory `T`.
 
-Note that unlike with `AbstractModel`, we do not expect that structs subtyping
-`Model` will necessarily be singletons. In general, they may contain runtime
-data which is used in the implementations of the various methods. For instance,
-this would be the case for a slice category: the `Model` corresponding to a
-slice category would have runtime data of the object that we are slicing over.
+Note that we do not expect that structs subtyping `Model` will necessarily be
+singletons. In general, they may contain runtime data which is used in the
+implementations of the various methods. For instance, this would be the case for
+a slice category: the `Model` corresponding to a slice category would have
+runtime data of the object that we are slicing over.
 
 An instance of `Model{T}` should have overloads for
 

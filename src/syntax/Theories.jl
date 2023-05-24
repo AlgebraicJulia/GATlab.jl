@@ -1,25 +1,39 @@
 module Theories
 export Lvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory,
-  AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context, FullContext,
-  lookup, arity, judgments, rename, getname
+  AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context, is_theory, is_argument,
+  FullContext, lookup, arity, judgments, rename, getname
 
 using StructEquality
 
 using ...Util
 
+"""
+The tag of a Lvl takes up two bits and can be three things:
+
+00: part of the theory
+01: part of the context
+10: part of the argument to a dependent context
+"""
 @struct_hash_equal struct Lvl
   val::UInt64
-  function Lvl(i::Integer; context=false)
+  function Lvl(i::Integer; context=false, argument=false)
     i > 0 || error("Creating non-positive level $i context $context")
-    new(UInt64(i) | (UInt64(context) << 63))
+    !(context && argument) || error("at most one of context and argument can be true")
+    new(UInt64(i) | (UInt64(context) << 62) | (UInt64(argument) << 63))
   end
 end
 
-const CONTEXT_BIT = UInt64(1) << 63
+TAG_MASK = UInt64(3) << 62
 
-is_context(i::Lvl) = (i.val & CONTEXT_BIT) != 0
+tag(i::Lvl) = i.val >> 62
 
-index(i::Lvl) = i.val & (CONTEXT_BIT - 1)
+is_theory(i::Lvl) = tag(i) == 0
+
+is_context(i::Lvl) = tag(i) == 1
+
+is_argument(i::Lvl) = tag(i) == 2
+
+index(i::Lvl) = i.val & (~TAG_MASK)
 
 Base.:(+)(i::Lvl, j::Int) = Lvl(i.val + UInt64(j))
 
@@ -29,7 +43,7 @@ abstract type TrmTyp end
   head::Lvl
   args::Vector{Trm}
   function Trm(l::Lvl,a=Trm[])
-    !(is_context(l) && !isempty(a)) || error("Elements of context are *nullary* term constructors")
+    is_theory(l) || isempty(a) || error("Elements of context are *nullary* term constructors")
     return new(l,a)
   end
   function Trm(l::Int,a=Trm[])
@@ -45,7 +59,7 @@ should point at a type constructor judgment.
   head::Lvl
   args::Vector{Trm}
   function Typ(l,a=Lvl[]) 
-    !is_context(l) || error("Bad head for type: $(index(l))")
+    is_theory(l) || error("Bad head for type: $(index(l))")
     return new(l,a)
   end 
 end
@@ -116,7 +130,7 @@ end
 Base.:(==)(x::Theory,y::Theory) = x.judgments == y.judgments
 Base.hash(x::Theory, h) = hash(x.judgments, h)
 Base.getindex(t::Theory,i::Lvl) = 
-  is_context(i) ? error("Bad index $i") : t.judgments[index(i)]
+  is_theory(i) ? t.judgments[index(i)] : error("Bad index $i")
 Base.length(t::Theory) = t.judgments |> length
 judgments(t::Theory) = t.judgments
 

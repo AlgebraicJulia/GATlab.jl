@@ -3,6 +3,6 @@ module TestSyntax
 using Test
 using Gatlab
 
-# todo
+include("NestedContexts.jl")
 
 end
