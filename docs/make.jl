@@ -35,12 +35,14 @@ makedocs(
   doctest=false,
   checkdocs=:none,
   pages=Any[
-    "Gatlab.jl"=>"index.md",
-    # "Examples"=>Any[
-    #   "examples/test_example/test_example.md",
-    # ],
-    "Library Reference"=>"api.md",
-    "Standard Library"=>"stdlib.md",
+    "Gatlab.jl" => "index.md",
+    "Concepts" => Any[
+      "concepts/overview.md",
+      "concepts/theories.md",
+      "concepts/models.md"
+    ],
+    "Library Reference" => "api.md",
+    "Standard Library" => "stdlib.md",
   ]
 )
 
