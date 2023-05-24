@@ -1,5 +1,7 @@
 module Theories
-export Lvl, Typ, Trm, TypCon, TrmCon, Axiom, Context, Judgment, Theory,
+export Lvl, Typ, Trm, TypCon, TrmCon,
+  TypTag, TrmTag, AnonTypTag, AnonTrmTag,
+  Axiom, Context, Judgment, Theory,
   AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context, is_theory, is_argument,
   FullContext, lookup, arity, judgments, rename, getname
 
@@ -102,6 +104,26 @@ rename(j::Judgment, n::Name) = Judgment(n, j.head, j.ctx)
   end
 end
 
+"""
+This is used as a supertype for the tag types in a theory that correspond to
+type constructors.
+
+Example:
+
+```julia
+module Category
+struct Ob <: TypTag{1} end
+end
+```
+"""
+abstract type TypTag{i} end
+
+"""
+This can be used when there isn't a specific struct like `Category.Ob`. Specific
+structs are preferred because they make reading backtraces easier.
+"""
+struct AnonTypTag{i} <: TypTag{i} end
+
 # Args index the CONTEXT of the judgment
 @struct_hash_equal struct TypCon <: Constructor
   args::Vector{Lvl}
@@ -110,6 +132,26 @@ end
     return new(a)
   end
 end
+
+"""
+This is used as a supertype for the tag types in a theory that correspond to
+term constructors.
+
+Example:
+
+```julia
+module Category
+struct compose <: TrmTag{3} end
+end
+```
+"""
+abstract type TrmTag{i} end
+
+"""
+This can be used when there isn't a specific struct like `Category.compose`. Specific
+structs are preferred because they make reading backtraces easier.
+"""
+struct AnonTrmTag{i} <: TrmTag{i} end
 
 arity(f::Constructor) = length(f.args)
 

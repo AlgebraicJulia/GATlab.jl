@@ -1,8 +1,8 @@
-# Overview
+# For Catlab users
 
 Gatlab is a refactoring of the core GAT system in Catlab. There are three main differences between the Gatlab GAT system and the Catlab GAT system, in addition to a variety of new features enabled by these differences.
 
-## 1. Instances as values
+## 1. Models as values
 
 Instances (or models) of GATs in Catlab worked on a system analogous to Haskell type classes. That is, given a type and a GAT, that type could be involved in at most one instance of the GAT. However, there are many, many categories that have, for instance, integers as objects. The way to fix this was to make lots of "newtype" wrappers, like
 
@@ -20,7 +20,7 @@ Sometimes we refer to this by "categories as contexts", because the category (i.
 
 ## 2. E-Graphs
 
-An e-graph is a data structure used to store congruence relations on a collections of terms. A congruence relation is an equivalence relation with the property that if $x_{i} \sim x_{i}'$, then $f(x_{1},\ldots,x_{n}) \sim f(x_{1}',\ldots,f_{n}')$ for any term constructor $f$. E-graphs are used for a variety of purposes, including:
+An e-graph is a data structure used to store congruence relations on a collections of terms. A congruence relation is an equivalence relation with the property that if $x_{i} \sim x_{i}'$, then $f(x_{1},\ldots,x_{n}) \sim f(x_{1}',\ldots,x_{n}')$ for any term constructor $f$. E-graphs are used for a variety of purposes, including:
 
 - finding simple representations of terms
 - deciding whether two terms are equal
@@ -29,7 +29,7 @@ The syntax systems we use for GATs in Gatlab are built from the ground-up to be 
 
 Additionally, it allows us to perform a weak form of typechecking. Typechecking in general for a GAT requires deciding the equality of arbitrary terms, which is undecidable. However, we can typecheck "up to" the collection of equivalences that we have recorded in an e-graph. Any well-typed term can be typechecked using this procedure by first placing the necessary equalities in the e-graph and then running the type-checking algorithm. Moreover, whenever this algorithm finds a positive result, one can be sure that the term does in fact typecheck. This is analogous to the termination-checking in proof assistants; we circumvent undecidability by putting the burden on the user to give us some additional data to show that their program is valid. And in many circumstances, very little additional data is required. For instance, in the bare theory of categories, there are no term constructors that produce objects. So checking whether two objects are equal in a presentation of a category is a simple problem of computing an equivalence relation (instead of a congruence relation). Thus, typechecking is very easy in this circumstance.
 
-## 3. Indexed dependent types in instances
+## 3. Indexed dependent types in models
 
 A morphism between the finite sets $\{1,\ldots,n\}$ and $\{1,\ldots,m\}$ is simply a length-$n$ vector whose entries are in $\{1,\ldots,m\}$. However, in Catlab we cannot make a model of the theory of categories which has `Vector{Int}` as its type for morphisms. This is because we require an implementation of `dom` and `codom` to have a model, and it is not possible to infer the size of the codomain from a `Vector{Int}`.
 
