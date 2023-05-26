@@ -9,7 +9,7 @@ include("syntax/module.jl")
 
 # include("logic/module.jl")
 
-# include("models/module.jl")
+include("models/module.jl")
 
 include("dsl/module.jl")
 
@@ -19,7 +19,7 @@ include("stdlib/module.jl")
 @reexport using .Util
 @reexport using .Syntax
 # @reexport using .Logic
-# @reexport using .Models
+@reexport using .Models
 @reexport using .Dsl
 @reexport using .Stdlib
 
