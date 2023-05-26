@@ -47,7 +47,7 @@ function checkvalidity end
 """
 If not otherwise specified, we assume that a given value is not valid.
 """
-checkvalidity(::Model{<:AbstractTheory}, ::TypTag, args..., _) = false
+checkvalidity(::Model{<:AbstractTheory}, ::TypTag, args...) = false
 
 """
 Meant to be overloaded as

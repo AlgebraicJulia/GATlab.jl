@@ -8,9 +8,9 @@ using Reexport
 include("Overloads.jl")
 include("Parsing.jl")
 include("TheoryMacros.jl")
-include("ModelMacros.jl")
+# include("ModelMacros.jl")
 
 @reexport using .TheoryMacros
-@reexport using .ModelMacros
+# @reexport using .ModelMacros
 
 end
