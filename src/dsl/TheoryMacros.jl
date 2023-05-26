@@ -132,8 +132,22 @@ macro theory(head, body)
   ]
   precursor = theory_precursor(parent, usings)
   theory = theory_impl(precursor, name, judgments)
+  typ_cons = [
+    (j.name.name, :(struct $(j.name.name) <: $(GlobalRef(Theories, :TypTag)){$i} end))
+    for (i,j) in enumerate(theory.judgments)
+      if (typeof(j.head) == TypCon) && (typeof(j.name) == SymLit)
+  ]
+  trm_cons = [
+    (j.name.name, :(struct $(j.name.name) <: $(GlobalRef(Theories, :TrmTag)){$i} end))
+    for (i,j) in enumerate(theory.judgments)
+      if (typeof(j.head) == TrmCon) && (typeof(j.name) == SymLit)
+  ]
+  exports = [first.(typ_cons); first.(trm_cons)]
   esc(Expr(:toplevel, :(
     module $name
+    export $(exports...)
+    $(last.(typ_cons)...)
+    $(last.(trm_cons)...)
     struct Th <: $(GlobalRef(Theories, :AbstractTheory)) end
     macro theory()
       $theory
