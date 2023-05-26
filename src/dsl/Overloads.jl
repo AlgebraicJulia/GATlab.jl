@@ -1,6 +1,5 @@
 module Overloads
 
-using ...Models
 using ...Syntax
 
 TheoryMaps.TheoryIncl(T1::Type{<:AbstractTheory}, T2::Type{<:AbstractTheory}, m) =

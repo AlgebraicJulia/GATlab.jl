@@ -3,7 +3,6 @@ export @theory, @theorymap, @term, @context
 
 using MLStyle
 
-using ...Models
 using ...Syntax
 using ...Util
 
@@ -83,14 +82,12 @@ function rename_by(t::Theory, renamings::Dict{Name,Name})
 end
 
 function theory_precursor(
-  parent::Type{<:AbstractTheory},
-  usings::Vector{Tuple{DataType, Dict{Name,Name}}}
+  parent::Theory,
+  usings::Vector{Tuple{Theory, Dict{Name,Name}}}
 )
-  parent = gettheory(parent)
   cur = parent
   incl = collect(1:length(parent.judgments))
-  for (T, renamings) in usings
-    t = gettheory(T)
+  for (t, renamings) in usings
     cur = pushout(
       Anon(),
       TheoryIncl(parent, cur, incl),
@@ -128,32 +125,22 @@ macro theory(head, body)
       l => push!(judgments, l)
     end
   end
-  # we use :ref instead of :vect so that we construct a vector of the proper
-  # type when there are no using statements
-  usings = Expr(
-    :ref,
-    Tuple{DataType, Dict{Name,Name}},
-    [Expr(:tuple, T, renames) for (T, renames) in usings]...
-  )
-  precursor = gensym(:precursor)
-  tmp = gensym(:theory)
-  esc(
-    Expr(
-      :block,
-      :(const $precursor = $(GlobalRef(TheoryMacros, :theory_precursor))(
-        $parent,
-        $usings
-      )),
-      :(const $tmp = $(GlobalRef(TheoryMacros, :theory_impl))(
-         $precursor,
-         $(Expr(:quote, name)),
-         $judgments
-      )),
-      __source__,
-      :(struct $name <: $(GlobalRef(Theories, :AbstractTheory)) end),
-      :($(GlobalRef(Theories, :gettheory))(::$name) = $tmp)
-    )
-  )
+  parent = macroexpand(__module__, :($parent.@theory()))
+  usings = Tuple{Theory, Dict{Name, Name}}[
+    (macroexpand(__module__, :($T.@theory)), renames)
+    for (T, renames) in usings
+  ]
+  precursor = theory_precursor(parent, usings)
+  theory = theory_impl(precursor, name, judgments)
+  esc(Expr(:toplevel, :(
+    module $name
+    struct Th <: $(GlobalRef(Theories, :AbstractTheory)) end
+    macro theory()
+      $theory
+    end
+    $(GlobalRef(Theories, :gettheory))(::Th) = $theory
+    end
+  )))
 end
 
 function parse_mapping(expr)

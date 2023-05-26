@@ -237,8 +237,16 @@ A convenience overload of `theory`
 """
 gettheory(T::Type{<:AbstractTheory}) = gettheory(T())
 
-struct ThEmpty <: AbstractTheory end
+module ThEmpty
+import ..Theories
 
-gettheory(::ThEmpty) = empty_theory
+macro theory()
+  Theories.empty_theory
+end
+
+struct Th <: Theories.AbstractTheory end
+
+gettheory(::Th) = Theories.empty_theory
+end
 
 end

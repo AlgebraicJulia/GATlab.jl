@@ -33,7 +33,7 @@ Pushout two inclusions.
 g ↓   ↓
   C->⌜D
 
-D is thought of as a copy of B with the unmerged judgments of C added aftewards.
+D is a copy of B with the novel judgments of C added aftewards.
  
 """
 function pushout(new_name::Name, f::TheoryIncl, g::TheoryIncl;  
