@@ -7,11 +7,15 @@ using Reexport
 # include("SimpleLenses.jl")
 # include("LensMacros.jl")
 include("FinSets.jl")
+include("FinMatrices.jl")
+include("SliceCategories.jl")
 
 # @reexport using .ContextMaps
 # @reexport using .ContextMapMacros
 # @reexport using .SimpleLenses
 # @reexport using .LensMacros
 @reexport using .FinSets
+@reexport using .FinMatrices
+@reexport using .SliceCategories
 
 end

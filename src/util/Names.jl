@@ -50,4 +50,9 @@ end
 
 Base.string(::Default) = "_"
 
+Base.Symbol(n::SymLit) = n.name
+Base.Symbol(n::StrLit) = Symbol(n.name)
+Base.Symbol(::Anon) = gensym()
+Base.Symbol(::Default) = :default
+
 end
