@@ -35,7 +35,7 @@ is_context(i::Lvl) = tag(i) == 1
 
 is_argument(i::Lvl) = tag(i) == 2
 
-index(i::Lvl) = i.val & (~TAG_MASK)
+index(i::Lvl) = Int(i.val & (~TAG_MASK))
 
 Base.:(+)(i::Lvl, j::Int) = Lvl(i.val + UInt64(j))
 

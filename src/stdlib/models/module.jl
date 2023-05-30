@@ -9,6 +9,7 @@ using Reexport
 include("FinSets.jl")
 include("FinMatrices.jl")
 include("SliceCategories.jl")
+include("Rigs.jl")
 
 # @reexport using .ContextMaps
 # @reexport using .ContextMapMacros
@@ -17,5 +18,6 @@ include("SliceCategories.jl")
 @reexport using .FinSets
 @reexport using .FinMatrices
 @reexport using .SliceCategories
+@reexport using .Rigs
 
 end
