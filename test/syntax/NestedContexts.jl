@@ -21,6 +21,4 @@ push!(bare_hom, SymLit(:it), Typ(Lvl(2), [Trm(Lvl(1; argument=true)), Trm(Lvl(2;
 
 push!(dctx, SymLit(:f), bare_hom, [Lvl(1; context=true), Lvl(2; context=true)])
 
-println(dctx)
-
 end

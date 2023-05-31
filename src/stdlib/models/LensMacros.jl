@@ -21,7 +21,7 @@ macro lens(theory, body)
       _ => error("expected an assignment, got $e instead")
     end
   end
-  esc(Expr(:call, lens_impl, Expr(:parameters, to_param.(getlines(body))...), theory))
+  esc(Expr(:call, lens_impl, Expr(:parameters, to_param.(getlines(body))...), :($theory.T)))
 end
 
 function construct_arena(T::Type{<:AbstractTheory}, bar_expr::Expr)
@@ -55,7 +55,7 @@ function construct_lens(
 end
 
 macro system(theory, body)
-  esc(Expr(:call, system_impl, theory, getlines(body)))
+  esc(Expr(:call, system_impl, :($theory.T), getlines(body)))
 end
 
 function system_impl(T::Type{<:AbstractTheory}, lines::Vector)

@@ -31,11 +31,11 @@ end
   out = x * y * z * inv(x)
 end
 """
-macro context_map(T, dom, codom, body)
+macro context_map(theory, dom, codom, body)
   dom = parse_ctx(dom)
   codom = parse_ctx(codom)
   esc(:(
-    $(GlobalRef(ContextMapMacros, :context_map_impl))($T, $dom, $codom, $(QuoteNode(body)))
+    $(GlobalRef(ContextMapMacros, :context_map_impl))($theory.T, $dom, $codom, $(QuoteNode(body)))
   ))
 end
 

@@ -13,7 +13,7 @@ using Gatlab
   h::Hom(y,y)
 end
 
-eg = EGraph(C)
+eg = EGraph(C.T)
 
 id = add!(eg, @term C (f ⋅ id(y)))
 
@@ -31,7 +31,7 @@ run!(m, eg, instructions, [Reg(4), Reg(2)])
 Γ = @context ThCategory [a::Ob, b::Ob, α::Hom(a,b)]
 t = @term ThCategory Γ (α ⋅ id(b))
 pat = Pattern(t, Γ)
-prog = compile(ThCategory, pat)
+prog = compile(ThCategory.T, pat)
 
 m = Machine()
 

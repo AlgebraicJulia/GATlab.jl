@@ -19,7 +19,7 @@ end
   c :: U ⊣ []
 end
 
-eg = EGraph(M)
+eg = EGraph(M.T)
 
 i1 = add!(eg, @term M (a * b))
 i2 = add!(eg, @term M c)
@@ -38,7 +38,7 @@ i4 = add!(eg, @term M c * (a * b))
   g :: Hom(y,z) ⊣ []
 end
 
-eg = EGraph(C)
+eg = EGraph(C.T)
 
 i1 = add!(eg, @term C (f ⋅ g))
 
