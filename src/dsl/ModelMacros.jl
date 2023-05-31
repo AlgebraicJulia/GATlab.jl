@@ -111,7 +111,7 @@ macro model(theorydecl, modeldecl, body)
   esc(
     Expr(:block,
          __source__,
-         :(struct $modeldef <: $(GlobalRef(ModelInterface, :Model)){$T.Th, Tuple{$(types...)}}
+         :(struct $modeldef <: $(GlobalRef(ModelInterface, :Model)){$T.T, Tuple{$(types...)}}
              $(fields...)
            end),
          model_impl(theory, modelarg, stripped_tyargs, defs)

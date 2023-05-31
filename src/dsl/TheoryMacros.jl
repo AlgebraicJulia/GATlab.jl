@@ -148,11 +148,11 @@ macro theory(head, body)
     export $(exports...)
     $(last.(typ_cons)...)
     $(last.(trm_cons)...)
-    struct Th <: $(GlobalRef(Theories, :AbstractTheory)) end
+    struct T <: $(GlobalRef(Theories, :AbstractTheory)) end
     macro theory()
       $theory
     end
-    $(GlobalRef(Theories, :gettheory))(::Th) = $theory
+    $(GlobalRef(Theories, :gettheory))(::T) = $theory
     end
   )))
 end
@@ -217,7 +217,7 @@ macro theorymap(head, body)
   lines = getlines(body)
   esc(
     quote
-      $(GlobalRef(TheoryMacros, :theorymap_impl))($dom, $codom, $lines)
+      $(GlobalRef(TheoryMacros, :theorymap_impl))($dom.T, $codom.T, $lines)
     end
   )
 end
@@ -230,11 +230,11 @@ term_impl(intheory::Type{<:AbstractTheory}, expr::Expr0; context = Context()) =
   term_impl(gettheory(intheory), expr; context)
 
 macro term(theory, expr)
-  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory, $(Expr(:quote, expr)))))
+  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory.T, $(Expr(:quote, expr)))))
 end
 
 macro term(theory, context, expr)
-  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory, $(Expr(:quote, expr)); context=$context)))
+  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory.T, $(Expr(:quote, expr)); context=$context)))
 end
 
 function context_impl(T::Type{<:AbstractTheory}, expr)
@@ -246,7 +246,7 @@ function context_impl(T::Type{<:AbstractTheory}, expr)
 end
 
 macro context(theory, expr)
-  esc(:($(GlobalRef(TheoryMacros, :context_impl))($theory, $(Expr(:quote, expr)))))
+  esc(:($(GlobalRef(TheoryMacros, :context_impl))($theory.T, $(Expr(:quote, expr)))))
 end
 
 

@@ -10,7 +10,7 @@ struct SliceOb{Ob, Hom}
   hom::Hom
 end
 
-@model ThCategory{SliceOb{Ob, Hom}, Hom} (self::SliceC{Ob, Hom, C<:Model{ThCategory.Th, Tuple{Ob, Hom}}}) begin
+@model ThCategory{SliceOb{Ob, Hom}, Hom} (self::SliceC{Ob, Hom, C<:Model{ThCategory.T, Tuple{Ob, Hom}}}) begin
   cat::C
   over::Ob
 

@@ -17,7 +17,7 @@ periodic_params = @lens ThRing begin
   end
 end
 
-rehydrated = parse_json(JSON.parse(JSON.json(periodic_params)), SimpleKleisliLens{ThRing})
+rehydrated = parse_json(JSON.parse(JSON.json(periodic_params)), SimpleKleisliLens{ThRing.T})
 
 @test rehydrated.dom == periodic_params.dom
 @test rehydrated.codom == periodic_params.codom

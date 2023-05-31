@@ -1,5 +1,5 @@
 module ContextMaps
-export interpret, interpret_term, show_context_map, KleisliContextMap
+export show_context_map, KleisliContextMap
 
 using ...StdTheories
 using ....Syntax
