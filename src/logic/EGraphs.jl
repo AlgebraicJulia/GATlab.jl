@@ -11,7 +11,7 @@ const Id = Int
 
 @struct_hash_equal struct ETrm
   head::Lvl
-  args::Vector{Id}
+  context::Vector{Id}
 end
 
 @as_record ETrm
@@ -75,19 +75,19 @@ not be injective, so this is ambiguous!
 What we are going to do for now is say that types in the context of a term former
 can't be nested. I.e., we only allow types of the form `Term(n)`, not `Term(S(n))`.
 
-Fortunately, I don't think we care about any theories with this kind of context
-former.
+Fortunately, I don't think we care about any theories with this kind of term
+constructor.
 """
-function context(eg::EGraph, etrm::ETrm)
-  j = eg.theory[etrm.head]
+function compute_context(eg::EGraph, head::Lvl, args::Vector{Id})
+  j = eg.theory[head]
   trmcon = j.head
   typeof(trmcon) == TrmCon ||
-    error("head of $etrm is not a term constructor")
-  length(etrm.args) == length(trmcon.args) ||
-    error("wrong number of args for term constructor in $etrm")
+    error("head $head is not a term constructor")
+  length(args) == length(trmcon.args) ||
+    error("wrong number of args $(length(args)) for term constructor $head")
   ctx = zeros(Id, length(j.ctx))
   toexpand = Tuple{Typ, ETyp}[]
-  for (argidx, id) in zip(trmcon.args, etrm.args)
+  for (argidx, id) in zip(trmcon.args, args)
     ctx[index(argidx)] = id
     push!(toexpand, (j.ctx[argidx][2], typof(eg, id)))
   end
@@ -118,9 +118,8 @@ function context(eg::EGraph, etrm::ETrm)
 end
 
 function compute_etyp(eg::EGraph, etrm::ETrm)
-  ctx = context(eg, etrm)
   j = eg.theory[etrm.head]
-  ETyp(j.head.typ.head, Id[subst(eg, arg, ctx) for arg in j.head.typ.args])
+  ETyp(j.head.typ.head, Id[subst(eg, arg, etrm.context) for arg in j.head.typ.args])
 end
 
 function subst(eg::EGraph, trm::Trm, ctx::Vector{Id})
@@ -128,18 +127,20 @@ function subst(eg::EGraph, trm::Trm, ctx::Vector{Id})
     ctx[index(trm.head)]
   else
     args = Id[subst(eg::EGraph, arg, ctx) for arg in trm.args]
-    add!(eg, ETrm(trm.head, args))
+    add!(eg, trm.head, args)
   end
 end
 
-function add!(eg::EGraph, etrm::ETrm)
-  etrm = canonicalize!(eg, etrm)
+function add!(eg::EGraph, head::Lvl, args::Vector{Id})
+  args = find_root!.(Ref(eg.eqrel), args)
+  context = compute_context(eg, head, args)
+  etrm = ETrm(head, context)
+  etyp = compute_etyp(eg, etrm)
   if etrm ∈ keys(eg.hashcons)
     eg.hashcons[etrm]
   else
-    etyp = compute_etyp(eg, etrm)
     id = push!(eg.eqrel)
-    for i in etrm.args
+    for i in etrm.context
       add_parent!(eg.eclasses[i], etrm, id)
     end
     eg.hashcons[etrm] = id
@@ -149,7 +150,7 @@ function add!(eg::EGraph, etrm::ETrm)
 end
 
 function add!(eg::EGraph, trm::Trm)
-  add!(eg, ETrm(trm.head, add!.(Ref(eg), trm.args)))
+  add!(eg, trm.head, Vector{Id}(add!.(Ref(eg), trm.args)))
 end
 
 find!(eg::EGraph, i::Id) = find_root!(eg.eqrel, i)
