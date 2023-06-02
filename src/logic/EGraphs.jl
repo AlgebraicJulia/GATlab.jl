@@ -35,22 +35,20 @@ function add_parent!(ec::EClass, etrm::ETrm, i::Id)
   ec.parents[etrm] = i
 end
 
-# TODO: also add a "context" field to this, so that we don't have to extend the
-# Theory
-
 struct EGraph
   theory::Theory
+  context::Context
   eqrel::IntDisjointSets{Id}
   eclasses::Dict{Id, EClass}
   hashcons::Dict{ETrm, Id}
   worklist::Vector{Id}
-  function EGraph(theory::Theory)
-    new(theory, IntDisjointSets(0), Dict{Id, EClass}(), Dict{ETrm, Id}(), Id[])
+  function EGraph(theory::Theory, ctx::Context)
+    new(theory, ctx, IntDisjointSets(0), Dict{Id, EClass}(), Dict{ETrm, Id}(), Id[])
   end
 end
 
-function EGraph(T::Type{<:AbstractTheory})
-  EGraph(gettheory(T))
+function EGraph(T::Type{<:AbstractTheory}, ctx::Context)
+  EGraph(gettheory(T), ctx)
 end
 
 function canonicalize!(eg::EGraph, etrm::ETrm)
@@ -62,7 +60,8 @@ function typof(eg::EGraph, i::Id)
 end
 
 """
-This computes the inferred context for an etrm.
+This computes the inferred context for an etrm that has a term constructor as
+its head.
 
 For example, if `f` is an id with etyp `Hom(x,y)` and `g` is an id with etyp
 `Hom(y,z)`, then context(eg, :(g ∘ f)) computes the context `[x,y,z,f,g]`.
@@ -121,9 +120,14 @@ function context(eg::EGraph, etrm::ETrm)
 end
 
 function compute_etyp(eg::EGraph, etrm::ETrm)
-  ctx = context(eg, etrm)
-  j = eg.theory[etrm.head]
-  ETyp(j.head.typ.head, Id[subst(eg, arg, ctx) for arg in j.head.typ.args])
+  if is_context(etrm.head)
+    (_, typ) = eg.context[etrm.head]
+    ETyp(typ.head, add!.(Ref(eg), typ.args))
+  else
+    ctx = context(eg, etrm)
+    j = eg.theory[etrm.head]
+    ETyp(j.head.typ.head, Id[subst(eg, arg, ctx) for arg in j.head.typ.args])
+  end
 end
 
 function subst(eg::EGraph, trm::Trm, ctx::Vector{Id})
