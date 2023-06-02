@@ -35,6 +35,9 @@ function add_parent!(ec::EClass, etrm::ETrm, i::Id)
   ec.parents[etrm] = i
 end
 
+# TODO: also add a "context" field to this, so that we don't have to extend the
+# Theory
+
 struct EGraph
   theory::Theory
   eqrel::IntDisjointSets{Id}
