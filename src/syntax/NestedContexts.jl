@@ -90,9 +90,65 @@ A struct declared from a nested context can either be declared
 1. For a specific model of a theory
 2. Generically
 
-In the first case, the struct has no type parameters
+In the first case, the struct has no type parameters.
 
-In the second case, the struct has a type parameter for each type constructor in the theory
+In the second case, the struct has a type parameter for each type constructor in
+the theory, and then a type parameter for the model.
+
+It should look something like
+
+@context_struct ThCategory WrappedHom begin
+  dom::Ob
+  codom::Ob
+  morphism::Hom(dom,codom)
+end
+
+=>
+
+struct WrappedHom{Ob, Hom, M<:Model{ThCategory.T, Tuple{Ob, Hom}}} <: AbstractContext{ThCategory.T, M}
+  dom::Ob
+  codom::Ob
+  morphism::Hom
+end
+
+contextspec(::Type{WrappedHom}) =
+  DependentContext(@context ThCategory [dom::Ob, codom::Ob, morphism::Hom(dom, codom)])
+
+@context_struct ThCartesianCategory Arena begin
+  pos::Ob
+  dir::Ob
+end
+
+@context_struct ThCartesianCategory Lens{dom::Arena, codom::Arena} begin
+  expose::Hom(dom.pos, codom.pos)
+  update::Hom(dom.pos × codom.dir, dom.dir)
+end
+
+@mixin ThCartesianCategory LensSupport begin
+  @context Arena begin
+    pos::Ob
+    dir::Ob
+  end
+
+  @context Lens(dom::Arena, codom::Arena) begin
+    expose::Hom(dom.pos, codom.pos)
+    update::Hom(dom.pos × codom.dir, dom.dir)
+  end
+end
+
+@theory_map ThMonoidalCategory ThCartesianCategory begin
+  using LensSupport
+
+  Ob => Arena
+  Hom(dom, codom) => Lens(dom, codom)
+
+  [a::Arena] ⊢ id(a) => Lens(id(a.pos), π₂(a.pos, a.dir))
+
+  [(a,b,c)::Arena, f::Lens(a,b), g::Lens(b,c)] ⊢ f ⋅ g => Lens(
+    f.expose ⋅ g.expose, ...
+  )
+end
+
 """
 
 end
