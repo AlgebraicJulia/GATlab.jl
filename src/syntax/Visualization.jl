@@ -3,7 +3,7 @@ export sequent, show_term, show_ctx
 
 using ...Util
 using ..Theories
-using ..Theories: TrmTyp, TypCon, TrmCon, Constructor, Axiom, args,TrmTyp, is_context, index
+using ..Theories: TrmTyp, TypCon, TrmCon, Constructor, Axiom,TrmTyp, is_context, index
 using ..TheoryMaps
 
 using DataStructures

@@ -3,6 +3,7 @@ export @instance
 
 using ...Util
 using MLStyle: @match
+using DataStructures
 using ...Syntax
 
 
@@ -10,7 +11,7 @@ macro instance(head, body)
   theoryname, theoryparams = parse_theory_binding_either(head)
   theory = macroexpand(__module__, :($theoryname.@theory))
   functions, ext_functions = parse_instance_body(body)
-  instance_code(theory, theoryparams, functions, ext_functions)
+  esc(instance_code(theory, theoryparams, functions, ext_functions))
 end 
 
 
@@ -48,7 +49,7 @@ function instance_code(theory, instance_types, instance_fns, external_fns)
   code = Expr(:block)
   typenames = [Symbol(j.name) for j in theory.judgments if j.head isa TypCon]
   bindings = Dict(zip(typenames, instance_types))
-  bound_fns = [ replace_symbols(bindings, f) for f in interface(theory) ]
+  bound_fns = interface(theory, bindings)
   bound_fns = OrderedDict(parse_function_sig(f) => f for f in bound_fns)
   instance_fns = Dict(parse_function_sig(f) => f for f in instance_fns)
   for (sig, f) in bound_fns
@@ -66,10 +67,26 @@ function instance_code(theory, instance_types, instance_fns, external_fns)
   return code
 end
 
-function interface(T::Theory)::Vector{JuliaFunction}
-  [interface(j) for j in judgments(T) if j.head isa TypCon || j.head isa TrmCon
+function interface(T::Theory, bindings::AbstractDict)::Vector{JuliaFunction}
+  vcat([interface(T, j, bindings) for j in judgments(T)]...)
 end 
-function interface(T::TermCon)::JuliaFunction
+function interface(T::Theory, j::Judgment, bindings::AbstractDict)::Vector{JuliaFunction}
+  h = headof(j)
+  getbound(x::Typ) = bindings[Symbol(T[x.head].name)]
+  if h isa Axiom return JuliaFunction[]  
+  elseif h isa TrmCon
+    args = [Expr(:(::), Symbol(name), getbound(typ)) 
+            for (name,typ) in getindex.(Ref(j.ctx), h.args)]
+    call_expr = Expr(:call,Symbol(j.name), args...)
+    [JuliaFunction(call_expr, getbound(h.typ))]
+  elseif h isa TypCon
+    map(argsof(h)) do arg 
+      argname, argtyp = j.ctx[arg]
+      JuliaFunction(Expr(:call, Symbol(argname), Expr(:(::), bindings[Symbol(j.name)])), 
+      getbound(argtyp))
+    end
+  end
 end 
+
 
 end # module
