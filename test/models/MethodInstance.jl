@@ -11,9 +11,17 @@ struct FinFunction
 end 
 
 @instance ThCategory{FinSet,FinFunction} begin 
-  dom(f) = f.dom 
-  codom(f) = f.codom 
-  compose(f,g) = FinFunction(g.values[f.values], dom(f),codom(g)) 
+  dom(f::FinFunction) = f.dom 
+  codom(f::FinFunction) = f.codom 
+  id(A::FinSet) = FinFunction(1:A.n, A, A)
+  ⋅(f::FinFunction,g::FinFunction) = FinFunction(g.values[f.values], dom(f),codom(g)) 
 end
+
+A = FinSet(2); 
+B=FinSet(3)
+f = FinFunction([2,3],A,B)
+g = FinFunction([1,1,1],B,A)
+id(A)
+⋅(f,g)
 
 end # module

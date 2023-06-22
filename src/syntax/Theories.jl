@@ -3,7 +3,7 @@ export Lvl, Typ, Trm, TypCon, TrmCon,
   TypTag, TrmTag, AnonTypTag, AnonTrmTag,
   Axiom, Context, Judgment, Theory,
   AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context, is_theory, is_argument, getlevel,
-  FullContext, lookup, arity, judgments, rename, getname
+  FullContext, lookup, arity, judgments, rename, getname, headof, argsof
 
 using StructEquality
 
@@ -77,10 +77,11 @@ Base.collect(c::Context) = collect(c.ctx)
 Base.length(c::Context) = length(c.ctx)
 Base.iterate(c::Context,i) = iterate(c.ctx,i)
 Base.iterate(c::Context,) = iterate(c.ctx)
+headof(t::TrmTyp) = t.head
 
 abstract type JudgmentHead end
 abstract type Constructor <: JudgmentHead end 
-args(c::Constructor) = c.args
+argsof(c::Constructor) = c.args
 
 struct Judgment
   name::Name
@@ -93,6 +94,7 @@ Base.:(==)(x::Judgment,y::Judgment) = x.head == y.head && x.ctx == y.ctx
 Base.hash(x::Judgment, h) = hash(x.head, hash(x.ctx, h))
 getname(j::Judgment) = j.name
 rename(j::Judgment, n::Name) = Judgment(n, j.head, j.ctx)
+headof(j::Judgment) = j.head
 
 # Args index the CONTEXT of the judgment
 @struct_hash_equal struct TrmCon <: Constructor
