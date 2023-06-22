@@ -4,12 +4,7 @@ export lens_dynamics
 using AlgebraicPetri
 using Catlab.CategoricalAlgebra
 
-using ..SimpleLenses
-using ...StdTheories: ThRing
-using ..ContextMaps
-using ....Syntax
-using ....Util
-using ....Dsl
+using Gatlab
 
 CtxTrm(i) = Trm(Lvl(i;context=true)) # upstream this?
 
