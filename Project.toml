@@ -21,8 +21,8 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [extensions]
-GatlabSciMLExt = ["ModelingToolkit"]
 GatlabAlgebraicPetriExt = ["AlgebraicPetri", "Catlab"]
+GatlabSciMLExt = ["ModelingToolkit"]
 
 [compat]
 DataStructures = "0.18"
@@ -31,3 +31,4 @@ MLStyle = "0.4"
 ModelingToolkit = "8"
 Reexport = "1"
 StructEquality = "2"
+TermInterface = "0.3"
