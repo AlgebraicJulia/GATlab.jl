@@ -1,15 +1,11 @@
 module GatlabSciMLExt
 
 using ModelingToolkit
+using Gatlab
 
-using ....Models
-using ....Dsl
-using ...StdTheories
+Gatlab.@model ThElementary{Num} (self::NumR) begin
+  default(::Num) = true
 
-using ..ContextMaps
-using ..SimpleLenses
-
-@model ThElementary NumR begin
   zero() = 0
 
   one() = 1
