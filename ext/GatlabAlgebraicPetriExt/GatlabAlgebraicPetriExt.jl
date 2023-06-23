@@ -1,18 +1,20 @@
-module Petri
+module GatlabAlgebraicPetriExt
 export lens_dynamics
 
 using AlgebraicPetri
 using Catlab.CategoricalAlgebra
 
 using Gatlab
+import Gatlab: SimpleKleisliLens
 
 CtxTrm(i) = Trm(Lvl(i;context=true)) # upstream this?
 
-function lens_dynamics(p::LabelledPetriNet, T::Type=ThRing)
-  Th = gettheory(T)
+function SimpleKleisliLens(p::LabelledPetriNet, Th=ThRing)
+  T = Th.T
+  theory = gettheory(T)
   names = [p[:sname], [Symbol("d$s") for s in p[:sname]], p[:tname]]
   pos, dom_dir,codom_dir = map(names) do name 
-    Context(Th, Name.(name))
+    Context(theory, Name.(name))
   end
   dom = SimpleArena{T}(pos, dom_dir)
   codom = SimpleArena{T}(pos, codom_dir)
@@ -21,16 +23,16 @@ function lens_dynamics(p::LabelledPetriNet, T::Type=ThRing)
   rxn_rates = map(parts(p, :T)) do t
     tlvl = CtxTrm(t+nparts(p, :S))
     i = CtxTrm.(p[incident(p, t, :it),:is])
-    sumterm = foldl((a,b)-> @term(T,$a * $b), i; init=@term(T, one))
-    @term(T, $tlvl * $sumterm)
+    sumterm = foldl((a,b)-> @term(Th,$a * $b), i; init=@term(Th, one))
+    @term(Th, $tlvl * $sumterm)
   end
-  Zero = (init=@term(T, zero),)
+  Zero = (init=@term(Th, zero),)
   update = map(parts(p, :S)) do s 
     i, o = incident.(Ref(p), s, [:is, :os])
     sinks, srcs = map([rxn_rates[p[i,:it]], rxn_rates[p[o,:ot]]]) do rates 
-      foldl((a,b)-> @term(T,$a + $b), rates; Zero...)
+      foldl((a,b)-> @term(Th, $a + $b), rates; Zero...)
     end
-    @term(T, $srcs + -$sinks)
+    @term(Th, $srcs + -$sinks)
   end
   SimpleKleisliLens{T}(dom,codom,expose,update)
 end 
