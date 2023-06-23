@@ -2,7 +2,6 @@ module VaxModel
 
 using Gatlab
 using ModelingToolkit
-using DifferentialEquations
 
 vax_production = @lens ThElementary begin
   dom = [C, VP, t] | [dC, dVP, dt]
