@@ -21,7 +21,8 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [extensions]
-GatlabSciMLIntegration = ["AlgebraicPetri", "Catlab", "DifferentialEquations", "ModelingToolkit", "Plots", "SymbolicUtils", "Symbolics"]
+GatlabSciMLExt = ["ModelingToolkit"]
+GatlabAlgebraicPetriExt = ["AlgebraicPetri", "Catlab"]
 
 [compat]
 DataStructures = "0.18"

@@ -1,4 +1,4 @@
-module MTKInterop
+module GatlabSciMLExt
 
 using ModelingToolkit
 
@@ -9,31 +9,27 @@ using ...StdTheories
 using ..ContextMaps
 using ..SimpleLenses
 
-module Impl
+@model ThElementary NumR begin
+  zero() = 0
 
-zero() = 0
+  one() = 1
 
-one() = 1
+  -(x) = Base.:(-)(x)
 
--(x) = Base.:(-)(x)
+  +(x,y) = Base.:(+)(x,y)
 
-+(x,y) = Base.:(+)(x,y)
+  *(x,y) = Base.:(*)(x,y)
 
-*(x,y) = Base.:(*)(x,y)
+  sin(x) = Base.sin(x)
 
-sin(x) = Base.sin(x)
+  cos(x) = Base.cos(x)
 
-cos(x) = Base.cos(x)
+  tan(x) = Base.tan(x)
 
-tan(x) = Base.tan(x)
+  exp(x) = Base.exp(x)
 
-exp(x) = Base.exp(x)
-
-sigmoid(x) = 1 / (1 + exp(-x))
-
+  sigmoid(x) = 1 / (1 + exp(-x))
 end
-
-@simple_model ThElementary NumR Impl
 
 function ModelingToolkit.ODESystem(v::SimpleKleisliLens; name)
   length(v.dom.dir) == length(v.dom.pos) || error("Expected domain to be a tangent bundle")

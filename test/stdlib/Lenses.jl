@@ -29,7 +29,7 @@ end
 
 sir_pn = LabelledPetriNet([:s, :i, :r], 
                           :β => ((:s, :i), (:i, :i)), :γ => (:i, :r))
-sir2 = lens_dynamics(sir_pn) # equivalent up to ring axioms
+sir2 = SimpleKleisliLens(sir_pn) # equivalent up to ring axioms
 @test sir2.dom == sir.dom && sir2.codom == sir.codom
 
 const_params = @lens ThElementary begin
