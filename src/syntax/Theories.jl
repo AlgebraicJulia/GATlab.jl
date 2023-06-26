@@ -6,7 +6,6 @@ export Lvl, Typ, Trm, TypCon, TrmCon,
   FullContext, lookup, arity, judgments, rename, getname
 
 using StructEquality
-import TermInterface
 
 using ...Util
 
@@ -53,18 +52,6 @@ abstract type TrmTyp end
     return new(Lvl(l), a)
   end
 end
-
-TermInterface.istree(::Trm) = true
-TermInterface.istree(::Type{Trm}) = true
-
-TermInterface.exprhead(::Trm) = :call
-
-TermInterface.operation(t::Trm) = t.head
-
-TermInterface.arguments(t::Trm) = t.args
-
-TermInterface.similarterm(::Type{Trm}, f::Lvl, args::Vector{Trm}, symtype=Any; metadata=nothing, exprhead=:call) =
-  Trm(f, args)
 
 """
 The head of a type can never come from a context, only a theory, because it 

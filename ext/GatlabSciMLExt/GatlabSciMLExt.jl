@@ -3,29 +3,15 @@ module GatlabSciMLExt
 using ModelingToolkit
 using Gatlab
 
-Gatlab.@model ThElementary{Num} (self::NumR) begin
-  default(::Num) = true
+ModelingToolkit.istree(::Trm) = true
+ModelingToolkit.istree(::Type{Trm}) = true
 
-  zero() = 0
+ModelingToolkit.operation(t::Trm) = t.head
 
-  one() = 1
+ModelingToolkit.arguments(t::Trm) = t.args
 
-  -(x) = Base.:(-)(x)
-
-  +(x,y) = Base.:(+)(x,y)
-
-  *(x,y) = Base.:(*)(x,y)
-
-  sin(x) = Base.sin(x)
-
-  cos(x) = Base.cos(x)
-
-  tan(x) = Base.tan(x)
-
-  exp(x) = Base.exp(x)
-
-  sigmoid(x) = 1 / (1 + exp(-x))
-end
+ModelingToolkit.similarterm(::Type{Trm}, f::Lvl, args::Vector{Trm}, symtype=Any; metadata=nothing, exprhead=:call) =
+  Trm(f, args)
 
 function ModelingToolkit.ODESystem(v::SimpleKleisliLens; name)
   length(v.dom.dir) == length(v.dom.pos) || error("Expected domain to be a tangent bundle")
@@ -37,5 +23,16 @@ function ModelingToolkit.ODESystem(v::SimpleKleisliLens; name)
   eqs = [D(x) ~ dx for (x,dx) in zip(state_vars, derivatives)]
   ODESystem(eqs, t, state_vars, param_vars; name)
 end
+
+function convert_term(t, opmap::AbstractDict, genmap::AbstractDict, into)
+  if istree(t)
+    op, args = operation(t), arguments(t)
+    args′ = convert_term.(args, Ref(opmap), Ref(genmap), Ref(into))
+    similarterm(into, opmap[op], args′)
+  else
+    genmap[t]
+  end
+end
+
 
 end

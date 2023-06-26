@@ -1,4 +1,5 @@
 module StdModels
+export NumR
 
 using Reexport
 
@@ -10,6 +11,7 @@ include("FinSets.jl")
 include("FinMatrices.jl")
 include("SliceCategories.jl")
 include("Rigs.jl")
+# include("Num.jl")
 
 @reexport using .ContextMaps
 @reexport using .ContextMapMacros
