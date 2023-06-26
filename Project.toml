@@ -9,7 +9,6 @@ JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 MLStyle = "d8e11817-5142-5d16-987a-aa16d5891078"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 StructEquality = "6ec83bb0-ed9f-11e9-3b4c-2b04cb4e219c"
-TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 
 [weakdeps]
 AlgebraicPetri = "4f99eebe-17bf-4e98-b6a1-2c4f205a959b"
@@ -21,8 +20,8 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [extensions]
-GatlabSciMLExt = ["ModelingToolkit"]
 GatlabAlgebraicPetriExt = ["AlgebraicPetri", "Catlab"]
+GatlabSciMLExt = ["ModelingToolkit"]
 
 [compat]
 DataStructures = "0.18"
