@@ -11,7 +11,7 @@ include("FinSets.jl")
 include("FinMatrices.jl")
 include("SliceCategories.jl")
 include("Rigs.jl")
-# include("Num.jl")
+include("NumberModels.jl")
 
 @reexport using .ContextMaps
 @reexport using .ContextMapMacros
@@ -21,5 +21,6 @@ include("Rigs.jl")
 @reexport using .FinMatrices
 @reexport using .SliceCategories
 @reexport using .Rigs
+@reexport using .NumberModels
 
 end

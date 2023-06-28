@@ -1,26 +1,45 @@
 module TheoryMacros
-export @theory, @theorymap, @term, @context
+export @theory, @theorymap, @term, @aterm, @context
 
 using MLStyle
 
 using ...Syntax
 using ...Util
+using ...Models.AugmentedTheories
 
 using ..Parsing
 
-function construct_typ(fc::FullContext, e::SymExpr)
+function construct_typ(fc::FullContext, e::CallExpr)
   head = lookup(fc, e.head)
   Typ(head, construct_trm.(Ref(fc), e.args))
 end
 
 construct_trm(::FullContext, t::Trm) = t
 
-function construct_trm(fc::FullContext, e::SymExpr)
+function construct_trm(fc::FullContext, e::CallExpr)
   head = lookup(fc, e.head)
   Trm(head, construct_trm.(Ref(fc), e.args))
 end
 
-function construct_context(judgments::Vector{Judgment}, symctx::Vector{Pair{Name, SymExpr}})
+function construct_atyp(fc::FullContext, e::CallExpr; interp_val=(_ -> nothing))
+  head = lookup(fc, e.head)
+  ATyp(head, map(arg -> construct_atrm(fc, arg; interp_val), e.args))
+end
+
+function construct_atrm(fc::FullContext, e::CallExpr; interp_val=(_ -> nothing))
+  head = lookup(fc, e.head)
+  ATrmCon(head, map(arg -> construct_atrm(fc, arg; interp_val), e.args))
+end
+
+construct_atrm(::FullContext, t::InjectedTrm; interp_val=(_ -> nothing)) = ATrm(t.trm)
+
+function construct_atrm(::FullContext, v::RawVal; interp_val=(_ -> nothing))
+  atrm = interp_val(v.val)
+  !isnothing(atrm) || error("could not construct constant from $(v.val)")
+  atrm
+end
+
+function construct_context(judgments::Vector{Judgment}, symctx::Vector{Pair{Name, SurfaceExpr}})
   c = Context()
   fc = FullContext(judgments, c)
   for (n, symtyp) in symctx
@@ -161,7 +180,7 @@ end
 
 function parse_mapping(expr)
   @match expr begin
-    :($lhs => $rhs) => (parse_symexpr(lhs) => parse_symexpr(rhs))
+    :($lhs => $rhs) => (parse_surface(lhs) => parse_surface(rhs))
     _ => error("illformed line in @gatmap")
   end
 end
@@ -189,7 +208,7 @@ theorymap_impl(dom::Type{<:AbstractTheory}, codom::Type{<:AbstractTheory}, lines
 function make_composite(
   codom::Theory,
   judgment::Judgment,
-  mapping::Union{Pair{SymExpr, SymExpr}, Nothing}
+  mapping::Union{Pair{CallExpr, CallExpr}, Nothing}
 )
   if isnothing(mapping)
     typeof(judgment.head) == Axiom || error("must provide a mapping for $(judgment.name)")
@@ -225,18 +244,27 @@ macro theorymap(head, body)
 end
 
 function term_impl(theory::Theory, expr::Union{Trm,Expr0}; context = Context())
-  construct_trm(FullContext(theory.judgments, context), parse_symexpr(expr))
+  construct_trm(FullContext(theory.judgments, context), parse_surface(expr))
 end
 
-term_impl(intheory::Type{<:AbstractTheory}, expr::Expr0; context = Context()) =
-  term_impl(gettheory(intheory), expr; context)
+function aterm_impl(theory::Theory, interp_val, expr::Union{Trm,Expr0}; context = Context())
+  construct_atrm(FullContext(theory.judgments, context), parse_surface(expr); interp_val)
+end
+
+term_impl(theory::Type{<:AbstractTheory}, expr::Expr0; context = Context()) =
+  term_impl(gettheory(theory), expr; context)
+
+term_impl(theory::Type{AT}, expr::Expr0; context = Context()) where {T, AT<:AugmentedTheory{T}} =
+  aterm_impl(gettheory(T), x -> interp_val(AT(), x), expr; context)
+
+term_impl(theory::Module, expr::Expr0; context=Context()) = term_impl(theory.T, expr; context)
 
 macro term(theory, expr)
-  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory.T, $(Expr(:quote, expr)))))
+  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory, $(Expr(:quote, expr)))))
 end
 
 macro term(theory, context, expr)
-  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory.T, $(Expr(:quote, expr)); context=$context)))
+  esc(:($(GlobalRef(TheoryMacros, :term_impl))($theory, $(Expr(:quote, expr)); context=$context)))
 end
 
 function context_impl(T::Type{<:AbstractTheory}, expr)

@@ -1,7 +1,8 @@
 module Parsing
 
-export Expr0, SymExpr, NewTerm, NewType, NewAxiom, Declaration, parse_decl,
-  parse_symexpr, parse_bindings, head, getlines, parse_name
+export Expr0, SurfaceExpr, CallExpr, InjectedTrm, RawVal, NewTerm, NewType,
+  NewAxiom, Declaration, parse_decl, parse_surface, parse_bindings, head,
+  getlines, parse_name
 
 using ...Util
 
@@ -9,22 +10,30 @@ using MLStyle
 using StructEquality
 using ...Syntax
 
-@struct_hash_equal struct SymExpr
+abstract type SurfaceExpr end
+
+@struct_hash_equal struct CallExpr <: SurfaceExpr
   head::Name
-  args::Vector{Union{Trm, SymExpr}}
-  function SymExpr(head::Name, args::Vector=Union{Trm,SymExpr}[])
+  args::Vector{SurfaceExpr}
+  function CallExpr(head::Name, args::Vector=SurfaceExpr[])
     new(head, args)
   end
 end
 
-head(e::SymExpr) = e.head
+@struct_hash_equal struct InjectedTrm <: SurfaceExpr
+  trm::Union{Trm, ATrm}
+end
+
+@struct_hash_equal struct RawVal <: SurfaceExpr
+  val::Any
+end
 
 abstract type DeclBody end
 
 struct NewTerm <: DeclBody
   head::Name
   args::Vector{Symbol}
-  type::SymExpr
+  type::SurfaceExpr
 end
 
 @as_record NewTerm
@@ -37,9 +46,9 @@ end
 @as_record NewType
 
 struct NewAxiom <: DeclBody
-  lhs::SymExpr
-  rhs::SymExpr
-  type::SymExpr
+  lhs::SurfaceExpr
+  rhs::SurfaceExpr
+  type::SurfaceExpr
   name::Name
 end
 
@@ -47,7 +56,7 @@ end
 
 struct Declaration
   body::DeclBody
-  context::Vector{Pair{Name, SymExpr}}
+  context::Vector{Pair{Name, SurfaceExpr}}
 end
 
 const Expr0 = Union{Symbol, Expr}
@@ -62,10 +71,10 @@ end
 
 function parse_args(e::Expr0)
   @match e begin
-    (name::Symbol) => (Name(name), Union{Trm, Expr0}[])
-    :($(name::Symbol)($(args...))) => (Name(name), Union{Trm, Expr0}[args...])
-    :($(ann::QuoteNode)($(name::Symbol))) => (Name(name; annotation=ann.value), Union{Trm, Expr0}[])
-    :($(ann::QuoteNode)($(name::Symbol))($(args...))) => (Name(name; annotation=ann.value), Union{Trm, Expr0}[args...])
+    (name::Symbol) => (Name(name), Any[])
+    :($(name::Symbol)($(args...))) => (Name(name), Any[args...])
+    :($(ann::QuoteNode)($(name::Symbol))) => (Name(name; annotation=ann.value), Any[])
+    :($(ann::QuoteNode)($(name::Symbol))($(args...))) => (Name(name; annotation=ann.value), Any[args...])
     Expr(:block, _...) => begin
       lines = getlines(e)
       length(lines) == 1 || error("only one expression allowed in a block")
@@ -75,14 +84,15 @@ function parse_args(e::Expr0)
   end
 end
 
-parse_symexpr(e::Trm) = e
+parse_surface(x::Any) = RawVal(x)
+parse_surface(e::Union{Trm, ATrm}) = InjectedTrm(e)
 
-function parse_symexpr(e::Expr0)
+function parse_surface(e::Expr0)
   (name, args) = parse_args(e)
-  SymExpr(name, parse_symexpr.(args))
+  CallExpr(name, parse_surface.(args))
 end
 
-function Base.show(io::IO, m::MIME"text/plain", e::SymExpr)
+function Base.show(io::IO, m::MIME"text/plain", e::CallExpr)
   print(io, string(e.head))
   if length(e.args) != 0
     print(io, "(")
@@ -114,7 +124,7 @@ function parse_decl(e::Expr)
         parse_declbody(body),
         parse_bindings(bindings)
       )
-    body => Declaration(parse_declbody(body), Pair{Symbol, SymExpr}[])
+    body => Declaration(parse_declbody(body), Pair{Symbol, SurfaceExpr}[])
     _ => error("Could not parse declaration $e")
   end
 end
@@ -122,27 +132,27 @@ end
 function parse_declbody(e::Expr0)
   @match e begin
     :($expr :: TYPE) => NewType(parse_args(expr)...)
-    :($expr :: $type) => NewTerm(parse_args(expr)..., parse_symexpr(type))
+    :($expr :: $type) => NewTerm(parse_args(expr)..., parse_surface(type))
     :($lhs == $rhs :: $type) =>
-      NewAxiom(parse_symexpr(lhs), parse_symexpr(rhs), parse_symexpr(type), Anon())
+      NewAxiom(parse_surface(lhs), parse_surface(rhs), parse_surface(type), Anon())
     :($name := ($lhs == $rhs :: $type)) =>
-      NewAxiom(parse_symexpr(lhs), parse_symexpr(rhs), parse_symexpr(type), Name(name))
+      NewAxiom(parse_surface(lhs), parse_surface(rhs), parse_surface(type), Name(name))
     _ => error("Could not parse declaration head $e")
   end
 end
 
 function parse_bindings(bindings::AbstractVector)
-  result = Pair{Name, SymExpr}[]
+  result = Pair{Name, SurfaceExpr}[]
   for binding in bindings
     @match binding begin
       :(($(heads...),)::$(type::Expr0)) => begin
-        type_expr = parse_symexpr(type)
+        type_expr = parse_surface(type)
         append!(result, map(head -> parse_name(head) => type_expr, heads))
       end
       :($head::$(type::Expr0)) =>
-        push!(result, parse_name(head) => parse_symexpr(type))
+        push!(result, parse_name(head) => parse_surface(type))
       :($head) =>
-        push!(result, parse_name(head) => SymExpr(Name(:default)))
+        push!(result, parse_name(head) => CallExpr(Name(:default)))
       _ => error("could not parse binding $binding")
     end
   end
@@ -156,4 +166,4 @@ function getlines(e::Expr)
   end
 end
 
-end
+end # module
