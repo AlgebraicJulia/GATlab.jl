@@ -1,5 +1,4 @@
 module StdModels
-export NumR
 
 using Reexport
 
