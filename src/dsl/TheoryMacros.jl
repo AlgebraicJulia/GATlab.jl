@@ -14,7 +14,7 @@ function construct_typ(fc::FullContext, e::CallExpr)
   Typ(head, construct_trm.(Ref(fc), e.args))
 end
 
-construct_trm(::FullContext, t::Trm) = t
+construct_trm(::FullContext, t::InjectedTrm) = t.trm
 
 function construct_trm(fc::FullContext, e::CallExpr)
   head = lookup(fc, e.head)
@@ -217,7 +217,7 @@ function make_composite(
   lhs, rhs = mapping
   all(length(arg.args) == 0 for arg in lhs.args) || error("left side of mapping must be a flat expression")
   length(lhs.args) == arity(judgment.head) || error("wrong number of arguments for $(judgment.name)")
-  names = Dict(zip(judgment.head.args, Name.(head.(lhs.args))))
+  names = Dict(zip(judgment.head.args, Name.(gethead.(lhs.args))))
   renamed_ctx = Context(map(enumerate(judgment.ctx.ctx)) do (i,nt)
     newname = get(names, Lvl(i; context=true), Anon())
     (newname, nt[2])

@@ -1,7 +1,7 @@
 module Parsing
 
 export Expr0, SurfaceExpr, CallExpr, InjectedTrm, RawVal, NewTerm, NewType,
-  NewAxiom, Declaration, parse_decl, parse_surface, parse_bindings, head,
+  NewAxiom, Declaration, parse_decl, parse_surface, parse_bindings, gethead,
   getlines, parse_name
 
 using ...Util
@@ -19,6 +19,8 @@ abstract type SurfaceExpr end
     new(head, args)
   end
 end
+
+gethead(e::CallExpr) = e.head
 
 @struct_hash_equal struct InjectedTrm <: SurfaceExpr
   trm::Union{Trm, ATrm}
