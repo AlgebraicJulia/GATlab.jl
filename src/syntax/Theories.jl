@@ -118,7 +118,8 @@ end
 """
 abstract type TypTag{i} end
 
-getlevel(tt::TypTag{i}) where {i} = i
+getlevel(::TypTag{i}) where {i} = Lvl(i)
+getlevel(::Type{<:TypTag{i}}) where {i} = Lvl(i)
 
 """
 This can be used when there isn't a specific struct like `Category.Ob`. Specific
@@ -149,7 +150,8 @@ end
 """
 abstract type TrmTag{i} end
 
-getlevel(tt::TrmTag{i}) where {i} = i
+getlevel(::TrmTag{i}) where {i} = Lvl(i)
+getlevel(::Type{<:TrmTag{i}}) where {i} = Lvl(i)
 
 """
 This can be used when there isn't a specific struct like `Category.compose`. Specific

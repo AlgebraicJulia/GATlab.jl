@@ -13,6 +13,16 @@ ModelingToolkit.arguments(t::Trm) = t.args
 ModelingToolkit.similarterm(::Type{Trm}, f::Lvl, args::Vector{Trm}, symtype=Any; metadata=nothing, exprhead=:call) =
   Trm(f, args)
 
+ModelingToolkit.istree(::ATrm) = true
+ModelingToolkit.istree(::Type{ATrm}) = true
+
+ModelingToolkit.operation(t::ATrm) = t.head
+
+ModelingToolkit.arguments(t::ATrm) = t.args
+
+ModelingToolkit.similarterm(::Type{ATrm}, f::Lvl, args::Vector{ATrm}, symtype=Any; metadata=nothing, exprhead=:call) =
+  ATrmCon(f, args)
+
 function ModelingToolkit.ODESystem(v::SimpleKleisliLens; name)
   length(v.dom.dir) == length(v.dom.pos) || error("Expected domain to be a tangent bundle")
   @variables t
@@ -24,13 +34,17 @@ function ModelingToolkit.ODESystem(v::SimpleKleisliLens; name)
   ODESystem(eqs, t, state_vars, param_vars; name)
 end
 
-function convert_term(t, opmap::AbstractDict, genmap::AbstractDict, into)
+function convert_term(t, opmap::AbstractDict, genmap::AbstractDict, into; interp_val=(_ -> nothing))
   if istree(t)
     op, args = operation(t), arguments(t)
-    args′ = convert_term.(args, Ref(opmap), Ref(genmap), Ref(into))
+    args′ = Vector{into}(map(args) do arg
+      convert_term(arg, opmap, genmap, into; interp_val)
+    end)
     similarterm(into, opmap[op], args′)
-  else
+  elseif t ∈ keys(genmap)
     genmap[t]
+  else
+    interp_val(t)
   end
 end
 
@@ -42,7 +56,6 @@ const ELEMENTARY_FUNCTION_OPMAP = Dict(
   Base.cos => getlevel(ThElementary.cos),
   Base.tan => getlevel(ThElementary.tan),
   Base.exp => getlevel(ThElementary.exp),
-  Base.sigmoid => getlevel(ThElementary.sigmoid),
 )
 
 
