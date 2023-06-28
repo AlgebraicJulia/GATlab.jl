@@ -34,5 +34,16 @@ function convert_term(t, opmap::AbstractDict, genmap::AbstractDict, into)
   end
 end
 
+const ELEMENTARY_FUNCTION_OPMAP = Dict(
+  Base.:(+) => getlevel(ThElementary.:(+)),
+  Base.:(*) => getlevel(ThElementary.:(*)),
+  Base.:(-) => getlevel(ThElementary.:(-)),
+  Base.sin => getlevel(ThElementary.sin),
+  Base.cos => getlevel(ThElementary.cos),
+  Base.tan => getlevel(ThElementary.tan),
+  Base.exp => getlevel(ThElementary.exp),
+  Base.sigmoid => getlevel(ThElementary.sigmoid),
+)
+
 
 end

@@ -2,7 +2,7 @@ module Theories
 export Lvl, Typ, Trm, TypCon, TrmCon,
   TypTag, TrmTag, AnonTypTag, AnonTrmTag,
   Axiom, Context, Judgment, Theory,
-  AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context, is_theory, is_argument,
+  AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context, is_theory, is_argument, getlevel,
   FullContext, lookup, arity, judgments, rename, getname
 
 using StructEquality
@@ -118,6 +118,8 @@ end
 """
 abstract type TypTag{i} end
 
+getlevel(tt::TypTag{i}) where {i} = i
+
 """
 This can be used when there isn't a specific struct like `Category.Ob`. Specific
 structs are preferred because they make reading backtraces easier.
@@ -146,6 +148,8 @@ end
 ```
 """
 abstract type TrmTag{i} end
+
+getlevel(tt::TrmTag{i}) where {i} = i
 
 """
 This can be used when there isn't a specific struct like `Category.compose`. Specific
