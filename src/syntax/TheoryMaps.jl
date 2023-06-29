@@ -1,5 +1,5 @@
 module TheoryMaps
-export TheoryIncl, TheoryMap, AbsTheoryMap, dom, codom
+export TheoryIncl, TheoryMap, AbsTheoryMap, Composite, dom, codom
 
 using ..Theories
 using ..Theories: TrmTyp
@@ -28,9 +28,11 @@ const Composite = Union{Typ, Trm, Nothing}
   dom::Theory
   codom::Theory
   composites::Vector{Composite}
-  function TheoryMap(d,c,cs)
-    lc, ld = length.([cs,d])
-    lc == ld || error("Bad composite length: $lc != $ld")
+  function TheoryMap(d, c, cs; partial=false)
+    lc, ld = length.([cs, d])
+    if !partial
+      lc == ld || error("Bad composite length: $lc != $ld")
+    end
     return new(d,c,cs)
   end
 end
@@ -73,4 +75,4 @@ end
 substitute(t::T, ts::Vector{Union{Nothing,Trm}}) where {T<:TrmTyp} = 
   is_context(t.head) ? ts[index(t.head)] : T(t.head, substitute.(t.args, Ref(ts)))
 
-end # module 
+end # module

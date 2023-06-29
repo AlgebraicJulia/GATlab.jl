@@ -10,7 +10,7 @@ using ...StdTheories
   Hom(n::Int, m::Int, A::Matrix{T}) = size(A) == (n,m)
 
   id(n::Int) = T[T(i == j) for i in 1:n, j in 1:n]
-  ⋅(_, _, _, A, B) = A * B
+  compose(_, _, _, A, B) = A * B
 end
 
 end

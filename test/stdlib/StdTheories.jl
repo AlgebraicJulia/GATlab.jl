@@ -59,7 +59,7 @@ show_term(T1.T, trm, ctx)
 thin = @theorymap ThCategory -> ThPreorder begin
   Ob => Ob
   Hom(a,b) => Leq(a,b)
-  (f ⋅ g) => trans(f, g)
+  compose(f, g) => trans(f, g)
   id(a) => refl(a)
 end;
 

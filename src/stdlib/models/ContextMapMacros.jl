@@ -54,8 +54,8 @@ function context_map_impl(
   body::Expr
 )
   theory = gettheory(T)
-  dom = construct_context(theory.judgments, dom)
-  codom = construct_context(theory.judgments, codom)
+  dom = construct_context(theory, dom)
+  codom = construct_context(theory, codom)
   lines = getlines(body)
   KleisliContextMap(
     dom,
@@ -80,8 +80,8 @@ function parse_line(T::Theory, ctx::Context, line)
   (name, term_impl(T, value; context=ctx))
 end
 
-TheoryMacros.construct_context(judgments::Vector{Judgment}, ctx::Context) = ctx
-TheoryMacros.construct_context(judgments::Vector{Judgment}, exprs::Vector{Expr0}) =
-  construct_context(judgments, parse_bindings(exprs))
+TheoryMacros.construct_context(theory::Theory, ctx::Context) = ctx
+TheoryMacros.construct_context(theory::Theory, exprs::Vector{Expr0}) =
+  construct_context(theory, parse_bindings(exprs))
 
 end

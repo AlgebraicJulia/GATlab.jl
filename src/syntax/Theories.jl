@@ -2,8 +2,9 @@ module Theories
 export Lvl, Typ, Trm, TypCon, TrmCon,
   TypTag, TrmTag, AnonTypTag, AnonTrmTag,
   Axiom, Context, Judgment, Theory,
-  AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context, is_theory, is_argument, getlevel,
-  FullContext, lookup, arity, judgments, rename, getname, headof, argsof
+  AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context,
+  is_theory, is_argument, getlevel, FullContext, lookup, arity, judgments,
+  rename, getname, headof, argsof, SortSignature, Constructor, getsort
 
 using StructEquality
 
@@ -44,11 +45,11 @@ abstract type TrmTyp end
 @struct_hash_equal struct Trm <:TrmTyp
   head::Lvl
   args::Vector{Trm}
-  function Trm(l::Lvl,a=Trm[])
+  function Trm(l::Lvl, a=Trm[])
     is_theory(l) || isempty(a) || error("Elements of context are *nullary* term constructors")
     return new(l,a)
   end
-  function Trm(l::Int,a=Trm[])
+  function Trm(l::Int, a=Trm[])
     return new(Lvl(l), a)
   end
 end
@@ -60,7 +61,7 @@ should point at a type constructor judgment.
 @struct_hash_equal struct Typ <: TrmTyp
   head::Lvl
   args::Vector{Trm}
-  function Typ(l,a=Lvl[]) 
+  function Typ(l, a=Lvl[])
     is_theory(l) || error("Bad head for type: $(index(l))")
     return new(l,a)
   end 
@@ -87,10 +88,10 @@ struct Judgment
   name::Name
   head::JudgmentHead
   ctx::Context
-  Judgment(n,h,c=Context()) = new(n,h,c)
+  Judgment(n, h, c=Context()) = new(n, h, c)
 end
 
-Base.:(==)(x::Judgment,y::Judgment) = x.head == y.head && x.ctx == y.ctx
+Base.:(==)(x::Judgment, y::Judgment) = x.head == y.head && x.ctx == y.ctx
 Base.hash(x::Judgment, h) = hash(x.head, hash(x.ctx, h))
 getname(j::Judgment) = j.name
 rename(j::Judgment, n::Name) = Judgment(n, j.head, j.ctx)
@@ -168,13 +169,33 @@ arity(f::Constructor) = length(f.args)
   equands::Vector{Trm}
   function Axiom(t,e)
     length(unique(e)) > 1 || error("Axiom must be nontrivial")
-    return new(t,e)
+    return new(t, e)
+  end
+end
+
+@struct_hash_equal struct SortSignature
+  name::Name
+  sorts::Vector{Lvl}
+  function SortSignature(j::Judgment)
+    j.head isa Constructor || error("Only can take the SortSignature of a constructor")
+    new(j.name, Lvl[j.ctx[i][2].head for i in j.head.args])
+  end
+  function SortSignature(n::Name, sorts::Vector{Lvl})
+    new(n, sorts)
   end
 end
 
 struct Theory
   name::Name
   judgments::Vector{Judgment}
+  aliases::Dict{SortSignature, Lvl}
+  function Theory(name::Name, judgments::Vector{Judgment}, aliases=Dict{SortSignature, Lvl}())
+    aliases = merge(
+      aliases,
+      Dict(SortSignature(j) => Lvl(i) for (i, j) in enumerate(judgments) if j.head isa Constructor)
+    )
+    new(name, judgments, aliases)
+  end
 end
 
 Base.:(==)(x::Theory,y::Theory) = x.judgments == y.judgments
@@ -195,9 +216,18 @@ TODO: maybe we should have different terms for "context judgment" and "theory
 judgment"
 """
 struct FullContext
-  judgments::Vector{Judgment}
+  theory::Theory
   context::Context
 end
+
+function getsort(fc::FullContext, t::Trm)
+  if is_theory(t.head)
+    fc.theory.judgments[index(t.head)].head.typ.head
+  else
+    fc.context[t.head][2].head
+  end
+end
+
 
 """
 Get the `Lvl` corresponding to a Name. This is the most recent judgment with
@@ -208,7 +238,7 @@ function lookup(fc::FullContext, n::Name)
   if !isnothing(i)
     return Lvl(i; context=true)
   end
-  i = findlast(j -> j.name == n, fc.judgments)
+  i = findlast(j -> j.name == n, fc.theory.judgments)
   if !isnothing(i)
     Lvl(i; context=false)
   else
@@ -216,8 +246,16 @@ function lookup(fc::FullContext, n::Name)
   end
 end
 
-lookup(t::Theory, n::Name) = lookup(FullContext(t.judgments,Context()), n)
+lookup(t::Theory, n::Name) = lookup(FullContext(t, Context()), n)
+lookup(t::Theory, s::Symbol) = lookup(FullContext(t, Context()), Name(s))
 lookup(fc::FullContext, s::Symbol) = lookup(fc, Name(s))
+function lookup(fc::FullContext, sig::SortSignature)
+  i = findlast(nt -> nt[1] == sig.name, fc.context.ctx)
+  if !isnothing(i)
+    return Lvl(i; context=true)
+  end
+  fc.theory.aliases[sig]
+end
 
 const empty_theory = Theory(Anon(), Judgment[])
 

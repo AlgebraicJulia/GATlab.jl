@@ -20,11 +20,11 @@ end
 
   Hom(x::SliceOb{Ob, Hom}, y::SliceOb{Ob, Hom}, f::Hom) =
     checkvalidity(self.cat, ThCategory.Hom(), x.ob, y.ob, f) &&
-    ap(self.cat, ThCategory.:(⋅)(), x.ob, y.ob, self.over, f, y.hom) == x.hom
+    ap(self.cat, ThCategory.compose(), x.ob, y.ob, self.over, f, y.hom) == x.hom
 
   id(x::SliceOb{Ob, Hom}) = ap(self.cat, ThCategory.id(), x.ob)
 
-  ⋅(x, y, z, f, g) = ap(self.cat, ThCategory.:(⋅)(), x.ob, y.ob, z.ob, f, g)
+  compose(x, y, z, f, g) = ap(self.cat, ThCategory.compose(), x.ob, y.ob, z.ob, f, g)
 end
 
 end

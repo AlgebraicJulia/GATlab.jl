@@ -27,7 +27,7 @@ end
 function construct_arena(T::Type{<:AbstractTheory}, bar_expr::Expr)
   theory = gettheory(T)
   pos, dir = @match bar_expr begin
-    :($pos | $dir) => construct_context.(Ref(theory.judgments), (pos, dir))
+    :($pos | $dir) => construct_context.(Ref(theory), (pos, dir))
   end
   SimpleArena{T}(pos, dir)
 end
@@ -73,13 +73,13 @@ function system_impl(T::Type{<:AbstractTheory}, lines::Vector)
   end
   state != nothing || error("state not provided to @system macro")
   params != nothing || error("params not provided to @system macro")
-  dom_pos = construct_context(theory.judgments, state)
+  dom_pos = construct_context(theory, state)
   dom_dir = Context(
     map(dom_pos.ctx) do (name, type)
       (Name(name; annotation=:d), type)
     end)
   codom_pos = dom_pos
-  codom_dir = construct_context(theory.judgments, params)
+  codom_dir = construct_context(theory, params)
   SimpleKleisliLens{T}(
     SimpleArena{T}(dom_pos, dom_dir),
     SimpleArena{T}(codom_pos, codom_dir),

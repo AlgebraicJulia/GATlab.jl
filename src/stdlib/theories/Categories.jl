@@ -14,10 +14,14 @@ end
 
 @theory ThGraph <: ThClass begin
   Hom(dom,codom)::TYPE ⊣ [dom::Ob, codom::Ob]
+  @op (→) := Hom
 end
 
 @theory ThLawlessCat <: ThGraph begin
-  (f ⋅ g)::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a,b), g::Hom(b,c)]
+  compose(f, g)::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a,b), g::Hom(b,c)]
+  @op begin
+    (⋅) := compose
+  end
 end
 
 @theory ThAscCat <: ThLawlessCat begin
