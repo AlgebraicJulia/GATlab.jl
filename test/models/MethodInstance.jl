@@ -4,6 +4,7 @@ using Gatlab
 struct FinSet 
   n::Int 
 end
+
 struct FinFunction 
   values::Vector{Int}
   dom::FinSet 
@@ -14,7 +15,7 @@ end
   dom(f::FinFunction) = f.dom 
   codom(f::FinFunction) = f.codom 
   id(A::FinSet) = FinFunction(1:A.n, A, A)
-  ⋅(f::FinFunction,g::FinFunction) = FinFunction(g.values[f.values], dom(f),codom(g)) 
+  ⋅(f::FinFunction, g::FinFunction) = FinFunction(g.values[f.values], dom(f),codom(g))
 end
 
 A = FinSet(2); 

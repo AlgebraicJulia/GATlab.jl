@@ -69,7 +69,8 @@ end
 
 function interface(T::Theory, bindings::AbstractDict)::Vector{JuliaFunction}
   vcat([interface(T, j, bindings) for j in judgments(T)]...)
-end 
+end
+
 function interface(T::Theory, j::Judgment, bindings::AbstractDict)::Vector{JuliaFunction}
   h = headof(j)
   getbound(x::Typ) = bindings[Symbol(T[x.head].name)]
