@@ -10,7 +10,7 @@ using ...StdTheories
   Hom(x::Int, y::Int, f::Vector{Int}) = length(f) == x && all(j ∈ 1:y for j in f)
 
   id(x::Int) = collect(1:x)
-  ⋅(x::Int, y::Int, z::Int, f::Vector{Int}, g::Vector{Int}) =
+  compose(x::Int, y::Int, z::Int, f::Vector{Int}, g::Vector{Int}) =
     Int[g[j] for j in f]
 end
 
@@ -23,7 +23,7 @@ end
     all(x[i] == y[f[i]] for i in 1:length(x))
 
   id(v::Vector{Int}) = collect(1:length(v))
-  ⋅(x, y, z, f::Vector{Int}, g::Vector{Int}) = Int[g[j] for j in f]
+  compose(x, y, z, f::Vector{Int}, g::Vector{Int}) = Int[g[j] for j in f]
 end
 
 end

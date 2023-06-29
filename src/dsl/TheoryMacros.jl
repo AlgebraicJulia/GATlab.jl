@@ -17,8 +17,10 @@ end
 construct_trm(::FullContext, t::InjectedTrm) = t.trm
 
 function construct_trm(fc::FullContext, e::CallExpr)
-  head = lookup(fc, e.head)
-  Trm(head, construct_trm.(Ref(fc), e.args))
+  args = construct_trm.(Ref(fc), e.args)
+  argsorts = Vector{Lvl}(getsort.(Ref(fc), args))
+  head = lookup(fc, SortSignature(e.head, argsorts))
+  Trm(head, args)
 end
 
 function construct_atyp(fc::FullContext, e::CallExpr; interp_val=(_ -> nothing))
@@ -39,25 +41,25 @@ function construct_atrm(::FullContext, v::RawVal; interp_val=(_ -> nothing))
   atrm
 end
 
-function construct_context(judgments::Vector{Judgment}, symctx::Vector{Pair{Name, SurfaceExpr}})
+function construct_context(t::Theory, symctx::Vector{Pair{Name, SurfaceExpr}})
   c = Context()
-  fc = FullContext(judgments, c)
+  fc = FullContext(t, c)
   for (n, symtyp) in symctx
     push!(c.ctx, (n, construct_typ(fc, symtyp)))
   end
   c
 end
 
-function construct_context(judgments::Vector{Judgment}, ctxexpr::Expr)
+function construct_context(t::Theory, ctxexpr::Expr)
   @match ctxexpr begin
-    :([$(bindings...)]) => construct_context(judgments, parse_bindings(bindings))
+    :([$(bindings...)]) => construct_context(t, parse_bindings(bindings))
     _ => error("expected a context of the form [bindings...], got: $ctxexpr")
   end
 end
 
-function construct_judgment(judgments::Vector{Judgment}, decl::Declaration)
-  context = construct_context(judgments, decl.context)
-  fc = FullContext(judgments, context)
+function construct_judgment(t::Theory, decl::Declaration)
+  context = construct_context(t, decl.context)
+  fc = FullContext(t, context)
   (name, head) = @match decl.body begin
     NewTerm(head, args, type) =>
       (
@@ -82,11 +84,34 @@ function construct_judgment(judgments::Vector{Judgment}, decl::Declaration)
 end
 
 function theory_impl(precursor::Theory, name::Symbol, lines::Vector)
-  judgments = copy(precursor.judgments)
+  t = Theory(Name(name), copy(precursor.judgments), copy(precursor.aliases))
   for line in lines
-    push!(judgments, construct_judgment(judgments, parse_decl(line)))
+    @match line begin
+      Expr(:macrocall, &(Symbol("@op")), _, aliasblock) => begin
+        aliases = @match aliasblock begin
+          Expr(:block, lines...) => lines
+          _ => [aliasblock]
+        end
+        for alias in aliases
+          @match alias begin
+            Expr(:(:=), newname, oldname) => begin
+              i = lookup(t, oldname)
+              t.aliases[SortSignature(Name(newname), SortSignature(t.judgments[index(i)]).sorts)] = i
+            end
+            _ => nothing
+          end
+        end
+      end
+      _ => begin
+        j = construct_judgment(t, parse_decl(line))
+        push!(t.judgments, j)
+        if j.head isa Constructor
+          t.aliases[SortSignature(j)] = Lvl(length(t.judgments))
+        end
+      end
+    end
   end
-  Theory(Name(name), judgments)
+  t
 end
 
 theory_impl(precursor::Type{<:AbstractTheory}, name::Symbol, lines::Vector) =
@@ -196,10 +221,12 @@ end
 function theorymap_impl(dom::Theory, codom::Theory, lines::Vector)
   mappings = parse_mapping.(lines)
   mappings = [onlydefault(filter(m -> Name(m[1].head) == j.name, mappings)) for j in dom.judgments]
-  composites = map(zip(mappings, dom.judgments)) do (mapping, judgment)
-    make_composite(codom, judgment, mapping)
+  composites = Composite[]
+  f = TheoryMap(dom, codom, composites; partial=true)
+  for (mapping, judgment) in zip(mappings, dom.judgments)
+    push!(composites, make_composite(codom, judgment, mapping, f))
   end
-  TheoryMap(dom, codom, composites)
+  f
 end
 
 theorymap_impl(dom::Type{<:AbstractTheory}, codom::Type{<:AbstractTheory}, lines::Vector) =
@@ -208,7 +235,8 @@ theorymap_impl(dom::Type{<:AbstractTheory}, codom::Type{<:AbstractTheory}, lines
 function make_composite(
   codom::Theory,
   judgment::Judgment,
-  mapping::Union{Pair{CallExpr, CallExpr}, Nothing}
+  mapping::Union{Pair{CallExpr, CallExpr}, Nothing},
+  f::TheoryMap
 )
   if isnothing(mapping)
     typeof(judgment.head) == Axiom || error("must provide a mapping for $(judgment.name)")
@@ -220,9 +248,9 @@ function make_composite(
   names = Dict(zip(judgment.head.args, Name.(gethead.(lhs.args))))
   renamed_ctx = Context(map(enumerate(judgment.ctx.ctx)) do (i,nt)
     newname = get(names, Lvl(i; context=true), Anon())
-    (newname, nt[2])
+    (newname, f(nt[2]))
   end)
-  fc = FullContext(codom.judgments, renamed_ctx)
+  fc = FullContext(codom, renamed_ctx)
   if typeof(judgment.head) == TrmCon
     construct_trm(fc, rhs)
   else
@@ -244,11 +272,11 @@ macro theorymap(head, body)
 end
 
 function term_impl(theory::Theory, expr::Union{Trm,Expr0}; context = Context())
-  construct_trm(FullContext(theory.judgments, context), parse_surface(expr))
+  construct_trm(FullContext(theory, context), parse_surface(expr))
 end
 
 function aterm_impl(theory::Theory, interp_val, expr::Union{Trm,Expr0}; context = Context())
-  construct_atrm(FullContext(theory.judgments, context), parse_surface(expr); interp_val)
+  construct_atrm(FullContext(theory, context), parse_surface(expr); interp_val)
 end
 
 term_impl(theory::Type{<:AbstractTheory}, expr::Expr0; context = Context()) =
@@ -270,7 +298,7 @@ end
 function context_impl(T::Type{<:AbstractTheory}, expr)
   T = gettheory(T)
   @match expr begin
-    :([$(bindings...)]) => construct_context(T.judgments, parse_bindings(bindings))
+    :([$(bindings...)]) => construct_context(T, parse_bindings(bindings))
     _ => error("expected a list of bindings")
   end
 end

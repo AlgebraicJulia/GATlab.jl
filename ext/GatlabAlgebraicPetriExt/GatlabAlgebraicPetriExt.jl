@@ -19,20 +19,21 @@ function SimpleKleisliLens(p::LabelledPetriNet, Th=ThRing)
   dom = SimpleArena{T}(pos, dom_dir)
   codom = SimpleArena{T}(pos, codom_dir)
   expose = ContextMaps.Impl.id(pos)
+  update_codom = ContextMaps.Impl.mcompose(pos, dom_dir)
   # Compute update, starting with each reaction rate
   rxn_rates = map(parts(p, :T)) do t
     tlvl = CtxTrm(t+nparts(p, :S))
     i = CtxTrm.(p[incident(p, t, :it),:is])
-    sumterm = foldl((a,b)-> @term(Th,$a * $b), i; init=@term(Th, one))
-    @term(Th, $tlvl * $sumterm)
+    sumterm = foldl((a,b)-> @term(Th, update_codom, $a * $b), i; init=@term(Th, one))
+    @term(Th, update_codom, $tlvl * $sumterm)
   end
   Zero = (init=@term(Th, zero),)
   update = map(parts(p, :S)) do s 
     i, o = incident.(Ref(p), s, [:is, :os])
     sinks, srcs = map([rxn_rates[p[i,:it]], rxn_rates[p[o,:ot]]]) do rates 
-      foldl((a,b)-> @term(Th, $a + $b), rates; Zero...)
+      foldl((a,b)-> @term(Th, update_codom, $a + $b), rates; Zero...)
     end
-    @term(Th, $srcs + -$sinks)
+    @term(Th, update_codom, $srcs + -$sinks)
   end
   SimpleKleisliLens{T}(dom,codom,expose,update)
 end 

@@ -71,7 +71,7 @@ const_paramsₕ = @lens ThElementary begin
   dom = [s, i, r] | [β, γ]
   codom = [h] | []
   expose = begin
-    h = i * (one + one + one)
+    h = i * (one + (one + one))
   end
   update = begin
     β = one
