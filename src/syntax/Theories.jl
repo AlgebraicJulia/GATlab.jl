@@ -4,7 +4,7 @@ export Lvl, Typ, Trm, TypCon, TrmCon,
   Axiom, Context, Judgment, Theory,
   AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context,
   is_theory, is_argument, getlevel, FullContext, lookup, arity, judgments,
-  rename, getname, headof, argsof, SortSignature, Constructor, getsort
+  rename, getname, headof, argsof, SortSignature, Constructor, getsort, Constructor
 
 using StructEquality
 
