@@ -151,8 +151,13 @@ function parse_rename(rename::Expr)
   end
 end
 
+function import_tags(name::Expr0, parent::Theory)
+  tagnames = [Symbol(j.name) for j in parent.judgments if j.head isa Constructor && j.name isa SymLit]
+  Expr(:using, Expr(:(:), Expr(:(.), :(.), :(.), name), Expr.(Ref(:(.)), tagnames)...))
+end
+
 macro theory(head, body)
-  (name, parent) = @match head begin
+  (name, parent_module) = @match head begin
     :($(name::Symbol) <: $(parent::Symbol)) => (name, parent)
     _ => error("expected head of @theory macro to be in the form name <: parent")
   end
@@ -171,7 +176,7 @@ macro theory(head, body)
       l => push!(judgments, l)
     end
   end
-  parent = macroexpand(__module__, :($parent.@theory()))
+  parent = macroexpand(__module__, :($parent_module.@theory()))
   usings = Tuple{Theory, Dict{Name, Name}}[
     (macroexpand(__module__, :($T.@theory)), renames)
     for (T, renames) in usings
@@ -180,18 +185,19 @@ macro theory(head, body)
   theory = theory_impl(precursor, name, judgments)
   typ_cons = [
     (j.name.name, :(struct $(j.name.name) <: $(GlobalRef(Theories, :TypTag)){$i} end))
-    for (i,j) in enumerate(theory.judgments)
+    for (i,j) in enumerate(theory.judgments[(length(parent.judgments)+1):end])
       if (typeof(j.head) == TypCon) && (typeof(j.name) == SymLit)
   ]
   trm_cons = [
     (j.name.name, :(struct $(j.name.name) <: $(GlobalRef(Theories, :TrmTag)){$i} end))
-    for (i,j) in enumerate(theory.judgments)
+    for (i,j) in enumerate(theory.judgments[(length(parent.judgments)+1):end])
       if (typeof(j.head) == TrmCon) && (typeof(j.name) == SymLit)
   ]
   exports = [first.(typ_cons); first.(trm_cons)]
   esc(Expr(:toplevel, :(
     module $name
     export $(exports...)
+    $(import_tags(parent_module, parent))
     $(last.(typ_cons)...)
     $(last.(trm_cons)...)
     struct T <: $(GlobalRef(Theories, :AbstractTheory)) end
