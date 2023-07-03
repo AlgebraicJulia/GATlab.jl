@@ -18,10 +18,16 @@ end
 end
 
 @theory ThLawlessCat <: ThGraph begin
+<<<<<<< HEAD
   compose(f, g)::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a,b), g::Hom(b,c)]
   @op begin
     (⋅) := compose
   end
+=======
+  compose(f,g)::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a,b), g::Hom(b,c)]
+
+  @op (⋅) := compose
+>>>>>>> 517e5b0 (wip)
 end
 
 @theory ThAscCat <: ThLawlessCat begin
