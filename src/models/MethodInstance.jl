@@ -74,7 +74,8 @@ end
 function interface(T::Theory, j::Judgment, bindings::AbstractDict)::Vector{JuliaFunction}
   h = headof(j)
   getbound(x::Typ) = bindings[Symbol(T[x.head].name)]
-  if h isa Axiom return JuliaFunction[]  
+  if h isa Axiom
+    return JuliaFunction[]
   elseif h isa TrmCon
     args = [Expr(:(::), Symbol(name), getbound(typ)) 
             for (name,typ) in getindex.(Ref(j.ctx), h.args)]
@@ -83,8 +84,10 @@ function interface(T::Theory, j::Judgment, bindings::AbstractDict)::Vector{Julia
   elseif h isa TypCon
     map(argsof(h)) do arg 
       argname, argtyp = j.ctx[arg]
-      JuliaFunction(Expr(:call, Symbol(argname), Expr(:(::), bindings[Symbol(j.name)])), 
-      getbound(argtyp))
+      JuliaFunction(
+        Expr(:call, Symbol(argname), Expr(:(::), bindings[Symbol(j.name)])),
+        getbound(argtyp)
+      )
     end
   end
 end 
