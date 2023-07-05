@@ -31,6 +31,4 @@ end
   A ⊗ I == A :: Ob ⊣ [A::Ob]
 end
 
-function mcompose end
-
 end

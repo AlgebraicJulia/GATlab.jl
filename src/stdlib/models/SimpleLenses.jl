@@ -174,25 +174,25 @@ end
 
 const SimpleArena = Impl.Arena
 
-Categories.compose(f::SimpleKleisliLens{T}, g::SimpleKleisliLens{T}) where {T<:AbstractTheory} =
-  SimpleKleisliLens{T}(
-    f.dom,
-    g.codom,
-    Impl.compose(
-      f.dom,
-      f.codom,
-      g.codom,
-      f.morphism,
-      g.morphism
-    )
-  )
+# ThCategory.compose(f::SimpleKleisliLens{T}, g::SimpleKleisliLens{T}) where {T<:AbstractTheory} =
+#   SimpleKleisliLens{T}(
+#     f.dom,
+#     g.codom,
+#     Impl.compose(
+#       f.dom,
+#       f.codom,
+#       g.codom,
+#       f.morphism,
+#       g.morphism
+#     )
+#   )
 
-Monoidal.mcompose(f::SimpleKleisliLens{T}, g::SimpleKleisliLens{T}) where {T<:AbstractTheory} =
-  SimpleKleisliLens{T}(
-    Impl.mcompose(f.dom, g.dom),
-    Impl.mcompose(f.codom, g.codom),
-    Impl.mcompose(f.dom, g.dom, f.codom, g.codom, f.morphism, g.morphism)
-  )
+# Monoidal.mcompose(f::SimpleKleisliLens{T}, g::SimpleKleisliLens{T}) where {T<:AbstractTheory} =
+#   SimpleKleisliLens{T}(
+#     Impl.mcompose(f.dom, g.dom),
+#     Impl.mcompose(f.codom, g.codom),
+#     Impl.mcompose(f.dom, g.dom, f.codom, g.codom, f.morphism, g.morphism)
+#   )
 
 function Base.show(io::IO, l::SimpleKleisliLens{T}) where {T<:AbstractTheory}
   theory = gettheory(T)

@@ -16,7 +16,7 @@ Given a theory, one can declare a model family for that theory. This consists of
    This can then be applied using, for instance
 
    ```julia
-   checkvalidity(m, Category.Hom(), x, y, f)
+   checkvalidity(m, Category.Hom, x, y, f)
    ```
 
    using the singleton structs defined in [Theories](@ref)

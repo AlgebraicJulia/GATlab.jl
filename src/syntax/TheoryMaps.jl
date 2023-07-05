@@ -1,5 +1,5 @@
 module TheoryMaps
-export TheoryIncl, TheoryMap, AbsTheoryMap, Composite, dom, codom
+export TheoryIncl, TheoryMap, AbsTheoryMap, Composite
 
 using ..Theories
 using ..Theories: TrmTyp
