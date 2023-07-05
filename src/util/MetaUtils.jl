@@ -27,7 +27,7 @@ const Expr0 = Union{Symbol,Expr}
 end
 
 @struct_hash_equal struct JuliaFunctionSig
-  name::Symbol
+  name::Expr0
   types::Vector{Expr0}
 end
 
@@ -70,8 +70,8 @@ end
 """
 function parse_function_sig(call_expr::Expr)::JuliaFunctionSig
   name, args = @match call_expr begin
-    Expr(:call, name::Symbol, Expr(:parameters, kw...), args...) => (name, args)
-    Expr(:call, name::Symbol, args...) => (name, args)
+    Expr(:call, name::Expr0, Expr(:parameters, kw...), args...) => (name, args)
+    Expr(:call, name::Expr0, args...) => (name, args)
     _ => throw(ParseError("Ill-formed function signature $call_expr"))
   end
   types = map(args) do expr
@@ -98,11 +98,15 @@ end
 
 """ Generate Julia expression for function definition.
 """
-function generate_function(fun::JuliaFunction)::Expr
+function generate_function(fun::JuliaFunction; rename=n->n)::Expr
+  call_expr = @match fun.call_expr begin
+    Expr(:call, name, args...) => Expr(:call, rename(name), args...)
+    _ => throw(ParseError("Ill-formed call expression $(fun.call_expr)"))
+  end
   head = if isnothing(fun.return_type)
-    fun.call_expr
+    call_expr
   else 
-    Expr(:(::), fun.call_expr, fun.return_type)
+    Expr(:(::), call_expr, fun.return_type)
   end
   body = if isnothing(fun.impl)
     Expr(:block)

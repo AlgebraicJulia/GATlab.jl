@@ -4,7 +4,8 @@ export Lvl, Typ, Trm, TypCon, TrmCon,
   Axiom, Context, Judgment, Theory,
   AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context,
   is_theory, is_argument, getlevel, FullContext, lookup, arity, judgments,
-  rename, getname, headof, argsof, SortSignature, Constructor, getsort, Constructor
+  rename, getname, headof, argsof, SortSignature, Constructor, getsort, Constructor,
+  exported_names
 
 using StructEquality
 
@@ -130,6 +131,22 @@ structs are preferred because they make reading backtraces easier.
 """
 struct AnonTypTag{i} <: TypTag{i} end
 
+"""
+This is used as a supertype for the tag types in a theory that correspond to
+the arguments to type constructors
+
+Example:
+```julia
+module Category
+struct dom <: TypArgTag{2,1} end
+struct codom <: TypArgTag{2,2} end
+```
+
+The first argument is the index of the type constructor, the second is the index
+of the argument.
+"""
+abstract type TypArgTag{i,j} end
+
 # Args index the CONTEXT of the judgment
 @struct_hash_equal struct TypCon <: Constructor
   args::Vector{Lvl}
@@ -204,6 +221,13 @@ Base.getindex(t::Theory,i::Lvl) =
   is_theory(i) ? t.judgments[index(i)] : error("Bad index $i")
 Base.length(t::Theory) = t.judgments |> length
 judgments(t::Theory) = t.judgments
+
+function exported_names(t::Theory)
+  [
+    [Symbol(j.name) for j in t.judgments if j.head isa Constructor];
+    [Symbol(arg) for j in t.judgments if j.head isa TypCon for (arg, _) in j.ctx.ctx]
+  ]
+end
 
 Context(T::Theory, c::AbstractVector{<:Name}) = 
   Context([(v,Typ(lookup(T, Default()))) for v in c])
@@ -290,13 +314,16 @@ gettheory(T::Type{<:AbstractTheory}) = gettheory(T())
 module ThEmpty
 import ..Theories
 
+module Types
+end
+
 macro theory()
   Theories.empty_theory
 end
 
-struct Th <: Theories.AbstractTheory end
+struct T <: Theories.AbstractTheory end
 
-gettheory(::Th) = Theories.empty_theory
+gettheory(::T) = Theories.empty_theory
 end
 
 end

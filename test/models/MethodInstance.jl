@@ -15,7 +15,7 @@ end
   dom(f::FinFunction) = f.dom 
   codom(f::FinFunction) = f.codom 
   id(A::FinSet) = FinFunction(1:A.n, A, A)
-  ⋅(f::FinFunction, g::FinFunction) = FinFunction(g.values[f.values], dom(f),codom(g))
+  compose(f::FinFunction, g::FinFunction) = FinFunction(g.values[f.values], dom(f),codom(g))
 end
 
 A = FinSet(2); 

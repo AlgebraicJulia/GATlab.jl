@@ -11,7 +11,7 @@ macro instance(head, body)
   theoryname, theoryparams = parse_theory_binding_either(head)
   theory = macroexpand(__module__, :($theoryname.@theory))
   functions, ext_functions = parse_instance_body(body)
-  esc(instance_code(theory, theoryparams, functions, ext_functions))
+  esc(instance_code(theory, theoryname, theoryparams, functions, ext_functions))
 end 
 
 
@@ -45,7 +45,7 @@ function parse_instance_body(expr::Expr)
   return (funs, ext_funs)
 end
 
-function instance_code(theory, instance_types, instance_fns, external_fns)
+function instance_code(theory, theoryname, instance_types, instance_fns, external_fns)
   code = Expr(:block)
   typenames = [Symbol(j.name) for j in theory.judgments if j.head isa TypCon]
   bindings = Dict(zip(typenames, instance_types))
@@ -62,7 +62,7 @@ function instance_code(theory, instance_types, instance_fns, external_fns)
     else
       error("Method $(f.call_expr) not implemented in $(nameof(mod)) instance")
     end
-    push!(code.args, generate_function(f_impl))
+    push!(code.args, generate_function(f_impl; rename=name->:(::$theoryname.Types.$name)))
   end
   return code
 end

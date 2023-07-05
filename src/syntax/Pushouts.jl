@@ -3,6 +3,7 @@ export pushout
 
 using ..Theories, ..TheoryMaps, ...Util
 using ..Theories: TrmTyp
+using ..TheoryMaps: dom, codom
 using DataStructures: IntDisjointSets, union!, find_root!
 
 

@@ -2,7 +2,7 @@ module Categories
 export ThClass, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThPreorder,
         ThMagma, ThSemiGroup, ThMonoid, ThGroup,
         ThNat, ThNatPlus, ThNatPlusTimes,
-        compose, id, TypedHom
+        TypedHom
 
 using ....Dsl
 using ....Syntax: ThEmpty
@@ -18,16 +18,10 @@ end
 end
 
 @theory ThLawlessCat <: ThGraph begin
-<<<<<<< HEAD
   compose(f, g)::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a,b), g::Hom(b,c)]
   @op begin
     (⋅) := compose
   end
-=======
-  compose(f,g)::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a,b), g::Hom(b,c)]
-
-  @op (⋅) := compose
->>>>>>> 517e5b0 (wip)
 end
 
 @theory ThAscCat <: ThLawlessCat begin
@@ -46,10 +40,6 @@ end
 @theory ThThinCategory <: ThCategory begin
   thineq := f == g :: Hom(A,B) ⊣ [A::Ob, B::Ob, f::Hom(A,B), g::Hom(A,B)]
 end
-
-function compose end
-
-function id end
 
 # function compose(c::Model, f, g)
 #   ap(c, Val{@trmidx ThCategory :(⋅)}(), f, g)
