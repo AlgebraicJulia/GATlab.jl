@@ -5,7 +5,7 @@ export Lvl, Typ, Trm, TypCon, TrmCon,
   AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context,
   is_theory, is_argument, getlevel, FullContext, lookup, arity, judgments,
   rename, getname, headof, argsof, SortSignature, Constructor, getsort, Constructor,
-  exported_names
+  exported_names, nameof, typcons
 
 using StructEquality
 
@@ -227,6 +227,10 @@ function exported_names(t::Theory)
     [Symbol(j.name) for j in t.judgments if j.head isa Constructor];
     [Symbol(arg) for j in t.judgments if j.head isa TypCon for (arg, _) in j.ctx.ctx]
   ]
+end
+
+function typcons(t::Theory)
+  filter(j -> j.head isa TypCon, t.judgments)
 end
 
 Context(T::Theory, c::AbstractVector{<:Name}) = 
