@@ -155,6 +155,10 @@ function using_names(from::Vector, names::Vector)
   Expr(:using, Expr(:(:), Expr(:(.), from...), Expr.(Ref(:(.)), names)...))
 end
 
+function define_nameof(name::Symbol)
+  :($(GlobalRef(Base, :nameof))(::$name) = $(Expr(:quote, name)))
+end
+
 macro theory(head, body)
   (name, parent_module) = @match head begin
     :($(name::Symbol) <: $(parent_module::Symbol)) => (name, parent_module)
@@ -184,17 +188,32 @@ macro theory(head, body)
   theory = theory_impl(precursor, name, judgments)
   new_judgments = theory.judgments[(length(parent.judgments)+1):end]
   typ_cons = [
-    (Symbol(j.name), :(struct $(Symbol(j.name)) <: $(GlobalRef(Theories, :TypTag)){$i} end))
+    (Symbol(j.name),
+     quote
+       struct $(Symbol(j.name)) <: $(GlobalRef(Theories, :TypTag)){$i} end
+
+       $(define_nameof(Symbol(j.name)))
+     end)
     for (i,j) in enumerate(new_judgments)
       if j.head isa TypCon
   ]
   trm_cons = [
-    (Symbol(j.name), :(struct $(Symbol(j.name)) <: $(GlobalRef(Theories, :TrmTag)){$i} end))
+    (Symbol(j.name),
+     quote
+       struct $(Symbol(j.name)) <: $(GlobalRef(Theories, :TrmTag)){$i} end
+
+       $(define_nameof(Symbol(j.name)))
+     end)
     for (i,j) in enumerate(new_judgments)
       if j.head isa TrmCon
   ]
   typ_accessors = [
-    (Symbol(arg), :(struct $(Symbol(arg)) <: $(GlobalRef(Theories, :TypArgTag)){$nj, $narg} end))
+    (Symbol(arg),
+     quote
+       struct $(Symbol(arg)) <: $(GlobalRef(Theories, :TypArgTag)){$nj, $narg} end
+
+       $(define_nameof(Symbol(arg)))
+     end)
     for (nj, j) in enumerate(new_judgments)
       if j.head isa TypCon
         for (narg, (arg, _)) in enumerate(j.ctx.ctx)
