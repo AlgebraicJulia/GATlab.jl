@@ -43,8 +43,41 @@ function (::typeof(ThCategory.Hom))(x1::Any, x2::FreeCategory.Ob, x3::FreeCatego
 end
 """
 
-function typname(theory::Theory, typ::Typ)
+
+function typname(theory::Theory, typ::Typ)::Symbol
   Symbol(theory.judgments[typ.head].name)
+end
+
+function symbolic_struct(name, abstract_type)::Expr
+  quote
+    struct $name{T} <: $abstract_type{T}
+      args::Vector
+      type_args::Vector{$(GlobalRef(SymbolicModels, :GATExpr))}
+    end
+  end
+end
+
+function symbolic_structs(theory::Theory, abstract_types::Vector)::Vector{Expr}
+  Expr[
+    symbolic_struct(Symbol(j.name), abstract_type)
+    for (j, abstract_type) in zip(typcons(theory), abstract_types)
+  ]
+end
+
+function symbolic_typ_arg(theoryname, argname, typname, argtyp)
+  quote
+    function (::typeof($theoryname.$argname))(x::$typname)::$argtyp
+      x.type_args[$arg_index]
+    end
+  end
+end
+
+function symbolic_typ_args(theory::Theory)::Vector{Expr}
+  Expr[
+    symbolic_typ_arg(theoryname, argname, Symbol(j.name), argtyp)
+    for j in theory.judgments if j.head isa TypCon
+      for (arg_index, (argname, argtyp)) in enumerate(j.ctx.ctx)
+  ]
 end
 
 macro symbolic_model(decl, theoryname, body)
@@ -54,18 +87,9 @@ macro symbolic_model(decl, theoryname, body)
     _ => throw(ParseError("Ill-formed head of @symbolic_model $decl"))
   end
 
-  structs = [
-    :(struct $(Symbol(j.name)){T} <: $abstract_type{T}
-        args::Vector
-        type_args::Vector{$(GlobalRef(SymbolicModels, :GATExpr))}
-      end)
-    for (j, abstract_type) in zip(typcons(theory), abstract_types)
-  ]
+  structs = symbolic_structs(theory, abstract_types)
 
   accessors = [
-    :(function (::typeof($theoryname.$argname))(x::$(Symbol(j.name)))::$(typname(argtyp))
-        x.type_args[$arg_index]
-      end)
     for j in theory.judgments if j.head isa TypCon
       for (arg_index, (argname, argtyp)) in enumerate(j.ctx.ctx)
   ]
