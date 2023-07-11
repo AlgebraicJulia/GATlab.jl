@@ -5,9 +5,12 @@ export Lvl, Typ, Trm, TypCon, TrmCon,
   AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context,
   is_theory, is_argument, getlevel, FullContext, lookup, arity, judgments,
   rename, getname, headof, argsof, SortSignature, Constructor, getsort, Constructor,
-  exported_names, nameof, typcons
+  exported_names, nameof, typcons, derive_context_from_args,
+  ArgExpr, IndirectArg, DirectArg
+
 
 using StructEquality
+using MLStyle
 
 using ...Util
 
@@ -286,6 +289,32 @@ function lookup(fc::FullContext, sig::SortSignature)
 end
 
 const empty_theory = Theory(Anon(), Judgment[])
+
+@data ArgExpr begin
+  DirectArg(id::Int)
+  IndirectArg(ty::Lvl, argidx::Int, expr::ArgExpr)
+end
+
+# Fill out an array the same length as the context, where each element is a vector of expressions
+# for how to derive that variable from the arguments.
+# Assumes `j` is a term constructor
+function derive_context_from_args(t::Theory, j::Judgment)::Vector{Vector{ArgExpr}}
+  arg_exprs = [ArgExpr[] for _ in j.ctx.ctx]
+  to_expand = Tuple{ArgExpr, Lvl}[(DirectArg(idx), i) for (idx, i) in enumerate(j.head.args)]
+  while !(isempty(to_expand))
+    (argexpr, i) = pop!(to_expand)
+    push!(arg_exprs[index(i)], argexpr)
+    _, ty = j.ctx[i]
+    for (argidx, arg) in enumerate(ty.args)
+      if is_context(arg.head)
+        push!(to_expand, (IndirectArg(ty.head, argidx, argexpr), arg.head))
+      else
+        # TODO: handle the case with a type constructor applied to term constructors
+      end
+    end
+  end
+  arg_exprs
+end
 
 """
 A type-level signifier for a particular theory, used to control dispatch

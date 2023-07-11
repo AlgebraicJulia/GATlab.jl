@@ -186,11 +186,12 @@ macro theory(head, body)
   ]
   precursor = theory_precursor(parent, usings)
   theory = theory_impl(precursor, name, judgments)
-  new_judgments = theory.judgments[(length(parent.judgments)+1):end]
+  n = length(parent.judgments)
+  new_judgments = theory.judgments[(n+1):end]
   typ_cons = [
     (Symbol(j.name),
      quote
-       struct $(Symbol(j.name)) <: $(GlobalRef(Theories, :TypTag)){$i} end
+       struct $(Symbol(j.name)) <: $(GlobalRef(Theories, :TypTag)){$(n+i)} end
 
        $(define_nameof(Symbol(j.name)))
      end)
@@ -200,7 +201,7 @@ macro theory(head, body)
   trm_cons = [
     (Symbol(j.name),
      quote
-       struct $(Symbol(j.name)) <: $(GlobalRef(Theories, :TrmTag)){$i} end
+       struct $(Symbol(j.name)) <: $(GlobalRef(Theories, :TrmTag)){$(n+i)} end
 
        $(define_nameof(Symbol(j.name)))
      end)
@@ -210,7 +211,7 @@ macro theory(head, body)
   typ_accessors = [
     (Symbol(arg),
      quote
-       struct $(Symbol(arg)) <: $(GlobalRef(Theories, :TypArgTag)){$nj, $narg} end
+       struct $(Symbol(arg)) <: $(GlobalRef(Theories, :TypArgTag)){$(n+nj), $narg} end
 
        $(define_nameof(Symbol(arg)))
      end)
