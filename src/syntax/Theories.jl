@@ -71,7 +71,6 @@ should point at a type constructor judgment.
   end 
 end
 
-
 @struct_hash_equal struct Context
   ctx::Vector{Tuple{Name, Typ}}
   Context(c=Tuple{Name, Typ}[]) = new(c)
