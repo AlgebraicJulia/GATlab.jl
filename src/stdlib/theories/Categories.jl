@@ -41,14 +41,6 @@ end
   thineq := f == g :: Hom(A,B) ⊣ [A::Ob, B::Ob, f::Hom(A,B), g::Hom(A,B)]
 end
 
-# function compose(c::Model, f, g)
-#   ap(c, Val{@trmidx ThCategory :(⋅)}(), f, g)
-# end
-
-# function id(c::Model, x)
-#   ap(c, Val{@trmidx ThCategory id}(), x)
-# end
-
 """
 Any implementor of TypedHom{Ob, Hom} should have precisely the fields
 
