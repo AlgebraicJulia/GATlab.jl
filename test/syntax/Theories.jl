@@ -17,6 +17,7 @@ arg_exprs = derive_context_from_args(th_category, th_category[getlevel(ThCategor
 @test arg_exprs[3] == ArgExpr[
   IndirectArg(getlevel(ThCategory.Hom), 2, DirectArg(2))
 ]
+
 @test arg_exprs[4] == ArgExpr[DirectArg(1)]
 @test arg_exprs[5] == ArgExpr[DirectArg(2)]
 
