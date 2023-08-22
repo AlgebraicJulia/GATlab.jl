@@ -5,7 +5,7 @@ export Lvl, Typ, Trm, TypCon, TrmCon,
   AbstractTheory, gettheory, empty_theory, ThEmpty, index, is_context,
   is_theory, is_argument, getlevel, FullContext, lookup, arity, judgments,
   rename, getname, headof, argsof, SortSignature, Constructor, getsort, Constructor,
-  exported_names, nameof, typcons, derive_context_from_args,
+  exported_names, nameof, typcons, trmcons, derive_context_from_args,
   ArgExpr, IndirectArg, DirectArg
 
 
@@ -233,6 +233,10 @@ end
 
 function typcons(t::Theory)
   filter(j -> j.head isa TypCon, t.judgments)
+end
+
+function trmcons(t::Theory)
+  filter(j -> j.head isa TrmCon, t.judgments)
 end
 
 Context(T::Theory, c::AbstractVector{<:Name}) = 

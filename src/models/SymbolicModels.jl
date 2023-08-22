@@ -1,16 +1,17 @@
 module SymbolicModels
+export GATExpr, @symbolic_model
 
-using ..Syntax
+using ...Syntax
 
 using Base.Meta: ParseError
 using MLStyle
 
-abstract type GATExpr end
+abstract type GATExpr{T} end
 
 """
 module FreeCategory
 export Ob,Hom
-using ..$__module__
+using ..__module__
 
 theory() = ThCategory
 
@@ -44,40 +45,56 @@ end
 """
 
 
-function typname(theory::Theory, typ::Typ)::Symbol
-  Symbol(theory.judgments[typ.head].name)
+function typname(theory::Theory, typ::Typ)
+  Symbol(theory[typ.head].name)
 end
 
-function symbolic_struct(name, abstract_type)::Expr
+function symbolic_struct(name, abstract_type, parentmod)::Expr
   quote
-    struct $name{T} <: $abstract_type{T}
-      args::Vector
-      type_args::Vector{$(GlobalRef(SymbolicModels, :GATExpr))}
+    struct $(esc(name)){T} <: $parentmod.$(abstract_type){T}
+      args::$(Vector)
+      type_args::$(Vector){$(GlobalRef(SymbolicModels, :GATExpr))}
     end
   end
 end
 
-function symbolic_structs(theory::Theory, abstract_types::Vector)::Vector{Expr}
+function symbolic_structs(theory::Theory, abstract_types, parentmod)::Vector{Expr}
   Expr[
-    symbolic_struct(Symbol(j.name), abstract_type)
+    symbolic_struct(Symbol(j.name), abstract_type, parentmod)
     for (j, abstract_type) in zip(typcons(theory), abstract_types)
   ]
 end
 
-function symbolic_typ_arg(theoryname, argname, typname, argtyp)
+function symbolic_accessor(theoryname, argname, typname, rettypname, argindex, parentmod)
   quote
-    function (::typeof($theoryname.$argname))(x::$typname)::$argtyp
-      x.type_args[$arg_index]
+    function (::$(typeof)($parentmod.$theoryname.$(Symbol(argname))))(x::$(esc(typname)))::$(esc(rettypname))
+      x.type_args[$argindex]
     end
   end
 end
 
-function symbolic_typ_args(theory::Theory)::Vector{Expr}
+function symbolic_accessors(theoryname, theory::Theory, parentmod)::Vector{Expr}
   Expr[
-    symbolic_typ_arg(theoryname, argname, Symbol(j.name), argtyp)
-    for j in theory.judgments if j.head isa TypCon
-      for (arg_index, (argname, argtyp)) in enumerate(j.ctx.ctx)
+    symbolic_accessor(theoryname, argname, Symbol(j.name), typname(theory, argtyp), argindex, parentmod)
+    for j in typcons(theory) for (argindex, (argname, argtyp)) in enumerate(j.ctx.ctx)
   ]
+end
+
+function symbolic_constructor(theoryname, j, theory, parentmod)
+  quote
+    function (::$(typeof)($parentmod.$theoryname.$(Symbol(j.name))))(
+      $([Expr(:(::), Symbol(:x, i), esc(typname(theory, j.ctx[idx][2]))) for (i, idx) in enumerate(j.head.args)]...)
+    )
+      $(esc(typname(theory, j.head.typ))){$(Expr(:quote, Symbol(j.name)))}(
+        $(Expr(:vect, [Symbol(:x, i) for i in 1:length(j.head.args)]...)),
+        $(Vector){$(GlobalRef(SymbolicModels, :GATExpr))}()
+      )
+    end
+  end
+end
+
+function symbolic_constructors(theoryname, theory::Theory, parentmod)::Vector{Expr}
+  Expr[symbolic_constructor(theoryname, judgment, theory, parentmod) for judgment in trmcons(theory)]
 end
 
 macro symbolic_model(decl, theoryname, body)
@@ -87,21 +104,22 @@ macro symbolic_model(decl, theoryname, body)
     _ => throw(ParseError("Ill-formed head of @symbolic_model $decl"))
   end
 
-  structs = symbolic_structs(theory, abstract_types)
+  structs = symbolic_structs(theory, abstract_types, __module__)
 
-  accessors = [
-    for j in theory.judgments if j.head isa TypCon
-      for (arg_index, (argname, argtyp)) in enumerate(j.ctx.ctx)
-  ]
+  accessors = symbolic_accessors(theoryname, theory, __module__)
 
-  constructors = [
-    :(function (::typeof($theoryname.$(Symbol(j.name))))(
-        $([Expr(:(::), Symbol(:x, i), $(typname(j.ctx[i][2]))) for (i, idx) in enumerate(j.head.args)])
-      )
+  constructors = symbolic_constructors(theoryname, theory, __module__)
 
-      end)
-    for j in theory.judgments if j.head isa TrmCon
-  ]
+  Expr(:toplevel,
+    :(module $(esc(name))
+      using ..($(nameof(__module__)))
+      $(structs...)
+
+      $(accessors...)
+
+      $(constructors...)
+    end)
+  )
 end
 
 end
