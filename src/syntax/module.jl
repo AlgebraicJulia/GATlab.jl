@@ -3,8 +3,12 @@ module Syntax
 using Reexport
 
 include("Scopes.jl")
+include("GATs.jl")
+include("ExprInterop.jl")
 
 @reexport using .Scopes
+@reexport using .GATs
+@reexport using .ExprInterop
 
 # include("Theories.jl")
 # include("NestedContexts.jl")
