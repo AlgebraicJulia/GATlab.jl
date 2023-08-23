@@ -1,0 +1,119 @@
+module ExprInterop
+export toexpr, fromexpr
+
+using ..Scopes, ..GATs
+using ...Util.MetaUtils
+using MLStyle 
+
+"""
+`toexpr(c::Context, t) -> Any`
+
+Converts Gatlab syntax into an Expr that can be read in via `fromexpr` to get
+the same thing. Crucially, the output of this will depend on the order of the
+scopes in `c`, and if read back in with a different `c` may end up with
+different results.
+"""
+function toexpr end
+
+"""
+`fromexpr(c::Context, e::Any, T::Type) -> Union{T,Nothing}`
+
+Converts a Julia Expr into type T, in a certain scope.
+"""
+function fromexpr end
+
+function toexpr(c::Context, x::Ident)
+  tag_scopelevel = scopelevel(c, gettag(x))
+  if isnamed(x)
+    if tag_scopelevel == scopelevel(c, nameof(x))
+      nameof(x)
+    else
+      Symbol(nameof(x), "!", tag_scopelevel)
+    end
+  else
+    if tag_scopelevel == length(c)
+      Symbol("#", getlevel(x))
+    else
+      Symbol("#", getlevel(x), "!", tag_scopelevel)
+    end
+  end
+end
+
+const explicit_level_regex = r"^(.*)!(\d+)$"
+const unnamed_var_regex = r"^#(\d+)$"
+
+function fromexpr(c::Context, e::Expr0, ::Type{Ident})
+  e isa Symbol || error("expected a Symbol, got: $e")
+  s = string(e)
+  m = match(explicit_level_regex, s)
+  if !isnothing(m)
+    scope = c[parse(Int, m[2])]
+    m2 = match(unnamed_var_regex, m[1])
+    if !isnothing(m2)
+      ident(scope, parse(Int, m2[1]))
+    else
+      ident(scope, Symbol(m[1]))
+    end
+  else
+    m2 = match(unnamed_var_regex, s)
+    if !isnothing(m2)
+      ident(c[end], parse(Int, m2[1]))
+    else
+      ident(c, e)
+    end
+  end
+end
+
+function toexpr(c::Context, ref::Reference)
+  if isnothing(rest(ref))
+    toexpr(c, first(ref))
+  else
+    error("paths not supported yet")
+  end
+end
+
+function fromexpr(c::Context, e, ::Type{Reference})
+  e isa Symbol || error("paths not supported yet")
+  Reference(fromexpr(c, e, Ident))
+end
+
+function toexpr(c::Context, term::AlgTerm)
+  if term.head isa Constant
+    term.head
+  else
+    if isempty(term.args)
+      toexpr(c, term.head)
+    else
+      Expr(:call, toexpr(c, term.head), toexpr.(Ref(c), term.args))
+    end
+  end
+end
+
+function fromexpr(c::Context, e, ::Type{AlgTerm})
+  @match e begin
+    s::Symbol => AlgTerm(fromexpr(c, s, Reference))
+    Expr(:call, head, args...) =>
+      AlgTerm(fromexpr(c, head, Reference), fromexpr.(Ref(c), args, Ref(AlgTerm)))
+    e::Expr => error("could not parse AlgTerm from $e")
+    x => AlgTerm(Constant(x))
+  end
+end
+
+function toexpr(c::Context, type::AlgType)
+  if isempty(type.args)
+    toexpr(c, type.head)
+  else
+    Expr(:call, toexpr(c, type.head), toexpr.(Ref(c), type.args))
+  end
+end
+
+function fromexpr(c::Context, e, ::Type{AlgType})
+  @match e begin
+    s::Symbol => AlgType(fromexpr(c, s, Reference))
+    Expr(:call, head, args...) =>
+      AlgType(fromexpr(c, head, Reference), fromexpr.(Ref(c), args, Ref(AlgTerm)))
+    _ => error("could not parse AlgType from $e")
+  end
+end
+
+end

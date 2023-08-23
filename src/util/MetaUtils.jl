@@ -3,7 +3,8 @@
 module MetaUtils
 export JuliaFunction, JuliaFunctionSig, parse_docstring, parse_function,
   parse_function_sig, generate_docstring, generate_function,
-  append_expr!, concat_expr, replace_symbols, strip_lines
+  append_expr!, concat_expr, replace_symbols, strip_lines,
+  Expr0
 
 using Base.Meta: ParseError
 using StructEquality

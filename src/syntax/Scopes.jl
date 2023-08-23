@@ -1,15 +1,18 @@
 module Scopes
 export
   ScopeTag, newscopetag, retag, rename,
-  Ident, tagof, levelof,
-  Path, firstof, restof,
-  NamedElt, aliasesof, valueof, signatureof,
-  Scope, namesof,
-  ScopeTagMismatch
+  ScopeTagError,
+  Ident, gettag, getlevel, isnamed,
+  Reference, rest,
+  Binding, getaliases, getvalue, getsignature,
+  Scope, ident, idents,
+  Context, scopelevel,
+  ScopeList
 
 using UUIDs
 using MLStyle
 using StructEquality
+import Base: rest
 
 """
 Design rationale:
@@ -17,7 +20,7 @@ Design rationale:
 Namespacing should be first class. This doesn't play nicely with deBruijn
 levels; we don't want to do a bunch of math to convert between flattened and
 unflattened versions of contexts. There is an accepted solution to the problem
-of organizing names: use paths! Mathematically speaking, a path is just a list
+of organizing names: use refs! Mathematically speaking, a ref is just a list
 of deBruijn levels.
 
 However, deBruijn levels are unfriendly for users; we want to be able to give
@@ -85,11 +88,28 @@ The tag that makes reference to a specific scope possible.
 const ScopeTag = UUID
 newscopetag() = uuid4()
 
-retag(_replacements::Dict{ScopeTag, ScopeTag}, x) = x
-rename(_tag::ScopeTag, _replacements::Dict{Symbol, Symbol}, x) = x
 
 """
-   Ident
+`retag(replacements::Dict{ScopeTag, ScopeTag}, x::T) where {T} -> T`
+
+Recurse through the structure of `x`, swapping any instance of a ScopeTag `t`
+with `get(replacements, t, t)`. Overload this function on structs that have
+ScopeTags within them.
+"""
+retag(replacements::Dict{ScopeTag, ScopeTag}, x) = x
+
+"""
+`rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x::T) where {T} -> T`
+
+Recurse through the structure of `x`, and change any name `n` in scope `tag` to
+`get(replacements, n, n)`. Overload this function on structs that have names
+in them.
+"""
+rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x) = x
+
+"""
+`Ident`
+
 An identifier.
 
 `tag` refers to the scope that this Ident is bound in
@@ -97,18 +117,22 @@ An identifier.
 `name` is an optional field for the sake of printing. A variable in a scope
 might be associated with several names
 """
-@struct_hash_equal struct Ident
+struct Ident
   tag::ScopeTag
   level::Int
   name::Union{Symbol, Nothing}
-  function Ident(tag::ScopeTag, level::Int, name::Union{Symbol, Nothing})
+  function Ident(tag::ScopeTag, level::Int, name::Union{Symbol, Nothing}=nothing)
     new(tag, level, name)
   end
 end
 
-tagof(x::Ident) = x.tag
+Base.:(==)(x::Ident, y::Ident) = x.tag == y.tag && x.level == y.level
 
-levelof(x::Ident) = x.level
+Base.hash(x::Ident, h::UInt64) = hash(x.tag, hash(x.level, h))
+
+gettag(x::Ident) = x.tag
+
+getlevel(x::Ident) = x.level
 
 Base.nameof(x::Ident) = x.name
 
@@ -118,76 +142,99 @@ function Base.show(io::IO, x::Ident)
   if isnamed(x)
     print(io, nameof(x))
   else
-    print(io, "#$(levelof(x))")
+    print(io, "#$(getlevel(x))")
   end
 end
 
 retag(replacements::Dict{ScopeTag, ScopeTag}, x::Ident) =
-  if tagof(x) ∈ keys(replacements)
-    Ident(replacements[tagof(x)], levelof(x), nameof(x))
+  if gettag(x) ∈ keys(replacements)
+    Ident(replacements[gettag(x)], getlevel(x), nameof(x))
   else
     x
   end
 
 rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x::Ident) =
-  if tagof(x) == tag && nameof(x) ∈ keys(replacements)
-    Ident(tag, levelof(x), replacements[nameof(x)])
+  if gettag(x) == tag && nameof(x) ∈ keys(replacements)
+    Ident(tag, getlevel(x), replacements[nameof(x)])
   else
     x
   end
 
 """
+`ScopeTagError`
+
+An error to throw when an identifier has an unexpected scope tag
+"""
+struct ScopeTagError <: Exception
+  expectedcontext::Any
+  id::Ident
+end
+
+Base.showerror(io::IO, e::ScopeTagError) =
+  print(io, "tag from ", e.id, " does not match ", e.expectedcontext)
+
+"""
+`Reference`
+
 A path of identifiers. We optimize for the (frequent) case where there is only
 one identifier by making this a linked list.
 """
-@struct_hash_equal struct Path
+@struct_hash_equal struct Reference
   first::Ident
-  rest::Union{Path, Nothing}
-  function Path(first::Ident, rest::Union{Path, Nothing}=nothing)
+  rest::Union{Reference, Nothing}
+  function Reference(first::Ident, rest::Union{Reference, Nothing}=nothing)
     new(first, rest)
   end
 end
 
-firstof(p::Path) = p.first
-restof(p::Path) = p.rest
+function Reference(first::Ident, rest...)
+  if isempty(rest)
+    Reference(first)
+  else
+    Reference(first, Reference(rest...))
+  end
+end
 
-function Base.show(io::IO, p::Path)
+Base.first(p::Reference) = p.first
+Base.rest(p::Reference) = p.rest
+
+function Base.show(io::IO, p::Reference)
   cur = p
   show(io, cur.first)
-  while !isnothing(restof(cur))
-    cur = restof(cur)
-    id = firstof(cur)
+  while !isnothing(rest(cur))
+    cur = rest(cur)
+    id = first(cur)
     if isnamed(id)
       print(io, ".")
       show(io, id)
     else
       print(io, "[")
-      print(io, levelof(id))
+      print(io, getlevel(id))
       print(io, "]")
     end
   end
 end
 
-retag(replacements::Dict{ScopeTag, ScopeTag}, p::Path) =
-  Path(retag(replacements, firstof(p)), retag(replacements, restof(p)))
+retag(replacements::Dict{ScopeTag, ScopeTag}, p::Reference) =
+  Reference(retag(replacements, first(p)), retag(replacements, rest(p)))
 
-rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, p::Path) =
-  Path(rename(tag, replacements, firstof(p)), rename(tag, replacements, restof(p)))
+rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, p::Reference) =
+  Reference(rename(tag, replacements, first(p)), rename(tag, replacements, rest(p)))
 
 """
-A NamedElement
+`Binding{T, Sig}`
 
 `primary` is an optional distinguished element of aliases
 `value` is the element
 `sig` is a way of uniquely distinguishing this element from others with the same name 
 (for example, ⊗ : Ob x Ob -> Ob and Hom x Hom -> Hom)
 """
-@struct_hash_equal struct NamedElt{T, Sig}
+@struct_hash_equal struct Binding{T, Sig}
   primary::Union{Symbol, Nothing}
   aliases::Set{Symbol}
   value::T
   sig::Sig
-  function NamedElt{T, Sig}(
+  function Binding{T, Sig}(
     primary::Union{Symbol, Nothing},
     aliases::Set{Symbol},
     value::T,
@@ -199,37 +246,76 @@ A NamedElement
       error("if aliases is nonempty, the primary must be set")
     new{T, Sig}(primary, aliases, value, sig)
   end
-  function NamedElt{T}(
+  function Binding{T}(
     primary::Union{Symbol, Nothing},
     aliases::Set{Symbol},
     value::T,
     sig::Sig=nothing,
   ) where {T, Sig}
-    NamedElt{T,Sig}(primary, aliases, value, sig)
+    Binding{T,Sig}(primary, aliases, value, sig)
   end
 end
 
-Base.nameof(ne::NamedElt) = ne.primary
-valueof(ne::NamedElt) = ne.value
-aliasesof(ne::NamedElt) = ne.aliases
-signatureof(ne::NamedElt) = ne.sig
+function Base.show(io::IO, b::Binding)
+  print(io, isnothing(nameof(b)) ? "_" : nameof(b))
+  if length(getaliases(b)) > 1 
+    print(io, "(aliases=")
+    join(io, filter(x -> x != nameof(b), getaliases(b)), ", ")
+    print(io,")")
+  end
+  print(io, isnothing(getsignature(b)) ? "" : "::$getsignature(b)")
+  print(io, " => $(repr(getvalue(b)))")
+end
 
-retag(replacements::Dict{ScopeTag, ScopeTag}, elt::NamedElt{T, Sig}) where {T, Sig} =
-  NamedElt{T,Sig}(
-    nameof(elt),
-    aliasesof(elt),
-    retag(replacements, valueof(elt)),
-    retag(replacements, signatureof(elt))
+
+Base.nameof(ne::Binding) = ne.primary
+
+getvalue(ne::Binding) = ne.value
+
+getaliases(ne::Binding) = ne.aliases
+
+getsignature(ne::Binding) = ne.sig
+
+retag(replacements::Dict{ScopeTag, ScopeTag}, binding::Binding{T, Sig}) where {T, Sig} =
+  Binding{T,Sig}(
+    nameof(binding),
+    getaliases(binding),
+    retag(replacements, getvalue(binding)),
+    retag(replacements, getsignature(binding))
   )
 
-function make_name_dict(elts::AbstractVector{NamedElt{T, Sig}}) where {T, Sig}
+"""
+A `Context` is anything which contains an ordered list of scopes.
+
+`Context`s should overload:
+
+- `ident`
+- `Base.getindex(c::Context, x::Ident) -> Binding`
+- `Base.getindex(c::Context, i::Int) -> Scope`
+- `Base.collect(c::Context) -> AbstractVector{Scope}`
+- `scopelevel(c::Context, name::Symbol) -> Union{Int, Nothing}`
+- `scopelevel(c::Context, tag::ScopeTag) -> Union{Int, Nothing}`
+- `Base.length`
+- `Base.contains(c::Context, tag::ScopeTag) -> Bool`
+"""
+abstract type Context end
+
+"""
+`ident(c::Context, name::Symbol; sig=nothing, scopelevel=nothing) -> Ident`
+
+`ident(c::Context, level::Int; scopelevel=nothing) -> Ident`
+"""
+function ident end 
+
+
+function make_name_dict(bindings::AbstractVector{Binding{T, Sig}}) where {T, Sig}
   d = Dict{Symbol, Dict{Sig, Int}}()
-  for (i, elt) in enumerate(elts)
-    for name in aliasesof(elt)
+  for (i, binding) in enumerate(bindings)
+    for name in getaliases(binding)
       if !(name ∈ keys(d))
         d[name] = Dict{Sig, Int}()
       end
-      sig = signatureof(elt)
+      sig = getsignature(binding)
       if sig ∈ keys(d[name])
         error("already defined $name with signature $sig")
       end
@@ -239,39 +325,147 @@ function make_name_dict(elts::AbstractVector{NamedElt{T, Sig}}) where {T, Sig}
   d
 end
 
+"""
+`Scope{T, Sig}`
+
+In Gatlab, we handle overloading and shadowing with a notion of *scope*.
+Anything which binds variables introduces a scope, for instance a `@theory`
+declaration or a context. For example, a scope with 3 elements:
+
+x::Int = 3
+y::String = "hello"
+x::String = "ex"
+
+This is a valid scope even though there are name collisions, because the 
+signature (in this case, a datatype) disambiguates. In this case, `namesof(scope)` 
+would return:
+
+  `Dict(x => Dict(Int => 3, String => "ex), y => Dict(String => "hello"))`
+"""
 struct Scope{T, Sig}
+  # unique identifier for the scope
   tag::ScopeTag
-  elts::Vector{NamedElt{T, Sig}}
+  # ordered sequence of name assignments
+  bindings::Vector{Binding{T, Sig}}
+  # a cached mapping which takes a name and a disambiguator (i.e. signature)
+  # and returns the index in `bindings`
   names::Dict{Symbol, Dict{Sig, Int}}
 end
 
-function Scope(named_elts::Vector{NamedElt{T, Sig}}; tag=newscopetag()) where {T, Sig}
-  Scope{T, Sig}(tag, named_elts, make_name_dict(named_elts))
+function Base.show(io::IO, x::Scope)
+  print(io, "{")
+  for (i, b) in enumerate(x.bindings)
+    print(io, b)
+    if i < length(x.bindings)
+      print(io, ", ")
+    end
+  end
+  print(io, "}")
 end
 
-tagof(s::Scope) = s.tag
-namesof(s::Scope) = s.names
 
-struct ScopeTagMismatch <: Exception
-  id::Ident
-  expectedcontext::Any
+function Scope(bindings::Vector{Binding{T, Sig}}; tag=newscopetag()) where {T, Sig}
+  Scope{T, Sig}(tag, bindings, make_name_dict(bindings))
 end
 
-Base.showerror(io::IO, e::ScopeTagMismatch) =
-  print(io, "tag from ", id, " does not match ", e.expectedcontext)
+gettag(s::Scope) = s.tag
 
-function Base.getindex(s::Scope, id::Ident)
-  tagof(id) == tagof(s) || throw(ScopeTagMismatch(id, s))
-  s.elts[levelof(id)].value
+getlevel(s::Scope{T,Sig}, name::Symbol, sig::Sig) where {T,Sig} =
+  s.names[name][sig]
+
+getlevel(s::Scope{T, Nothing}, name::Symbol) where {T} =
+  s.names[name][nothing]
+
+function getlevel(s::Scope, x::Ident)
+  gettag(s) == gettag(x) || throw(ScopeTagError(s, x))
+  getlevel(s, getlevel(x))
 end
 
-function Base.getindex(s::Scope, path::Path)
-  x = s[firstof(path)]
-  if !isnothing(restof(path))
-    x[restof(path)]
+function getlevel(s::Scope, level::Int)
+  level ∈ eachindex(s.bindings) || BoundsError(s, level)
+  level
+end
+
+Base.getindex(s::Scope, x) = s.bindings[getlevel(s, x)]
+
+Base.getindex(s::Scope, name::Symbol, sig) = s.bindings[getlevel(s, name, sig)]
+
+function Base.getindex(s::Scope, ref::Reference)
+  x = s[first(ref)]
+  if !isnothing(rest(ref))
+    getvalue(x)[rest(ref)]
   else
     x
   end
 end
+
+Base.iterate(s::Scope) = iterate(s.bindings)
+Base.iterate(s::Scope, i) = iterate(s.bindings, i)
+
+ident(s::Scope, name::Symbol; sig=nothing) =
+  Ident(gettag(s), getlevel(s, name, sig), name)
+
+function ident(s::Scope, level::Int, name=nothing)
+  binding = s.bindings[level]
+  isnothing(name) || name ∈ binding.aliases || error("invalid alias $name for $binding")
+  Ident(gettag(s), level, isnothing(name) ? nameof(binding) : name)
+end
+
+idents(s::Scope, names::AbstractVector{Symbol}) = ident.(Ref(s), names)
+
+idents(s::Scope{T, Sig}, names::AbstractVector{Symbol}, sigs::AbstractVector{Int}) where {T, Sig} =
+  ident.(Ref(s), names, sigs)
+
+idents(s::Scope{T, Sig}, pairs::AbstractVector{Tuple{Symbol, Sig}}) where {T, Sig} =
+  idents(s, first.(paris), second.(pairs))
+
+idents(s::Scope, levels::AbstractVector{Int}) = ident.(Ref(s), levels)
+
+idents(s::Scope, levels::AbstractVector{Int}, names::AbstractVector{Symbol}) =
+  ident.(Ref(s), levels, names)
+
+idents(s::Scope, pairs::AbstractVector{Tuple{Int, Symbol}}) =
+  idents(s, first.(pairs), second.(pairs))
+  
+
+struct ScopeList <: Context
+  scopes::Vector{Scope}
+  taglookup::Dict{ScopeTag, Int}
+  namelookup::Dict{Symbol, Int}
+  function ScopeList(scopes::Vector{<:Scope}=Scope[])
+    taglookup = Dict{ScopeTag, Int}()
+    namelookup = Dict{Symbol, Int}()
+    for (i, s) in enumerate(scopes)
+      taglookup[gettag(s)] = i
+      for binding in s
+        for alias in getaliases(binding)
+          namelookup[alias] = i # overwrite most recent
+        end
+      end 
+    end
+    new(Vector{Scope}(scopes), taglookup, namelookup)
+  end
+end
+
+getscopes(c::ScopeList) = c.scopes
+
+scopelevel(c::ScopeList, t::ScopeTag) = c.taglookup[t]
+scopelevel(c::ScopeList, s::Symbol) = c.namelookup[s]
+
+Base.length(c::ScopeList) = length(c.scopes)
+Base.lastindex(c::ScopeList) = length(c)
+Base.getindex(c::ScopeList, x::Ident) = c[scopelevel(c, gettag(x))][x]
+Base.getindex(c::ScopeList, i::Int) = getscopes(c)[i]
+
+function ident(c::ScopeList, level::Int; name=nothing, scopelevel::Union{Int, Nothing}=nothing)
+  scope = isnothing(scopelevel) ? c[end] : c[scopelevel]
+  ident(scope, level; name)
+end
+
+function ident(c::ScopeList, name::Symbol; sig=nothing, scopelevel::Union{Int, Nothing}=nothing)
+  scope = c[isnothing(scopelevel) ? c.namelookup[name] : scopelevel]
+  ident(scope, name; sig=sig)
+end
+
 
 end # module
