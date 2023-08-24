@@ -42,7 +42,7 @@ end
 const explicit_level_regex = r"^(.*)!(\d+)$"
 const unnamed_var_regex = r"^#(\d+)$"
 
-function fromexpr(c::Context, e::Expr0, ::Type{Ident})
+function fromexpr(c::Context, e::Expr0, ::Type{Ident}; sig=nothing)
   e isa Symbol || error("expected a Symbol, got: $e")
   s = string(e)
   m = match(explicit_level_regex, s)
@@ -50,16 +50,16 @@ function fromexpr(c::Context, e::Expr0, ::Type{Ident})
     scope = c[parse(Int, m[2])]
     m2 = match(unnamed_var_regex, m[1])
     if !isnothing(m2)
-      ident(scope, parse(Int, m2[1]))
+      ident(scope, parse(Int, m2[1]); sig)
     else
-      ident(scope, Symbol(m[1]))
+      ident(scope, Symbol(m[1]); sig)
     end
   else
     m2 = match(unnamed_var_regex, s)
     if !isnothing(m2)
-      ident(c[end], parse(Int, m2[1]))
+      ident(c[end], parse(Int, m2[1]); sig)
     else
-      ident(c, e)
+      ident(c, e; sig)
     end
   end
 end
@@ -72,9 +72,9 @@ function toexpr(c::Context, ref::Reference)
   end
 end
 
-function fromexpr(c::Context, e, ::Type{Reference})
+function fromexpr(c::Context, e, ::Type{Reference}; sig=nothing)
   e isa Symbol || error("paths not supported yet")
-  Reference(fromexpr(c, e, Ident))
+  Reference(fromexpr(c, e, Ident; sig))
 end
 
 function toexpr(c::Context, term::AlgTerm)
@@ -91,9 +91,20 @@ end
 
 function fromexpr(c::Context, e, ::Type{AlgTerm})
   @match e begin
-    s::Symbol => AlgTerm(fromexpr(c, s, Reference))
-    Expr(:call, head, args...) =>
-      AlgTerm(fromexpr(c, head, Reference), fromexpr.(Ref(c), args, Ref(AlgTerm)))
+    s::Symbol => begin
+      scope = c[scopelevel(c, s)]
+      ref = if sigtype(scope) == AlgSorts
+        fromexpr(c, s, Reference; sig=AlgSort[])
+      else
+        fromexpr(c, s, Reference)
+      end
+      AlgTerm(ref)
+    end
+    Expr(:call, head, argexprs...) => begin
+      args = fromexpr.(Ref(c), argexprs, Ref(AlgTerm))
+      argsorts = AlgSort.(Ref(c), args)
+      AlgTerm(fromexpr(c, head, Reference; sig=argsorts), args)
+    end
     e::Expr => error("could not parse AlgTerm from $e")
     x => AlgTerm(Constant(x))
   end

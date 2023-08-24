@@ -1,6 +1,6 @@
 module GATs
 export Constant, AlgTerm, AlgType,
-  TypeScope, AlgSort, ArgSorts,
+  TypeScope, AlgSort, AlgSorts,
   AlgTermConstructor, AlgTypeConstructor, AlgAxiom,
   JudgmentBinding, GATSegment, GAT
 
@@ -8,15 +8,10 @@ using ..Scopes
 
 using StructEquality
 
-
 """
-`Constant`
-
-A Julia value in an algebraic context. Checked elsewhere.
+We need this to resolve a mutual reference loop; the only subtype is Constant
 """
-@struct_hash_equal struct Constant
-  value::Any
-end
+abstract type AbstractConstant end
 
 """
 `AlgTerm`
@@ -24,9 +19,9 @@ end
 One syntax tree to rule all the terms.
 """
 @struct_hash_equal struct AlgTerm
-  head::Union{Reference, Constant}
+  head::Union{Reference, AbstractConstant}
   args::Vector{AlgTerm}
-  function AlgTerm(head::Union{Reference, Constant}, args::Vector{AlgTerm}=EMPTY_ARGS)
+  function AlgTerm(head::Union{Reference, AbstractConstant}, args::Vector{AlgTerm}=EMPTY_ARGS)
     new(head, args)
   end
 end
@@ -51,12 +46,38 @@ end
 AlgType(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgTerm(Reference(head), args)
 
 """
+`Constant`
+
+A Julia value in an algebraic context. Checked elsewhere.
+"""
+@struct_hash_equal struct Constant
+  value::Any
+  type::AlgType
+end
+
+"""
 `AlgSort`
 
 A *sort*, which is essentially a type constructor without arguments
 """
 @struct_hash_equal struct AlgSort
   ref::Reference
+end
+
+function AlgSort(c::Context, t::AlgTerm)
+  if t.head isa AbstractConstant
+    AlgSort(t.head.type.head)
+  else
+    binding = c[only(t.head)]
+    value = getvalue(binding)
+    if value isa AlgType
+      AlgSort(value.head)
+    elseif value isa AlgTermConstructor
+      AlgSort(value.type.head)
+    else
+      error("head of AlgTerm is not a term constructor or variable")
+    end
+  end
 end
 
 """
@@ -116,19 +137,19 @@ is composed of a list of judgments.
 const Judgment = Union{AlgTypeConstructor, AlgTermConstructor, AlgAxiom}
 
 """
-`ArgSorts`
+`AlgSorts`
 
 A description of the argument sorts for a term constructor, used to disambiguate
 multiple term constructors of the same name.
 """
-const ArgSorts = Vector{AlgSort}
+const AlgSorts = Vector{AlgSort}
 
 """
 `JudgmentBinding`
 
 A binding of a judgment to a name and possibly a signature.
 """
-const JudgmentBinding = Binding{Judgment, Union{ArgSorts, Nothing}}
+const JudgmentBinding = Binding{Judgment, Union{AlgSorts, Nothing}}
 
 """
 `GATSegment`
@@ -136,7 +157,7 @@ const JudgmentBinding = Binding{Judgment, Union{ArgSorts, Nothing}}
 A piece of a GAT, consisting of a scope that binds judgments to names, possibly
 disambiguated by argument sorts.
 """
-const GATSegment = Scope{Judgment, Union{ArgSorts, Nothing}}
+const GATSegment = Scope{Judgment, Union{AlgSorts, Nothing}}
 
 """
 `GAT`
