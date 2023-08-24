@@ -43,4 +43,28 @@ seg = fromexpr(c, seg_expr, GATSegment)
 
 @test toexpr(c, seg) == seg_expr
 
+O, H, i, cmp = idents(seg, 1:4)
+
+# Extend seg with a context of (A: Ob)
+sortscope = Scope([Binding{AlgType}(:A, Set([:A]), AlgType(O))])
+A = ident(sortscope, :A)
+
+ss = ScopeList(Scope[seg, sortscope])
+sortcheck(ss, AlgTerm(A))
+
+# Good term and bad term
+ida = fromexpr(ss, :(id(A)), AlgTerm)
+iida = AlgTerm(i,[AlgTerm(i, [AlgTerm(A)])])
+
+@test AlgSort(ss, ida) == AlgSort(H)
+@test sortcheck(ss, ida) == AlgSort(H)
+@test AlgSort(ss, iida) == AlgSort(H)
+@test_throws Exception sortcheck(ss, iida)
+
+# Good type and bad type
+haa = AlgType(H,[AlgTerm(A),AlgTerm(A)])
+haia = AlgType(H,[AlgTerm(A),ida])
+@test sortcheck(ss, haa)
+@test_throws Exception sortcheck(ss, haia)
+
 end

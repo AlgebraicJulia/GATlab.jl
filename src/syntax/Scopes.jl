@@ -325,21 +325,14 @@ function ident end
 Base.lastindex(c::Context) = length(c)
 Base.collect(c::Context) = [c[i] for i in 1:length(c)]
 
-function make_name_dict(bindings::AbstractVector{Binding{T, Sig}}) where {T, Sig}
-  d = Dict{Symbol, Dict{Sig, Int}}()
-  for (i, binding) in enumerate(bindings)
-    for name in getaliases(binding)
-      if !(name ∈ keys(d))
-        d[name] = Dict{Sig, Int}()
-      end
-      sig = getsignature(binding)
-      if sig ∈ keys(d[name])
-        error("already defined $name with signature $sig")
-      end
-      d[name][sig] = i
-    end
+"""Derive reference indexing given an implementation of `getindex(ctx, ident)`"""
+function Base.getindex(s::Context, ref::Reference)
+  x = s[first(ref)]
+  if !isnothing(rest(ref))
+    getvalue(x)[rest(ref)]
+  else
+    x
   end
-  d
 end
 
 """
@@ -372,6 +365,22 @@ end
 Scope{T, Sig}() where {T, Sig} = Scope{T, Sig}(newscopetag(), Binding{T, Sig}[], Dict{Symbol, Dict{Sig, Int}}())
 
 function Scope(bindings::Vector{Binding{T, Sig}}; tag=newscopetag()) where {T, Sig}
+  function make_name_dict(bindings::AbstractVector{Binding{T, Sig}}) where {T, Sig}
+    d = Dict{Symbol, Dict{Sig, Int}}()
+    for (i, binding) in enumerate(bindings)
+      for name in getaliases(binding)
+        if !(name ∈ keys(d))
+          d[name] = Dict{Sig, Int}()
+        end
+        sig = getsignature(binding)
+        if sig ∈ keys(d[name])
+          error("already defined $name with signature $sig")
+        end
+        d[name][sig] = i
+      end
+    end
+    d
+  end
   Scope{T, Sig}(tag, bindings, make_name_dict(bindings))
 end
 
@@ -407,15 +416,6 @@ end
 Base.getindex(s::Scope, x) = s.bindings[getlevel(s, x)]
 
 Base.getindex(s::Scope, name::Symbol, sig) = s.bindings[getlevel(s, name, sig)]
-
-function Base.getindex(s::Scope, ref::Reference)
-  x = s[first(ref)]
-  if !isnothing(rest(ref))
-    getvalue(x)[rest(ref)]
-  else
-    x
-  end
-end
 
 Base.iterate(s::Scope) = iterate(s.bindings)
 Base.iterate(s::Scope, i) = iterate(s.bindings, i)
