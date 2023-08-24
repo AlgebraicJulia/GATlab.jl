@@ -34,4 +34,33 @@ c = ScopeList([scope, scope′])
 @test_throws Exception fromexpr(ScopeList(), quote end, AlgTerm)
 @test_throws Exception fromexpr(ScopeList(), 1, AlgType)
 
+term_constructor_expr = :(compose(f::x(a,b), g::y(b,a)) :: Y ⊣ [a::X, b::Y])
+
+term_constructor = fromexpr(c, term_constructor_expr, JudgmentBinding)
+
+@test toexpr(c, term_constructor) == term_constructor_expr
+
+type_constructor_expr = :(Hom(dom::X(foo), codom::Y) :: TYPE ⊣ [foo::Y])
+
+type_constructor = fromexpr(c, type_constructor_expr, JudgmentBinding)
+
+@test toexpr(c, type_constructor) == type_constructor_expr
+
+axiom_expr = :((X(x,a) == Y(y,b)) :: Y ⊣ [a::X, b::Y])
+
+axiom = fromexpr(c, axiom_expr, JudgmentBinding)
+
+@test toexpr(c, axiom) == axiom_expr
+
+seg_expr = quote
+  Ob :: TYPE
+  Hom(dom::Ob, codom::Ob) :: TYPE
+  id(a::Ob) :: Hom(a,a)
+  compose(f::Hom(a, b), g::Hom(b, c)) :: Hom(a, c) ⊣ [a::Ob, b::Ob, c::Ob]
+end
+
+seg = fromexpr(c, seg_expr, GATSegment)
+
+@test toexpr(c, seg) == seg_expr
+
 end

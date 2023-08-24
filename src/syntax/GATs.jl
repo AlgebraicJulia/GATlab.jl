@@ -1,5 +1,8 @@
 module GATs
-export AlgTerm, AlgType, Constant, AlgTermConstructor, AlgTypeConstructor, AlgAxiom, GAT, GATSegment
+export Constant, AlgTerm, AlgType,
+  TypeScope, AlgSort, ArgSorts,
+  AlgTermConstructor, AlgTypeConstructor, AlgAxiom,
+  JudgmentBinding, GATSegment, GAT
 
 using ..Scopes
 
@@ -23,11 +26,12 @@ One syntax tree to rule all the terms.
 @struct_hash_equal struct AlgTerm
   head::Union{Reference, Constant}
   args::Vector{AlgTerm}
+  function AlgTerm(head::Union{Reference, Constant}, args::Vector{AlgTerm}=EMPTY_ARGS)
+    new(head, args)
+  end
 end
 
 const EMPTY_ARGS = AlgTerm[]
-
-AlgTerm(head::Union{Reference, Constant}) = AlgTerm(head, EMPTY_ARGS)
 
 AlgTerm(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgTerm(Reference(head), args)
 
@@ -39,7 +43,12 @@ One syntax tree to rule all the types.
 @struct_hash_equal struct AlgType
   head::Reference
   args::Vector{AlgTerm}
+  function AlgType(head::Reference, args::Vector{AlgTerm}=EMPTY_ARGS)
+    new(head, args)
+  end
 end
+
+AlgType(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgTerm(Reference(head), args)
 
 """
 `AlgSort`
@@ -72,7 +81,8 @@ const SortScope = Scope{AlgSort, Nothing}
 A declaration of a type constructor
 """
 @struct_hash_equal struct AlgTypeConstructor
-  args::SortScope
+  localcontext::TypeScope
+  args::TypeScope
 end
 
 """
@@ -112,6 +122,13 @@ A description of the argument sorts for a term constructor, used to disambiguate
 multiple term constructors of the same name.
 """
 const ArgSorts = Vector{AlgSort}
+
+"""
+`JudgmentBinding`
+
+A binding of a judgment to a name and possibly a signature.
+"""
+const JudgmentBinding = Binding{Judgment, Union{ArgSorts, Nothing}}
 
 """
 `GATSegment`

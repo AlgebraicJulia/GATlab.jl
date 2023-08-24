@@ -84,7 +84,7 @@ function toexpr(c::Context, term::AlgTerm)
     if isempty(term.args)
       toexpr(c, term.head)
     else
-      Expr(:call, toexpr(c, term.head), toexpr.(Ref(c), term.args))
+      Expr(:call, toexpr(c, term.head), toexpr.(Ref(c), term.args)...)
     end
   end
 end
@@ -103,7 +103,7 @@ function toexpr(c::Context, type::AlgType)
   if isempty(type.args)
     toexpr(c, type.head)
   else
-    Expr(:call, toexpr(c, type.head), toexpr.(Ref(c), type.args))
+    Expr(:call, toexpr(c, type.head), toexpr.(Ref(c), type.args)...)
   end
 end
 
@@ -114,6 +114,135 @@ function fromexpr(c::Context, e, ::Type{AlgType})
       AlgType(fromexpr(c, head, Reference), fromexpr.(Ref(c), args, Ref(AlgTerm)))
     _ => error("could not parse AlgType from $e")
   end
+end
+
+function bindingexprs(c::Context, s::Scope)
+  c′ = AppendScope(c, s)
+  [Expr(:(::), nameof(b), toexpr(c′, getvalue(b))) for b in s]
+end
+
+function toexpr(c::Context, binding::JudgmentBinding)
+  judgment = getvalue(binding)
+  name = nameof(binding)
+  c′ = AppendScope(c, judgment.localcontext)
+  head = if judgment isa Union{AlgTypeConstructor, AlgTermConstructor}
+    if !isempty(judgment.args)
+        Expr(:call, name, bindingexprs(c′, judgment.args)...)
+    else
+        name
+    end
+  else
+    Expr(:call, :(==), toexpr(c′, judgment.equands[1]), toexpr(c′, judgment.equands[2]))
+  end
+  c″ = judgment isa AlgTermConstructor ? AppendScope(c′, judgment.args) : c′
+  headtyped = Expr(:(::), head, judgment isa AlgTypeConstructor ? :TYPE : toexpr(c″, judgment.type))
+  if !isempty(judgment.localcontext)
+    Expr(:call, :(⊣), headtyped, Expr(:vect, bindingexprs(c, judgment.localcontext)...))
+  else
+    headtyped
+  end
+end
+
+"""
+@theory ThLawlessCat <: ThGraph begin
+  compose(f::Hom(a,b), g::Hom(b,c))::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob]
+  @op begin
+    (⋅) := compose
+  end
+end
+assoc := ((f ⋅ g) ⋅ h) == (f ⋅ (g ⋅ h)) :: Hom(a,d) ⊣ [a::Ob, b::Ob, c::Ob, d::Ob]
+otimes(a::Hom(X,Y),b::Hom(P,Q)) ⊣ [(X,Y,P,Q)::Ob]
+"""
+
+function fromexpr(c::Context, e, ::Type{Binding{AlgType, Nothing}})
+  @match e begin
+    Expr(:(::), name::Symbol, type_expr) =>
+      Binding{AlgType, Nothing}(name, Set([name]), fromexpr(c, type_expr, AlgType))
+    _ => error("could not parse binding of name to type from $e")
+  end
+end
+
+function parsetypescope(c::Context, exprs::AbstractVector)
+  scope = TypeScope()
+  c′ = AppendScope(c, scope)
+  for expr in exprs
+    binding = fromexpr(c′, expr, Binding{AlgType, Nothing})
+    push!(scope, binding)
+  end
+  scope
+end
+
+function fromexpr(c::Context, e, ::Type{JudgmentBinding})
+  (binding, localcontext) = @match e begin
+    Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
+    e => (e, TypeScope())
+  end
+
+  c′ = AppendScope(c, localcontext)
+  
+  (head, type_expr) = @match binding begin
+    Expr(:(::), head, type_expr) => (head, type_expr)
+    _ => error("failed to parse binding of judgment $binding")
+  end
+
+  @match head begin
+    Expr(:call, :(==), lhs_expr, rhs_expr) => begin
+      equands = fromexpr.(Ref(c′), [lhs_expr, rhs_expr], Ref(AlgTerm))
+      type = fromexpr(c′, type_expr, AlgType)
+      axiom = AlgAxiom(localcontext, type, equands)
+      JudgmentBinding(nothing, Set{Symbol}(), axiom)
+    end
+    _ => begin
+      (name, arglist) = @match head begin
+        Expr(:call, name, args...) => (name, args)
+        name::Symbol => (name, [])
+        _ => error("failed to parse head of term constructor $call")
+      end
+      args = parsetypescope(c′, arglist)
+      @match type_expr begin
+        :TYPE => begin
+          typecon = AlgTypeConstructor(localcontext, args)
+          JudgmentBinding(name, Set([name]), typecon)
+        end
+        _ => begin
+          c″ = AppendScope(c′, args)
+          type = fromexpr(c″, type_expr, AlgType)
+          termcon = AlgTermConstructor(localcontext, args, type)
+          argsorts = map(type -> AlgSort(type.head), getvalue.(args))
+          JudgmentBinding(name, Set([name]), termcon, argsorts)
+        end
+      end
+    end
+  end
+end
+
+function toexpr(c::Context, seg::GATSegment)
+  c′ = AppendScope(c, seg)
+  e = Expr(:block)
+  for binding in seg
+    if !isnothing(getline(binding))
+      push!(e.args, getline(binding))
+    end
+    push!(e.args, toexpr(c′, binding))
+  end
+  e
+end
+
+function fromexpr(c::Context, e, ::Type{GATSegment})
+  seg = GATSegment()
+  e.head == :block || error("expected a block to pars into a GATSegment, got: $e")
+  c′ = AppendScope(c, seg)
+  linenumber = nothing
+  for line in e.args
+    @match line begin
+      l::LineNumberNode => (linenumber = l)
+      _ => begin
+        binding = setline(fromexpr(c′, line, JudgmentBinding), linenumber)
+        push!(seg, binding)
+      end
+    end
+  end
+  seg
 end
 
 end
