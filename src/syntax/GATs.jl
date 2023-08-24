@@ -2,7 +2,7 @@ module GATs
 export Constant, AlgTerm, AlgType,
   TypeScope, AlgSort, AlgSorts,
   AlgTermConstructor, AlgTypeConstructor, AlgAxiom,
-  JudgmentBinding, GATSegment, GAT
+  JudgmentBinding, GATSegment, GAT, sortcheck
 
 using ..Scopes
 
@@ -17,6 +17,7 @@ abstract type AbstractConstant end
 `AlgTerm`
 
 One syntax tree to rule all the terms.
+Head reference can be a AlgTermConstructor, Binding{AlgType, Nothing}, AbstractConstant
 """
 @struct_hash_equal struct AlgTerm
   head::Union{Reference, AbstractConstant}
@@ -34,6 +35,7 @@ AlgTerm(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgTerm(Reference(head)
 `AlgType`
 
 One syntax tree to rule all the types.
+`head` must be reference to a `AlgTypeConstructor`
 """
 @struct_hash_equal struct AlgType
   head::Reference
@@ -43,7 +45,7 @@ One syntax tree to rule all the types.
   end
 end
 
-AlgType(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgTerm(Reference(head), args)
+AlgType(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgType(Reference(head), args)
 
 """
 `Constant`
@@ -59,10 +61,13 @@ end
 `AlgSort`
 
 A *sort*, which is essentially a type constructor without arguments
+`ref` must be reference to a `AlgTypeConstructor`
 """
 @struct_hash_equal struct AlgSort
   ref::Reference
 end
+
+AlgSort(i::Ident) = AlgSort(Reference(i))
 
 function AlgSort(c::Context, t::AlgTerm)
   if t.head isa AbstractConstant
@@ -75,7 +80,7 @@ function AlgSort(c::Context, t::AlgTerm)
     elseif value isa AlgTermConstructor
       AlgSort(value.type.head)
     else
-      error("head of AlgTerm is not a term constructor or variable")
+      error("head of AlgTerm $value is not a term constructor or variable")
     end
   end
 end
@@ -95,6 +100,42 @@ A scope where variables are assigned to `AlgSorts`s, and no overloading is
 permitted.
 """
 const SortScope = Scope{AlgSort, Nothing}
+
+"""`sortcheck(ctx::Context, t::AlgTerm)`
+
+Throw an error if a the head of an AlgTerm (which refers to a term constructor)
+has arguments of the wrong sort. Returns the sort of the term.
+"""
+function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
+  if t.head isa Reference
+    ref = ctx[t.head] |> getvalue
+    if ref isa AlgType
+      isempty(t.args) || error("Cannot apply a variable to arguments: $t")
+    elseif ref isa AlgTermConstructor
+      argsorts = sortcheck.(Ref(ctx), t.args)
+      argsorts == AlgSort.([a.head for a in getvalue.(ref.args)]) || error("Sorts don't match")
+    else 
+      error("Unexpected reference type $ref for AlgTerm $t")
+    end
+  elseif t.head isa Constant
+  else 
+    error("Unexpected head for AlgTerm")
+  end
+  return AlgSort(ctx, t)
+end
+
+"""`sortcheck(ctx::Context, t::AlgType)`
+
+Throw an error if a the head of an AlgType (which refers to a type constructor)
+has arguments of the wrong sort.
+"""
+function sortcheck(ctx::Context, t::AlgType)
+  ref = ctx[t.head] |> getvalue
+  ref isa AlgTypeConstructor || error("AlgType head must refer to AlgTypeConstructor: $ref")
+  argsorts = sortcheck.(Ref(ctx), t.args)
+  expected = AlgSort.([a.head for a in getvalue.(ref.args)])
+  argsorts == expected || error("Sorts don't match: $argsorts != $expected")
+end
 
 """
 `AlgTypeConstructor`
@@ -167,6 +208,8 @@ of `GATSegment`s, but there is also some caching to make access faster.
 Specifically, there is a dictionary to map ScopeTag to position in the list of
 segments, and there are lists of all of the identifiers for term constructors,
 type constructors, and axioms so that they can be iterated through faster.
+
+GATs allow overloading but not shadowing.
 """
 struct GAT <: Context
   name::Symbol
