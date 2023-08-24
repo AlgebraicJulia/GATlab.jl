@@ -5,7 +5,7 @@ export
   Ident, gettag, getlevel, isnamed,
   Reference, rest,
   Binding, getaliases, getvalue, getsignature, getline, setline,
-  Scope, ident, idents,
+  Scope, ident, idents, valtype, sigtype,
   Context, scopelevel,
   ScopeList, AppendScope
 
@@ -196,7 +196,15 @@ function Reference(first::Ident, rest...)
 end
 
 Base.first(p::Reference) = p.first
+
 Base.rest(p::Reference) = p.rest
+
+function Base.only(p::Reference)
+  if !isnothing(rest(p))
+    throw(ArgumentError("Reference has multiple elements, must contain exactly 1 element"))
+  end
+  first(p)
+end
 
 function Base.show(io::IO, p::Reference)
   cur = p
@@ -431,7 +439,7 @@ end
 ident(s::Scope, name::Symbol; sig=nothing) =
   Ident(gettag(s), getlevel(s, name, sig), name)
 
-function ident(s::Scope, level::Int, name=nothing)
+function ident(s::Scope, level::Int, name=nothing; sig=nothing)
   binding = s.bindings[level]
   isnothing(name) || name ∈ binding.aliases || error("invalid alias $name for $binding")
   Ident(gettag(s), level, isnothing(name) ? nameof(binding) : name)
@@ -452,7 +460,9 @@ idents(s::Scope, levels::AbstractVector{Int}, names::AbstractVector{Symbol}) =
 
 idents(s::Scope, pairs::AbstractVector{Tuple{Int, Symbol}}) =
   idents(s, first.(pairs), second.(pairs))
-  
+
+valtype(s::Scope{T}) where {T} = T
+sigtype(s::Scope{T, Sig}) where {T, Sig} = Sig
 
 struct ScopeList <: Context
   scopes::Vector{Scope}
@@ -499,7 +509,7 @@ end
 
 Base.length(c::AppendScope) = length(c.context) + 1
 Base.getindex(c::AppendScope, i::Int) = i == length(c) ? c.last : c.context[i]
-Base.getindex(c::AppendScope, x::Ident) = gettag(i) == gettag(c.last) ? c.last[x] : c.context[x]
+Base.getindex(c::AppendScope, x::Ident) = gettag(x) == gettag(c.last) ? c.last[x] : c.context[x]
 
 function ident(c::AppendScope, name::Symbol; sig=nothing, scopelevel::Union{Int, Nothing}=nothing)
   if !isnothing(scopelevel)
