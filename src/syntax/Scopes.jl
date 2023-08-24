@@ -4,10 +4,10 @@ export
   ScopeTagError,
   Ident, gettag, getlevel, isnamed,
   Reference, rest,
-  Binding, getaliases, getvalue, getsignature,
+  Binding, getaliases, getvalue, getsignature, getline, setline,
   Scope, ident, idents,
   Context, scopelevel,
-  ScopeList
+  ScopeList, AppendScope
 
 using UUIDs
 using MLStyle
@@ -234,25 +234,28 @@ rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, p::Reference) =
   aliases::Set{Symbol}
   value::T
   sig::Sig
+  line::Union{LineNumberNode, Nothing}
   function Binding{T, Sig}(
     primary::Union{Symbol, Nothing},
     aliases::Set{Symbol},
     value::T,
     sig::Sig=nothing,
+    line::Union{LineNumberNode, Nothing}=nothing
   ) where {T, Sig}
     isnothing(primary) || primary ∈ aliases ||
       error("if the primary is not nothing then it must be contained in aliases")
     !isnothing(primary) || isempty(aliases) ||
       error("if aliases is nonempty, the primary must be set")
-    new{T, Sig}(primary, aliases, value, sig)
+    new{T, Sig}(primary, aliases, value, sig, line)
   end
   function Binding{T}(
     primary::Union{Symbol, Nothing},
     aliases::Set{Symbol},
     value::T,
     sig::Sig=nothing,
+    line::Union{LineNumberNode, Nothing}=nothing
   ) where {T, Sig}
-    Binding{T,Sig}(primary, aliases, value, sig)
+    Binding{T,Sig}(primary, aliases, value, sig, line)
   end
 end
 
@@ -284,6 +287,11 @@ retag(replacements::Dict{ScopeTag, ScopeTag}, binding::Binding{T, Sig}) where {T
     retag(replacements, getsignature(binding))
   )
 
+getline(b::Binding) = b.line
+
+setline(b::Binding{T, Sig}, line::Union{LineNumberNode, Nothing}) where {T, Sig} =
+  Binding{T, Sig}(b.primary, b.aliases, b.value, b.sig, line)
+
 """
 A `Context` is anything which contains an ordered list of scopes.
 
@@ -292,7 +300,6 @@ A `Context` is anything which contains an ordered list of scopes.
 - `ident`
 - `Base.getindex(c::Context, x::Ident) -> Binding`
 - `Base.getindex(c::Context, i::Int) -> Scope`
-- `Base.collect(c::Context) -> AbstractVector{Scope}`
 - `scopelevel(c::Context, name::Symbol) -> Union{Int, Nothing}`
 - `scopelevel(c::Context, tag::ScopeTag) -> Union{Int, Nothing}`
 - `Base.length`
@@ -307,6 +314,8 @@ abstract type Context end
 """
 function ident end 
 
+Base.lastindex(c::Context) = length(c)
+Base.collect(c::Context) = [c[i] for i in 1:length(c)]
 
 function make_name_dict(bindings::AbstractVector{Binding{T, Sig}}) where {T, Sig}
   d = Dict{Symbol, Dict{Sig, Int}}()
@@ -352,6 +361,12 @@ struct Scope{T, Sig}
   names::Dict{Symbol, Dict{Sig, Int}}
 end
 
+Scope{T, Sig}() where {T, Sig} = Scope{T, Sig}(newscopetag(), Binding{T, Sig}[], Dict{Symbol, Dict{Sig, Int}}())
+
+function Scope(bindings::Vector{Binding{T, Sig}}; tag=newscopetag()) where {T, Sig}
+  Scope{T, Sig}(tag, bindings, make_name_dict(bindings))
+end
+
 function Base.show(io::IO, x::Scope)
   print(io, "{")
   for (i, b) in enumerate(x.bindings)
@@ -361,11 +376,6 @@ function Base.show(io::IO, x::Scope)
     end
   end
   print(io, "}")
-end
-
-
-function Scope(bindings::Vector{Binding{T, Sig}}; tag=newscopetag()) where {T, Sig}
-  Scope{T, Sig}(tag, bindings, make_name_dict(bindings))
 end
 
 gettag(s::Scope) = s.tag
@@ -401,6 +411,22 @@ end
 
 Base.iterate(s::Scope) = iterate(s.bindings)
 Base.iterate(s::Scope, i) = iterate(s.bindings, i)
+
+Base.length(s::Scope) = length(s.bindings)
+
+function Base.push!(s::Scope{T, Sig}, b::Binding{T,Sig}) where {T, Sig}
+  sig = getsignature(b)
+  for name in getaliases(b)
+    if name ∈ keys(s.names) && sig ∈ keys(s.names[name])
+      error("$name already bound with signature $sig in $s")
+    end
+    if name ∉ keys(s.names)
+      s.names[name] = Dict{Sig, Int}()
+    end
+    s.names[name][sig] = length(s.bindings) + 1
+  end
+  push!(s.bindings, b)
+end
 
 ident(s::Scope, name::Symbol; sig=nothing) =
   Ident(gettag(s), getlevel(s, name, sig), name)
@@ -453,7 +479,6 @@ scopelevel(c::ScopeList, t::ScopeTag) = c.taglookup[t]
 scopelevel(c::ScopeList, s::Symbol) = c.namelookup[s]
 
 Base.length(c::ScopeList) = length(c.scopes)
-Base.lastindex(c::ScopeList) = length(c)
 Base.getindex(c::ScopeList, x::Ident) = c[scopelevel(c, gettag(x))][x]
 Base.getindex(c::ScopeList, i::Int) = getscopes(c)[i]
 
@@ -464,8 +489,50 @@ end
 
 function ident(c::ScopeList, name::Symbol; sig=nothing, scopelevel::Union{Int, Nothing}=nothing)
   scope = c[isnothing(scopelevel) ? c.namelookup[name] : scopelevel]
-  ident(scope, name; sig=sig)
+  ident(scope, name; sig)
 end
 
+struct AppendScope <: Context
+  context::Context
+  last::Scope
+end
+
+Base.length(c::AppendScope) = length(c.context) + 1
+Base.getindex(c::AppendScope, i::Int) = i == length(c) ? c.last : c.context[i]
+Base.getindex(c::AppendScope, x::Ident) = gettag(i) == gettag(c.last) ? c.last[x] : c.context[x]
+
+function ident(c::AppendScope, name::Symbol; sig=nothing, scopelevel::Union{Int, Nothing}=nothing)
+  if !isnothing(scopelevel)
+    if scopelevel == length(c)
+      ident(c.last, name; sig)
+    else
+      ident(c.context, name; sig, scopelevel)
+    end
+  else
+    if name ∈ keys(c.last.names)
+      ident(c.last, name; sig)
+    else
+      ident(c.context, name; sig)
+    end
+  end
+end
+
+function ident(c::AppendScope, level::Int; name=nothing, scopelevel::Union{Int, Nothing}=nothing)
+  if scopelevel == length(c)
+    ident(c.last, level; name)
+  else 
+    ident(c.context, level; name, scopelevel)
+  end 
+end
+
+scopelevel(c::AppendScope, name::Symbol) = 
+  if name ∈ keys(c.last.names)
+    length(c)
+  else 
+    scopelevel(c.context, name)
+  end
+  
+scopelevel(c::AppendScope, tag::ScopeTag) = gettag(c.last) == tag ? length(c) : scopelevel(c.context, tag)
+Base.contains(c::AppendScope, tag::ScopeTag) = gettag(c.last) == tag || tag ∈ c
 
 end # module
