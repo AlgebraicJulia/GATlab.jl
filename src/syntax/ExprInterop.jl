@@ -93,7 +93,7 @@ function fromexpr(c::Context, e, ::Type{AlgTerm})
   @match e begin
     s::Symbol => begin
       scope = c[scopelevel(c, s)]
-      ref = if sigtype(scope) == AlgSorts
+      ref = if sigtype(scope) == Union{Nothing, AlgSorts}
         fromexpr(c, s, Reference; sig=AlgSort[])
       else
         fromexpr(c, s, Reference)
@@ -101,8 +101,8 @@ function fromexpr(c::Context, e, ::Type{AlgTerm})
       AlgTerm(ref)
     end
     Expr(:call, head, argexprs...) => begin
-      args = fromexpr.(Ref(c), argexprs, Ref(AlgTerm))
-      argsorts = AlgSort.(Ref(c), args)
+      args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
+      argsorts = AlgSorts(AlgSort.(Ref(c), args))
       AlgTerm(fromexpr(c, head, Reference; sig=argsorts), args)
     end
     e::Expr => error("could not parse AlgTerm from $e")
@@ -177,14 +177,47 @@ function parsetypescope(c::Context, exprs::AbstractVector)
   scope = TypeScope()
   c′ = AppendScope(c, scope)
   for expr in exprs
-    binding = fromexpr(c′, expr, Binding{AlgType, Nothing})
-    push!(scope, binding)
+    binding_exprs = @match expr begin
+      a::Symbol => [:($a :: default)]
+      Expr(:tuple, names...) => [:($name :: default) for name in names]
+      Expr(:(::), Expr(:tuple, names...), T) => [:($name :: $T) for name in names]
+      :($a :: $T) => [expr]
+      _ => error("invalid binding expression $expr")
+    end
+    for binding_expr in binding_exprs
+      binding = fromexpr(c′, binding_expr, Binding{AlgType, Nothing})
+      push!(scope, binding)
+    end
   end
   scope
 end
 
+function normalize_decl(e)
+  @match e begin
+    :($name := $lhs == $rhs :: $typ ⊣ $ctx) => :((($name := ($lhs == $rhs)) :: $typ) ⊣ $ctx)
+    :($lhs == $rhs :: $typ ⊣ $ctx) => :((($lhs == $rhs) :: $typ) ⊣ $ctx)
+    :(($lhs == $rhs :: $typ) ⊣ $ctx) => :((($lhs == $rhs) :: $typ) ⊣ $ctx)
+    :($lhs == $rhs ⊣ $ctx) => :((($lhs == $rhs) :: default) ⊣ $ctx)
+    :($trmcon :: $typ ⊣ $ctx) => :(($trmcon :: $typ) ⊣ $ctx)
+    :($trmcon ⊣ $ctx) => :(($trmcon :: default) ⊣ $ctx)
+    e => e
+  end
+end
+
+function parseaxiom(c::Context, localcontext, type_expr, e; name=nothing)
+  @match e begin
+    Expr(:call, :(==), lhs_expr, rhs_expr) => begin
+      equands = fromexpr.(Ref(c), [lhs_expr, rhs_expr], Ref(AlgTerm))
+      type = fromexpr(c, type_expr, AlgType)
+      axiom = AlgAxiom(localcontext, type, equands)
+      JudgmentBinding(name, isnothing(name) ? Set{Symbol}() : Set([name]), axiom)
+    end
+    _ => error("failed to parse equation from $e")
+  end
+end
+
 function fromexpr(c::Context, e, ::Type{JudgmentBinding})
-  (binding, localcontext) = @match e begin
+  (binding, localcontext) = @match normalize_decl(e) begin
     Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
     e => (e, TypeScope())
   end
@@ -193,16 +226,12 @@ function fromexpr(c::Context, e, ::Type{JudgmentBinding})
   
   (head, type_expr) = @match binding begin
     Expr(:(::), head, type_expr) => (head, type_expr)
-    _ => error("failed to parse binding of judgment $binding")
+    _ => (binding, :default)
   end
 
   @match head begin
-    Expr(:call, :(==), lhs_expr, rhs_expr) => begin
-      equands = fromexpr.(Ref(c′), [lhs_expr, rhs_expr], Ref(AlgTerm))
-      type = fromexpr(c′, type_expr, AlgType)
-      axiom = AlgAxiom(localcontext, type, equands)
-      JudgmentBinding(nothing, Set{Symbol}(), axiom)
-    end
+    Expr(:(:=), name, equation) => parseaxiom(c′, localcontext, type_expr, equation; name)
+    Expr(:call, :(==), _, _) => parseaxiom(c′, localcontext, type_expr, head)
     _ => begin
       (name, arglist) = @match head begin
         Expr(:call, name, args...) => (name, args)
@@ -247,6 +276,19 @@ function fromexpr(c::Context, e, ::Type{GATSegment})
   for line in e.args
     @match line begin
       l::LineNumberNode => (linenumber = l)
+      Expr(:macrocall, var"@op", _, aliasexpr) => begin
+        lines = @match aliasexpr begin
+          Expr(:block, lines...) => lines
+          _ => [aliasexpr]
+        end
+        for line in lines
+          @match line begin
+            _::LineNumberNode => nothing
+            :($alias := $name) => addalias!(seg, name, alias)
+            _ => error("could not match @op line $line")
+          end
+        end
+      end
       _ => begin
         binding = setline(fromexpr(c′, line, JudgmentBinding), linenumber)
         push!(seg, binding)

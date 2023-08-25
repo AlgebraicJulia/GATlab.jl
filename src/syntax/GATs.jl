@@ -200,14 +200,22 @@ disambiguated by argument sorts.
 """
 const GATSegment = Scope{Judgment, Union{AlgSorts, Nothing}}
 
-function allnames(seg::GATSegment)
+function allnames(seg::GATSegment; aliases=false)
   names = Symbol[]
   for binding in seg
     judgment = getvalue(binding)
     if judgment isa AlgTermConstructor
-      push!(names, nameof(binding))
+      if aliases
+        append!(names, getaliases(binding))
+      else
+        push!(names, nameof(binding))
+      end
     elseif judgment isa AlgTypeConstructor
-      push!(names, nameof(binding))
+      if aliases
+        append!(names, getaliases(binding))
+      else
+        push!(names, nameof(binding))
+      end
       for argbinding in judgment.args
         push!(names, nameof(argbinding))
       end
@@ -279,8 +287,8 @@ Scopes.ident(c::GAT, level::Int; name=nothing, scopelevel::Union{Int, Nothing}=n
 Scopes.ident(c::GAT, name::Symbol; sig=nothing, scopelevel::Union{Int, Nothing}=nothing) =
   ident(c.segments, name; sig, scopelevel)
 
-function allnames(theory::GAT)
-  vcat(allnames.(theory.segments)...)
+function allnames(theory::GAT; aliases=false)
+  vcat(allnames.(theory.segments; aliases)...)
 end
 
 

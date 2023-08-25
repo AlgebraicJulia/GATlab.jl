@@ -2,7 +2,7 @@ module ModelInterface
 
 using ...Syntax
 
-export Model, checkvalidity, typarg, ap
+export Model, implements
 
 """
 `Model{Tup <: Tuple}`
