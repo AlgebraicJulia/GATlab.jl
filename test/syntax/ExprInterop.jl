@@ -49,7 +49,7 @@ O, H, i, cmp = idents(seg, 1:4)
 sortscope = Scope([Binding{AlgType}(:A, Set([:A]), AlgType(O))])
 A = ident(sortscope, :A)
 
-ss = ScopeList(Scope[seg, sortscope])
+ss = AppendScope(ScopeList([seg]), sortscope)
 sortcheck(ss, AlgTerm(A))
 
 # Good term and bad term

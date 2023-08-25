@@ -464,11 +464,11 @@ idents(s::Scope, pairs::AbstractVector{Tuple{Int, Symbol}}) =
 valtype(s::Scope{T}) where {T} = T
 sigtype(s::Scope{T, Sig}) where {T, Sig} = Sig
 
-struct ScopeList <: Context
-  scopes::Vector{Scope}
+struct ScopeList{T, Sig} <: Context
+  scopes::Vector{Scope{T,Sig}}
   taglookup::Dict{ScopeTag, Int}
   namelookup::Dict{Symbol, Int}
-  function ScopeList(scopes::Vector{<:Scope}=Scope[])
+  function ScopeList(scopes::Vector{Scope{T,Sig}}) where {T,Sig}
     taglookup = Dict{ScopeTag, Int}()
     namelookup = Dict{Symbol, Int}()
     for (i, s) in enumerate(scopes)
@@ -479,7 +479,7 @@ struct ScopeList <: Context
         end
       end 
     end
-    new(Vector{Scope}(scopes), taglookup, namelookup)
+    new{T, Sig}(scopes, taglookup, namelookup)
   end
 end
 

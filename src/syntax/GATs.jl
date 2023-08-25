@@ -2,7 +2,7 @@ module GATs
 export Constant, AlgTerm, AlgType,
   TypeScope, AlgSort, AlgSorts,
   AlgTermConstructor, AlgTypeConstructor, AlgAxiom,
-  JudgmentBinding, GATSegment, GAT, sortcheck
+  JudgmentBinding, GATSegment, GAT, sortcheck, allnames
 
 using ..Scopes
 
@@ -200,6 +200,22 @@ disambiguated by argument sorts.
 """
 const GATSegment = Scope{Judgment, Union{AlgSorts, Nothing}}
 
+function allnames(seg::GATSegment)
+  names = Symbol[]
+  for binding in seg
+    judgment = getvalue(binding)
+    if judgment isa AlgTermConstructor
+      push!(names, nameof(binding))
+    elseif judgment isa AlgTypeConstructor
+      push!(names, nameof(binding))
+      for argbinding in judgment.args
+        push!(names, nameof(argbinding))
+      end
+    end
+  end
+  names
+end
+
 """
 `GAT`
 
@@ -213,11 +229,59 @@ GATs allow overloading but not shadowing.
 """
 struct GAT <: Context
   name::Symbol
-  segments::Vector{GATSegment}
-  lookup::Dict{ScopeTag, Int}
+  segments::ScopeList{Judgment, Union{AlgSorts, Nothing}}
   termcons::Vector{Ident}
   typecons::Vector{Ident}
   axioms::Vector{Ident}
+  function GAT(name::Symbol, segments::Vector{GATSegment})
+    termcons = Ident[]
+    typecons = Ident[]
+    axioms = Ident[]
+    names = Set{Symbol}()
+    for segment in segments
+      if !isempty(intersect(keys(segment.names), names))
+        error("We do not permit shadowing of names between segments of a GAT")
+      end
+      union!(names, keys(segment.names))
+      for (i, binding) in enumerate(segment)
+        x = ident(segment, i)
+        judgment = getvalue(binding)
+        if judgment isa AlgTermConstructor
+          push!(termcons, x)
+        elseif judgment isa AlgTypeConstructor
+          push!(typecons, x)
+        else
+          push!(axioms, x)
+        end
+      end
+    end
+    new(name, ScopeList(segments), termcons, typecons, axioms)
+  end
+
+  # This could be faster, but it's not really worth worrying about
+  function GAT(name::Symbol, parent::GAT, newsegment::GATSegment)
+    GAT(name, [parent.segments.scopes..., newsegment])
+  end
 end
+
+Scopes.getscopes(c::GAT) = getscopes(c.segments)
+
+Scopes.scopelevel(c::GAT, t::ScopeTag) = scopelevel(c.segments, t)
+Scopes.scopelevel(c::GAT, s::Symbol) = scopelevel(c.segments, s)
+
+Base.length(c::GAT) = length(c.segments)
+Base.getindex(c::GAT, x::Ident) = getindex(c.segments, x)
+Base.getindex(c::GAT, i::Int) = getindex(c.segments, i)
+
+Scopes.ident(c::GAT, level::Int; name=nothing, scopelevel::Union{Int, Nothing}=nothing) =
+  ident(c.segments, level; name, scopelevel)
+
+Scopes.ident(c::GAT, name::Symbol; sig=nothing, scopelevel::Union{Int, Nothing}=nothing) =
+  ident(c.segments, name; sig, scopelevel)
+
+function allnames(theory::GAT)
+  vcat(allnames.(theory.segments)...)
+end
+
 
 end
