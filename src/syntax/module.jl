@@ -5,10 +5,12 @@ using Reexport
 include("Scopes.jl")
 include("GATs.jl")
 include("ExprInterop.jl")
+include("TheoryInterface.jl")
 
 @reexport using .Scopes
 @reexport using .GATs
 @reexport using .ExprInterop
+@reexport using .TheoryInterface
 
 # include("Theories.jl")
 # include("NestedContexts.jl")
