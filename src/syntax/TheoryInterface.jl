@@ -52,7 +52,7 @@ macro theory(head, body)
 
   modulelines = Any[]
 
-  push!(modulelines, :(export $(allnames(theory)...)))
+  push!(modulelines, :(export $(allnames(theory; aliases=true)...)))
 
   if !isnothing(parentname)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
@@ -65,6 +65,18 @@ macro theory(head, body)
   for name in allnames(newsegment)
     # TODO: also push an automatically generated docstring
     push!(modulelines, :(function $name end))
+  end
+
+  for binding in newsegment
+    bname = nameof(binding)
+    judgment = getvalue(binding)
+    if judgment isa Union{AlgTermConstructor, AlgTypeConstructor}
+      for alias in getaliases(binding)
+        if alias != bname
+          push!(modulelines, :(const $alias = $bname))
+        end
+      end
+    end
   end
 
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))

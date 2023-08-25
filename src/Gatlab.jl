@@ -13,7 +13,7 @@ include("syntax/module.jl")
 # include("dsl/module.jl")
 
 # # A "standard library" of GATs.
-# include("stdlib/module.jl")
+include("stdlib/module.jl")
 
 @reexport using .Util
 @reexport using .Syntax

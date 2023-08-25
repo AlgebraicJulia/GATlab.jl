@@ -2,68 +2,67 @@ module Algebra
 export ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing,
   ThCRing, ThRig, ThCRig, ThElementary
 
-using ....Dsl
-using ....Syntax: ThEmpty
+using ....Syntax
 
-@theory ThSet <: ThEmpty begin
+@theory ThSet begin
   default::TYPE
 end
 
 @theory ThMagma <: ThSet begin
-  (x ⋅ y) ⊣ [x,y]
+  (x ⋅ y) :: default
 end
 
 @theory ThSemiGroup <: ThMagma begin
-  (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x,y,z]
+  (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
 end
 
 @theory ThMonoid <: ThSemiGroup begin
-  e() ⊣ []
-  e() ⋅ x == x ⊣ [x]
-  x ⋅ e() == x ⊣ [x]
+  e :: default
+  e ⋅ x == x ⊣ [x]
+  x ⋅ e == x ⊣ [x]
 end
 
 @theory ThGroup <: ThMonoid begin
-  i(x) ⊣ [x]
+  i(x)
   i(x) ⋅ x == e ⊣ [x]
   x ⋅ i(x) == e ⊣ [x]
 end
 
 @theory ThCMonoid <: ThMonoid begin
-  a ⋅ b == b ⋅ a ⊣ [a,b]
+  a ⋅ b == b ⋅ a ⊣ [a, b]
 end
 
-@theory ThAb <: ThMonoid begin
-  using ThGroup
-  using ThCMonoid
-end
+# @theory ThAb <: ThMonoid begin
+#   using ThGroup
+#   using ThCMonoid
+# end
 
-@theory ThRing <: ThSet begin
-  using ThAb: ⋅ as +, i as -, e as zero
-  using ThMonoid: ⋅ as *, e as one
-  a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
-end
+# @theory ThRing <: ThSet begin
+#   using ThAb: ⋅ as +, i as -, e as zero
+#   using ThMonoid: ⋅ as *, e as one
+#   a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
+# end
 
-@theory ThCRing <: ThRing begin
-  a * b == b * a ⊣ [a,b]
-end
+# @theory ThCRing <: ThRing begin
+#   a * b == b * a ⊣ [a,b]
+# end
 
-@theory ThRig <: ThSet begin
-  using ThCMonoid: ⋅ as +, e as zero
-  using ThMonoid: ⋅ as *, e as one
-  a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
-end
+# @theory ThRig <: ThSet begin
+#   using ThCMonoid: ⋅ as +, e as zero
+#   using ThMonoid: ⋅ as *, e as one
+#   a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
+# end
 
-@theory ThCRig <: ThRig begin
-  a * b == b * a ⊣ [a,b]
-end
+# @theory ThCRig <: ThRig begin
+#   a * b == b * a ⊣ [a,b]
+# end
 
-@theory ThElementary <: ThCRing begin
-  sin(x) ⊣ [x]
-  cos(x) ⊣ [x]
-  tan(x) ⊣ [x]
-  exp(x) ⊣ [x]
-  sigmoid(x) ⊣ [x]
-end
+# @theory ThElementary <: ThCRing begin
+#   sin(x) ⊣ [x]
+#   cos(x) ⊣ [x]
+#   tan(x) ⊣ [x]
+#   exp(x) ⊣ [x]
+#   sigmoid(x) ⊣ [x]
+# end
 
 end

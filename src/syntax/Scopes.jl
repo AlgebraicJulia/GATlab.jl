@@ -5,7 +5,7 @@ export
   Ident, gettag, getlevel, isnamed,
   Reference, rest,
   Binding, getaliases, getvalue, getsignature, getline, setline,
-  Scope, ident, idents, valtype, sigtype,
+  Scope, ident, idents, valtype, sigtype, addalias!,
   Context, scopelevel,
   ScopeList, AppendScope
 
@@ -274,7 +274,7 @@ function Base.show(io::IO, b::Binding)
     join(io, filter(x -> x != nameof(b), getaliases(b)), ", ")
     print(io,")")
   end
-  print(io, isnothing(getsignature(b)) ? "" : "::$getsignature(b)")
+  print(io, isnothing(getsignature(b)) ? "" : "::$(getsignature(b))")
   print(io, " => $(repr(getvalue(b)))")
 end
 
@@ -398,7 +398,11 @@ end
 gettag(s::Scope) = s.tag
 
 getlevel(s::Scope{T,Sig}, name::Symbol, sig::Sig) where {T,Sig} =
-  s.names[name][sig]
+  if name ∈ keys(s.names) && sig ∈ keys(s.names[name])
+    s.names[name][sig]
+  else
+    error("name $name with signature $sig not found in $s")
+  end
 
 getlevel(s::Scope{T, Nothing}, name::Symbol) where {T} =
   s.names[name][nothing]
@@ -434,6 +438,14 @@ function Base.push!(s::Scope{T, Sig}, b::Binding{T,Sig}) where {T, Sig}
     s.names[name][sig] = length(s.bindings) + 1
   end
   push!(s.bindings, b)
+end
+
+function addalias!(s::Scope, name::Symbol, alias::Symbol)
+  name ∈ keys(s.names) || error("tried to add alias $alias to nonexisting name $name in scope $s")
+  for i in values(s.names[name])
+    push!(s.bindings[i].aliases, alias)
+  end
+  s.names[alias] = s.names[name]
 end
 
 ident(s::Scope, name::Symbol; sig=nothing) =
