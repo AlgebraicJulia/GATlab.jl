@@ -27,6 +27,7 @@ end
 @test ThCategory.dom([1,2,3]; model=FinSetC()) == 3
 @test_throws ErrorException ThCategory.codom([1,2,3]; model=FinSetC())
 
+@test implements(FinSetC(), ThCategory)
 
 # Todo: get things working where Ob and Hom are the same type (i.e. binding dict not monic)
 struct TypedFinSetC <: Model{Tuple{Vector{Int}, Vector{Int}}}
@@ -42,10 +43,11 @@ end
   munit() = 0
 end
 
+@test implements(FinSetC(), ThStrictMonCat)
+
 using .ThStrictMonCat
 
 @test mcompose(id(2; model=FinSetC()), id(2; model=FinSetC()); context=(;B₁=2), model=FinSetC()) ==
   id(4; model=FinSetC())
-
 
 end # module
