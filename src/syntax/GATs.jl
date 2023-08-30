@@ -1,8 +1,8 @@
 module GATs
 export Constant, AlgTerm, AlgType,
   TypeScope, AlgSort, AlgSorts,
-  AlgTermConstructor, AlgTypeConstructor, AlgAxiom,
-  JudgmentBinding, GATSegment, GAT, sortcheck, allnames
+  AlgTermConstructor, AlgTypeConstructor, AlgAxiom, sortsignature,
+  JudgmentBinding, GATSegment, GAT, sortcheck, allnames, sorts
 
 using ..Scopes
 
@@ -108,14 +108,14 @@ has arguments of the wrong sort. Returns the sort of the term.
 """
 function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
   if t.head isa Reference
-    ref = ctx[t.head] |> getvalue
-    if ref isa AlgType
+    judgment = ctx[t.head] |> getvalue
+    if judgment isa AlgType
       isempty(t.args) || error("Cannot apply a variable to arguments: $t")
-    elseif ref isa AlgTermConstructor
+    elseif judgment isa AlgTermConstructor
       argsorts = sortcheck.(Ref(ctx), t.args)
-      argsorts == AlgSort.([a.head for a in getvalue.(ref.args)]) || error("Sorts don't match")
+      argsorts == sortsignature(judgment) || error("Sorts don't match")
     else 
-      error("Unexpected reference type $ref for AlgTerm $t")
+      error("Unexpected judgment type $ref for AlgTerm $t")
     end
   elseif t.head isa Constant
   else 
@@ -157,6 +157,9 @@ A declaration of a term constructor
   args::TypeScope
   type::AlgType
 end
+
+sortsignature(tc::Union{AlgTypeConstructor, AlgTermConstructor}) =
+  AlgSort.([a.head for a in getvalue.(tc.args)])
 
 """
 `AlgAxiom`
@@ -283,6 +286,8 @@ struct GAT <: Context
     GAT(name, [parent.segments.scopes..., newsegment])
   end
 end
+
+sorts(theory::GAT) = AlgSort.(theory.typecons)
 
 Scopes.getscopes(c::GAT) = getscopes(c.segments)
 

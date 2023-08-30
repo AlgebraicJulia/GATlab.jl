@@ -106,137 +106,55 @@ end
 end
 ```
 
-TODO:
-
-- implement assuming each method is defined
-- default implementations for methods
-- handle aliases
-- handle @import
-- handle overload
 """
 macro instance(head, model, body)
+  # Parse the head of @instance to get theory and instance types
   (theory_module, instance_types) = @match head begin
     :($ThX{$(Ts...)}) => (ThX, Ts)
     _ => error("invalid syntax for head of @instance macro: $head")
   end
 
+
+  # Get the underlying theory
+  theory = macroexpand(__module__, :($theory_module.@theory))
+
+  # A dictionary to look up the Julia type of a type constructor from its name (an ident)
+  jltype_by_sort = Dict(zip(sorts(theory), instance_types)) # for type checking
+
+  # Get the model type that we are overloading for, or nothing if this is the
+  # default instance for `instance_types`
   model_type = @match model begin
     Expr(:tuple, Expr(:parameters, Expr(:(::), :model, model_type))) => model_type
+    nothing => nothing
     _ => error("invalid syntax for declaring model type: $model")
   end
 
-  theory = macroexpand(__module__, :($theory_module.@theory))
-
+  # Parse the body into functions defined here and functions defined elsewhere
   functions, ext_functions = parse_instance_body(body)
 
-  bindings = Dict(zip(theory.typecons, instance_types)) # for type checking
-  functions = typecheck_instance(theory, functions, bindings) # adds defaults too
+  # Checks that all the functions are defined with the correct types Add default
+  # methods for type constructors and type argument accessors if these methods
+  # are missing
+  typechecked_functions = typecheck_instance(theory, functions, ext_functions, jltype_by_sort)
+
+  # Adds keyword arguments to the functions, and qualifies them by
+  # `theory_module`, i.e. changes `Ob(x) = blah` to `ThCategory.Ob(x; model::M,
+  # context=nothing) = blah`
   qualified_functions = 
-    map(fun -> qualify_function(fun, theory_module, model_type), functions)
+    map(fun -> qualify_function(fun, theory_module, model_type), typechecked_functions)
 
   esc(Expr(:block,
     [generate_function(f) for f in qualified_functions]...
   ))
 end
 
-"""
-Throw error if missing a term constructor
-Provide default instances for type constructors and type arguments, which return true or error, respectively
-
-TODO: termcons/accessors need to be qualified by signature
-"""
-function typecheck_instance(theory::GAT, functions, binding)
-  typechecked = JuliaFunction[]
-  undefined_termcons = Set(theory.termcons)
-  undefined_typecons = Set(theory.typecons)
-  undefined_accessors = deepcopy(theory.accessors)
-  
-  inv_binding = DefaultDict{Expr0, Set{Ident}}(()->Set{Ident}()) 
-  for (k,v) in pairs(binding)
-    push!(inv_binding[v], k)
-  end
-
-  typecon_names = Set(nameof.(theory.typecons))
-  termcon_names = Set(nameof.(theory.termcons))
-  
-  for f in functions
-    sig = parse_function_sig(f)
-    arg_types = [inv_binding[ty] for ty in sig.types] # Vector{Set{Ident}}
-
-    if f.name ∈ keys(theory.accessors)
-      # TODO: report good errors here
-      f_idents = undefined_accessors[f.name]
-      typecons = only(arg_types) ∩ f_idents
-      typecon = only(typecons)
-      delete!(undefined_accessors[f.name], typecon)
-    elseif f.name ∈ typecon_names
-      f_ident = ident(theory, f.name)
-      typecon = getvalue(theory[f_ident])
-      @assert only.(arg_types) == Ident[f_ident, [first(getvalue(binding).head) for binding in typecon.args]...]
-      delete!(undefined_typecons, f_ident)
-    elseif f.name ∈ termcon_names
-      sig = only.(arg_types)
-      f_ident = ident(theory, f.name; sig=AlgSort.(sig))
-      termcon = getvalue(theory[f_ident])
-      @assert sig == [first(getvalue(binding).head) for binding in termcon.args]
-      delete!(undefined_termcons, f_ident)
-    else 
-      error("Unknown name $(f.name)")
-    end
-    
-    push!(typechecked, f)
-  end
-
-  isempty(undefined_termcons) || error("Failed to implement $undefined_termcons")
-
-  for utc in undefined_typecons
-    typecon = getvalue(theory[utc])
-    argtypes = [binding[x] for x in [utc, [first(getvalue(arg).head) for arg in typecon.args]...]]
-    push!(
-      typechecked, 
-      JuliaFunction(nameof(utc), Expr0[Expr(:(::), at) for at in argtypes], Expr0[], :Bool, :(return true), nothing)
-    )
-  end
-
-  for (uacc, typecons) in pairs(undefined_accessors)
-    for typecon in typecons
-      errormsg = "$(uacc) not defined for $(binding[typecon])"
-      push!(
-        typechecked,
-        JuliaFunction(
-          uacc, Expr0[Expr(:(::), binding[typecon])], Expr0[],
-          nothing, :(error($errormsg * " in model $model"))
-        )
-      )
-    end
-  end
-
-  typechecked
-end
-
-"""
-Add `model` kwarg (it shouldn't have it already)
-Qualify method name to be in theory module
-Add `context` kwargs if not already present
-  
-TODO throw error if there's junk kwargs present already?
-TODO: possibly add `where` clause if the model_type has a parameter
-"""
-function qualify_function(fun::JuliaFunction, theory_module, model_type)
-  JuliaFunction(
-    Expr(:., theory_module, QuoteNode(fun.name)),
-    fun.args,
-    Expr0[Expr(:kw, :context, nothing), Expr(:(::), :model, model_type)],
-    fun.return_type,
-    fun.impl,
-    fun.doc
-  )
-end
-
 macro instance(head, body)
   esc(:(@instance $head $(nothing) $body))
 end
 
+"""
+Parses the raw julia expression into JuliaFunctions
+"""
 function parse_instance_body(expr::Expr)
   @assert expr.head == :block
   funs = JuliaFunction[]
@@ -255,5 +173,145 @@ function parse_instance_body(expr::Expr)
   end
   return (funs, ext_funs)
 end
+
+function default_typecon_impl(X::Ident, theory::GAT, jltype_by_sort::Dict{AlgSort})
+  typecon = getvalue(theory[X])
+  argtypes = [jltype_by_sort[x] for x in [AlgSort(X), sortsignature(typecon)...]]
+  JuliaFunction(nameof(X), Expr0[Expr(:(::), at) for at in argtypes], Expr0[], :Bool, :(return true), nothing)
+end
+
+function default_accessor_impl(X::Ident, accessor::Symbol, jltype_by_sort::Dict{AlgSort})
+  jltype = jltype_by_sort[AlgSort(X)]
+  errormsg = "$(accessor) not defined for $(jltype)"
+  JuliaFunction(
+    accessor, Expr0[Expr(:(::), jltype)], Expr0[],
+    nothing, :(error($errormsg * " in model $model"))
+  )
+end
+
+function julia_signature(theory::GAT, x::Ident, termcon::AlgTermConstructor, jltype_by_sort::Dict{AlgSort})
+  JuliaFunctionSig(nameof(x), Expr0[jltype_by_sort[sort] for sort in sortsignature(termcon)])
+end
+
+function julia_signature(theory::GAT, X::Ident, typecon::AlgTypeConstructor, jltype_by_sort::Dict{AlgSort})
+  JuliaFunctionSig(nameof(X), Expr0[jltype_by_sort[sort] for sort in [AlgSort(X), sortsignature(typecon)...]])
+end
+
+function julia_signature(theory::GAT, X::Ident, a::Symbol, jltype_by_sort::Dict{AlgSort})
+  JuliaFunctionSig(a, [jltype_by_sort[AlgSort(X)]])
+end
+
+function ExprInterop.toexpr(sig::JuliaFunctionSig)
+  Expr(:call, sig.name, [Expr(:(::), type) for type in sig.types]...)
+end
+
+struct SignatureMismatchError <: Exception
+  name::Symbol
+  sig::Expr0
+  options::Set{Expr0}
+end
+
+Base.showerror(io::IO, e::SignatureMismatchError) =
+  print(io, "signature for ", e.name, ": ", e.sig,
+        " does not match any of [", join(e.options, ", "), "]")
+
+"""
+Throw error if missing a term constructor
+Provide default instances for type constructors and type arguments, which return true or error, respectively
+
+TODO: termcons/accessors need to be qualified by signature
+"""
+function typecheck_instance(
+  theory::GAT,
+  functions::Vector{JuliaFunction},
+  ext_functions::Vector{Symbol},
+  jltype_by_sort::Dict{AlgSort}
+)::Vector{JuliaFunction}
+  typechecked = JuliaFunction[]
+
+  undefined_signatures = Dict{JuliaFunctionSig, Union{Ident, Tuple{Ident, Symbol}}}()
+  for x in theory.termcons
+    if nameof(x) ∉ ext_functions
+      undefined_signatures[julia_signature(theory, x, getvalue(theory[x]), jltype_by_sort)] = x
+    end
+  end
+  for X in theory.typecons
+    if nameof(X) ∉ ext_functions
+      undefined_signatures[julia_signature(theory, X, getvalue(theory[X]), jltype_by_sort)] = X
+    end
+  end
+  for (a, Xs) in pairs(theory.accessors)
+    if a ∉ ext_functions
+      for X in Xs
+        undefined_signatures[julia_signature(theory, X, a, jltype_by_sort)] = (X,a)
+      end
+    end
+  end
+
+  expected_signatures = DefaultDict{Symbol, Set{Expr0}}(()->Set{Expr0}())
+
+  for (sig, n) in undefined_signatures
+    name = if n isa Ident
+      nameof(n)
+    else
+      last(n)
+    end
+    push!(expected_signatures[name], toexpr(sig))
+  end
+
+  for f in functions
+    sig = parse_function_sig(f)
+
+    sig ∈ keys(undefined_signatures) ||
+      throw(SignatureMismatchError(f.name, toexpr(sig), expected_signatures[f.name]))
+
+    delete!(undefined_signatures, sig)
+
+    push!(typechecked, f)
+  end
+
+  for (_, n) in undefined_signatures
+    if n isa Ident
+      judgment = getvalue(theory[n])
+      if judgment isa AlgTermConstructor
+        error("Failed to implement $(nameof(n))")
+      elseif judgment isa AlgTypeConstructor
+        push!(typechecked, default_typecon_impl(n, theory, jltype_by_sort))
+      end
+    else
+      (X, a) = n
+      push!(typechecked, default_accessor_impl(X, a, jltype_by_sort))
+    end
+  end
+
+  typechecked
+end
+
+"""
+Add `model` kwarg (it shouldn't have it already)
+Qualify method name to be in theory module
+Add `context` kwargs if not already present
+  
+TODO: throw error if there's junk kwargs present already?
+TODO: possibly add `where` clause if the model_type has a parameter
+"""
+function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{Expr0, Nothing})
+  kwargs = if isnothing(model_type)
+    Expr0[Expr(:kw, :context, nothing)]
+  else
+    Expr0[Expr(:kw, :context, nothing), Expr(:(::), :model, model_type)]
+  end
+
+  JuliaFunction(
+    Expr(:., theory_module, QuoteNode(fun.name)),
+    fun.args,
+    kwargs,
+    fun.return_type,
+    fun.impl,
+    fun.doc
+  )
+end
+
+
 
 end
