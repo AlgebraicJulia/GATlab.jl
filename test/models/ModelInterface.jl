@@ -33,5 +33,19 @@ struct TypedFinSetC <: Model{Tuple{Vector{Int}, Vector{Int}}}
   ntypes::Int
 end
 
+@instance ThStrictMonCat{Int, Vector{Int}} (;model::FinSetC) begin
+  @import Ob, Hom, id, compose, dom, codom
+
+  mcompose(a::Int, b::Int) = a + b
+  mcompose(f::Vector{Int}, g::Vector{Int}; context) = [f; g .+ context.B₁]
+
+  munit() = 0
+end
+
+using .ThStrictMonCat
+
+@test mcompose(id(2; model=FinSetC()), id(2; model=FinSetC()); context=(;B₁=2), model=FinSetC()) ==
+  id(4; model=FinSetC())
+
 
 end # module
