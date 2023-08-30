@@ -45,7 +45,7 @@ end
 """
 
 
-function typname(theory::Theory, typ::Typ)
+function typname(theory::GAT, typ::AlgType)
   Symbol(theory[typ.head].name)
 end
 
@@ -58,7 +58,7 @@ function symbolic_struct(name, abstract_type, parentmod)::Expr
   end
 end
 
-function symbolic_structs(theory::Theory, abstract_types, parentmod)::Vector{Expr}
+function symbolic_structs(theory::GAT, abstract_types, parentmod)::Vector{Expr}
   Expr[
     symbolic_struct(Symbol(j.name), abstract_type, parentmod)
     for (j, abstract_type) in zip(typcons(theory), abstract_types)
@@ -73,7 +73,7 @@ function symbolic_accessor(theoryname, argname, typname, rettypname, argindex, p
   end
 end
 
-function symbolic_accessors(theoryname, theory::Theory, parentmod)::Vector{Expr}
+function symbolic_accessors(theoryname, theory::GAT, parentmod)::Vector{Expr}
   Expr[
     symbolic_accessor(theoryname, argname, Symbol(j.name), typname(theory, argtyp), argindex, parentmod)
     for j in typcons(theory) for (argindex, (argname, argtyp)) in enumerate(j.ctx.ctx)
@@ -93,7 +93,7 @@ function symbolic_constructor(theoryname, j, theory, parentmod)
   end
 end
 
-function symbolic_constructors(theoryname, theory::Theory, parentmod)::Vector{Expr}
+function symbolic_constructors(theoryname, theory::GAT, parentmod)::Vector{Expr}
   Expr[symbolic_constructor(theoryname, judgment, theory, parentmod) for judgment in trmcons(theory)]
 end
 

@@ -240,11 +240,14 @@ struct GAT <: Context
   segments::ScopeList{Judgment, Union{AlgSorts, Nothing}}
   termcons::Vector{Ident}
   typecons::Vector{Ident}
+  accessors::Dict{Symbol, Set{Ident}}
   axioms::Vector{Ident}
   function GAT(name::Symbol, segments::Vector{GATSegment})
     termcons = Ident[]
     typecons = Ident[]
     axioms = Ident[]
+    # Maps a name of an accessor to the type constructors it appears in
+    accessors = Dict{Symbol, Set{Ident}}()
     names = Set{Symbol}()
     for segment in segments
       if !isempty(intersect(keys(segment.names), names))
@@ -258,12 +261,21 @@ struct GAT <: Context
           push!(termcons, x)
         elseif judgment isa AlgTypeConstructor
           push!(typecons, x)
+          for arg in judgment.args
+            if nameof(arg) ∉ keys(accessors)
+              accessors[nameof(arg)] = Set{Ident}()
+            end
+            push!(accessors[nameof(arg)], x)
+          end
         else
           push!(axioms, x)
         end
       end
     end
-    new(name, ScopeList(segments), termcons, typecons, axioms)
+    if !isempty(intersect(keys(accessors), names))
+      error("We do not permit the arguments to type constructors to have the same name as term constructors or type constructors")
+    end
+    new(name, ScopeList(segments), termcons, typecons, accessors, axioms)
   end
 
   # This could be faster, but it's not really worth worrying about

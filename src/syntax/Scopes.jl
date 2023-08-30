@@ -473,6 +473,8 @@ idents(s::Scope, levels::AbstractVector{Int}, names::AbstractVector{Symbol}) =
 idents(s::Scope, pairs::AbstractVector{Tuple{Int, Symbol}}) =
   idents(s, first.(pairs), second.(pairs))
 
+idents(s::Scope) = ident.(Ref(s), 1:length(s))
+
 valtype(s::Scope{T}) where {T} = T
 sigtype(s::Scope{T, Sig}) where {T, Sig} = Sig
 
