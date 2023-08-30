@@ -1,6 +1,6 @@
 module ModelInterface
 
-export Model, implements, @model, @instance
+export Model, implements, @model, @instance, @withmodel
 
 using ...Syntax
 using ...Util.MetaUtils
@@ -150,8 +150,12 @@ macro instance(head, model, body)
 
   # Declare that this model implements the theory
 
-  implements_declarations = map(theory.segments.scopes) do scope
-    implements_declaration(model_type, scope)
+  implements_declarations = if !isnothing(model_type)
+    map(theory.segments.scopes) do scope
+      implements_declaration(model_type, scope)
+    end
+  else
+    []
   end
 
   esc(Expr(:block,
@@ -270,20 +274,35 @@ function typecheck_instance(
 
   undefined_signatures = Dict{JuliaFunctionSig, Union{Ident, Tuple{Ident, Symbol}}}()
 
+  overload_errormsg =
+   "the types for this model declaration do not permit Julia overloading to distinguish between GAT overloads"
+
   for x in theory.termcons
     if nameof(x) ∉ ext_functions
-      undefined_signatures[julia_signature(theory, x, getvalue(theory[x]), jltype_by_sort)] = x
+      sig = julia_signature(theory, x, getvalue(theory[x]), jltype_by_sort)
+      if haskey(undefined_signatures, sig)
+        error(overload_errormsg)
+      end
+      undefined_signatures[sig] = x
     end
   end
   for X in theory.typecons
     if nameof(X) ∉ ext_functions
-      undefined_signatures[julia_signature(theory, X, getvalue(theory[X]), jltype_by_sort)] = X
+      sig = julia_signature(theory, X, getvalue(theory[X]), jltype_by_sort)
+      if haskey(undefined_signatures, sig)
+        error(overload_errormsg)
+      end
+      undefined_signatures[sig] = X
     end
   end
   for (a, Xs) in pairs(theory.accessors)
     if a ∉ ext_functions
       for X in Xs
-        undefined_signatures[julia_signature(theory, X, a, jltype_by_sort)] = (X,a)
+        sig = julia_signature(theory, X, a, jltype_by_sort)
+        if haskey(undefined_signatures, sig)
+          error(overload_errormsg)
+        end
+        undefined_signatures[sig] = (X,a)
       end
     end
   end
@@ -359,6 +378,37 @@ function implements_declaration(model_type, scope)
       ::$(model_type), ::Type{Val{$(gettag(scope))}}
     ) = $notes
   end
+end
+
+macro withmodel(model, subsexpr, body)
+  modelvar = gensym("model")
+
+  subs = @match subsexpr begin
+    Expr(:tuple, subs...) => [subs...]
+    sub::Symbol => [sub]
+  end
+
+  subvars = gensym.(subs) # e.g. #25compose to avoid global method overloading
+
+  subvardefs = [
+    Expr(:(=), var, sub)
+    for (sub, var) in zip(subs, subvars)
+  ]
+
+  subdefs = [
+    Expr(:(=), sub, :((args...;kwargs...) -> $var(args...;kwargs..., model=$modelvar)))
+    for (sub, var) in zip(subs, subvars)
+  ]
+ 
+  esc(
+    Expr(:let,
+      Expr(:block, :($modelvar = $model), subvardefs...),
+      Expr(:let,
+        Expr(:block, subdefs...),
+        body
+      )
+    )
+  )
 end
 
 end
