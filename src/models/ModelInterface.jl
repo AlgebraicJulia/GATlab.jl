@@ -76,7 +76,12 @@ end
 If `m` implements the GATSegment referred to by `tag`, then return the
 corresponding implementation notes.
 """
-implements(m::Model, tag::ScopeTag) = implements(m, Type{Val{tag}})
+implements(m::Module, ::Type{Val{tag}}) where {tag} = nothing
+
+implements(m::Model, tag::ScopeTag) = implements(m, Val{tag})
+
+implements(m::Model, theory_module::Module) =
+  all(!isnothing(implements(m, gettag(scope))) for scope in theory_module.THEORY.segments.scopes)
 
 """
 Usage:
@@ -143,8 +148,15 @@ macro instance(head, model, body)
   qualified_functions = 
     map(fun -> qualify_function(fun, theory_module, model_type), typechecked_functions)
 
+  # Declare that this model implements the theory
+
+  implements_declarations = map(theory.segments.scopes) do scope
+    implements_declaration(model_type, scope)
+  end
+
   esc(Expr(:block,
-    [generate_function(f) for f in qualified_functions]...
+    [generate_function(f) for f in qualified_functions]...,
+    implements_declarations...
   ))
 end
 
@@ -177,10 +189,18 @@ end
 function default_typecon_impl(X::Ident, theory::GAT, jltype_by_sort::Dict{AlgSort})
   typecon = getvalue(theory[X])
   argtypes = [jltype_by_sort[x] for x in [AlgSort(X), sortsignature(typecon)...]]
-  JuliaFunction(nameof(X), Expr0[Expr(:(::), at) for at in argtypes], Expr0[], :Bool, :(return true), nothing)
+  JuliaFunction(
+    nameof(X),
+    Expr0[Expr(:(::), at) for at in argtypes],
+    Expr0[], :Bool, :(return true), nothing
+  )
 end
 
-function default_accessor_impl(X::Ident, accessor::Symbol, jltype_by_sort::Dict{AlgSort})
+function default_accessor_impl(
+  X::Ident,
+  accessor::Symbol,
+  jltype_by_sort::Dict{AlgSort}
+)
   jltype = jltype_by_sort[AlgSort(X)]
   errormsg = "$(accessor) not defined for $(jltype)"
   JuliaFunction(
@@ -189,15 +209,36 @@ function default_accessor_impl(X::Ident, accessor::Symbol, jltype_by_sort::Dict{
   )
 end
 
-function julia_signature(theory::GAT, x::Ident, termcon::AlgTermConstructor, jltype_by_sort::Dict{AlgSort})
-  JuliaFunctionSig(nameof(x), Expr0[jltype_by_sort[sort] for sort in sortsignature(termcon)])
+function julia_signature(
+  theory::GAT,
+  x::Ident,
+  termcon::AlgTermConstructor,
+  jltype_by_sort::Dict{AlgSort}
+)
+  JuliaFunctionSig(
+    nameof(x),
+    Expr0[jltype_by_sort[sort] for sort in sortsignature(termcon)]
+  )
 end
 
-function julia_signature(theory::GAT, X::Ident, typecon::AlgTypeConstructor, jltype_by_sort::Dict{AlgSort})
-  JuliaFunctionSig(nameof(X), Expr0[jltype_by_sort[sort] for sort in [AlgSort(X), sortsignature(typecon)...]])
+function julia_signature(
+  theory::GAT,
+  X::Ident,
+  typecon::AlgTypeConstructor,
+  jltype_by_sort::Dict{AlgSort}
+)
+  JuliaFunctionSig(
+    nameof(X),
+    Expr0[jltype_by_sort[sort] for sort in [AlgSort(X), sortsignature(typecon)...]]
+  )
 end
 
-function julia_signature(theory::GAT, X::Ident, a::Symbol, jltype_by_sort::Dict{AlgSort})
+function julia_signature(
+  theory::GAT,
+  X::Ident,
+  a::Symbol,
+  jltype_by_sort::Dict{AlgSort}
+)
   JuliaFunctionSig(a, [jltype_by_sort[AlgSort(X)]])
 end
 
@@ -216,10 +257,8 @@ Base.showerror(io::IO, e::SignatureMismatchError) =
         " does not match any of [", join(e.options, ", "), "]")
 
 """
-Throw error if missing a term constructor
-Provide default instances for type constructors and type arguments, which return true or error, respectively
-
-TODO: termcons/accessors need to be qualified by signature
+Throw error if missing a term constructor. Provides default instances for type
+constructors and type arguments, which return true or error, respectively.
 """
 function typecheck_instance(
   theory::GAT,
@@ -230,6 +269,7 @@ function typecheck_instance(
   typechecked = JuliaFunction[]
 
   undefined_signatures = Dict{JuliaFunctionSig, Union{Ident, Tuple{Ident, Symbol}}}()
+
   for x in theory.termcons
     if nameof(x) ∉ ext_functions
       undefined_signatures[julia_signature(theory, x, getvalue(theory[x]), jltype_by_sort)] = x
@@ -312,6 +352,13 @@ function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{E
   )
 end
 
-
+function implements_declaration(model_type, scope)
+  notes = ImplementationNotes(nothing)
+  quote
+    $(GlobalRef(ModelInterface, :implements))(
+      ::$(model_type), ::Type{Val{$(gettag(scope))}}
+    ) = $notes
+  end
+end
 
 end
