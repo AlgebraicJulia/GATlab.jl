@@ -6,7 +6,7 @@ export
   Reference, rest,
   Binding, getaliases, getvalue, getsignature, getline, setline,
   Scope, ident, idents, valtype, sigtype, addalias!,
-  Context, scopelevel,
+  Context, scopelevel, canonicalize,
   ScopeList, AppendScope
 
 using UUIDs
@@ -335,6 +335,19 @@ function Base.getindex(s::Context, ref::Reference)
   end
 end
 
+function Base.in(x::Ident, s::Context)
+  try 
+    s[x]
+    true
+  catch e 
+    false
+  end
+end
+
+function canonicalize(c::Context, x::Ident)
+  ident(c, x.level; scopelevel=scopelevel(c, gettag(x)))
+end
+
 """
 `Scope{T, Sig}`
 
@@ -508,7 +521,7 @@ Base.getindex(c::ScopeList, i::Int) = getscopes(c)[i]
 
 function ident(c::ScopeList, level::Int; name=nothing, scopelevel::Union{Int, Nothing}=nothing)
   scope = isnothing(scopelevel) ? c[end] : c[scopelevel]
-  ident(scope, level; name)
+  ident(scope, level, name)
 end
 
 function ident(c::ScopeList, name::Symbol; sig=nothing, scopelevel::Union{Int, Nothing}=nothing)
