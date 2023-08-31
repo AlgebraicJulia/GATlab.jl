@@ -9,13 +9,19 @@ using MLStyle
 abstract type GATExpr{T} end
 
 """
+This module is for backwards compatibility with Catlab's @syntax macro.
+
+@symbolic_model FreeCategory{ObExr, HomExpr} ThCategory begin
+end
+
+```julia
 module FreeCategory
 export Ob,Hom
 using ..__module__
 
 theory() = ThCategory
 
-struct Ob{T} <: ObExpr{T}
+struct Ob{T} <: ObExpr{T} # T is :generator or a Symbol
   args::Vector
   type_args::Vector{GATExpr}
 end
@@ -25,7 +31,9 @@ struct Hom{T} <: HomExpr{T}
   type_args::Vector{GATExpr}
 end
 
-function (::typeof(ThCategory.dom))(x::Hom)::Ob
+# default implementations 
+
+function ThCategory.dom(x::Hom)::Ob
   x.type_args[1]
 end
 
@@ -33,21 +41,13 @@ function Ob(::Typ{Ob}, __value__::Any)::Ob
   Ob{:generator}([__value__], [])
 end
 
-function (::typeof(ThCategory.id))(A::Ob)::Hom
+function ThCategory.id(A::Ob)::Hom
   Hom{:id}([A], [A, A])
 end
 
-end # module
-
-function (::typeof(ThCategory.Hom))(x1::Any, x2::FreeCategory.Ob, x3::FreeCategory.Ob)::FreeCategory.Hom
-  FreeCategory.Hom(x1, x2, x3)
-end
+end #module
+```
 """
-
-
-function typname(theory::GAT, typ::AlgType)
-  Symbol(theory[typ.head].name)
-end
 
 function symbolic_struct(name, abstract_type, parentmod)::Expr
   quote
@@ -60,14 +60,14 @@ end
 
 function symbolic_structs(theory::GAT, abstract_types, parentmod)::Vector{Expr}
   Expr[
-    symbolic_struct(Symbol(j.name), abstract_type, parentmod)
-    for (j, abstract_type) in zip(typcons(theory), abstract_types)
+    symbolic_struct(nameof(X), abstract_type, parentmod)
+    for (X, abstract_type) in zip(theory.typecons, abstract_types)
   ]
 end
 
-function symbolic_accessor(theoryname, argname, typname, rettypname, argindex, parentmod)
+function symbolic_accessor(theoryname, argname, typename, rettypename, argindex, parentmod)
   quote
-    function (::$(typeof)($parentmod.$theoryname.$(Symbol(argname))))(x::$(esc(typname)))::$(esc(rettypname))
+    function $parentmod.$theoryname.$argname(x::$(esc(typename)))::$(rettypename)
       x.type_args[$argindex]
     end
   end
@@ -75,18 +75,34 @@ end
 
 function symbolic_accessors(theoryname, theory::GAT, parentmod)::Vector{Expr}
   Expr[
-    symbolic_accessor(theoryname, argname, Symbol(j.name), typname(theory, argtyp), argindex, parentmod)
-    for j in typcons(theory) for (argindex, (argname, argtyp)) in enumerate(j.ctx.ctx)
+    symbolic_accessor(theoryname, nameof(binding), nameof(X), typename(theory, getvalue(binding)), i, parentmod)
+    for X in typecons(theory) for (i, binding) in enumerate(getvalue(theory[X]).args)
   ]
 end
 
-function symbolic_constructor(theoryname, j, theory, parentmod)
+function typename(theory::GAT, type::AlgType)
+  esc(nameof(sortname(theory, type)))
+end
+
+function symbolic_constructor(theoryname, name::Ident, termcon::AlgTermConstructor, theory::GAT, parentmod)
+  eqs = equations(termcon.args, termcon.localcontext, theory)
+  eq_exprs = Expr[]
+  # for vs in values(eqs)
+  #   for (a,b) in zip(vs, vs[2:end])
+  #     errexpr = Expr(:call, GlobalRef(SyntaxSystems, :SyntaxDomainError),
+  #.                   Expr(:quote, cons.name),
+  #.                   Expr(:vect, cons.params...))
+
+  #     push!(eq_exprs, Expr(:(||), Expr(:==, a, b), errexpr))
+  #   end
+  # end
+  
   quote
-    function (::$(typeof)($parentmod.$theoryname.$(Symbol(j.name))))(
-      $([Expr(:(::), Symbol(:x, i), esc(typname(theory, j.ctx[idx][2]))) for (i, idx) in enumerate(j.head.args)]...)
+    function $parentmod.$theoryname.$(nameof(name))(
+      $([Expr(:(::), nameof(binding), typename(theory, getvalue(binding))) for binding in termcon.args]...)
     )
-      $(esc(typname(theory, j.head.typ))){$(Expr(:quote, Symbol(j.name)))}(
-        $(Expr(:vect, [Symbol(:x, i) for i in 1:length(j.head.args)]...)),
+      $(typename(theory, termcon.type)){$(Expr(:quote, nameof(name)))}(
+        $(Expr(:vect, nameof.(termcon.args)...)),
         $(Vector){$(GlobalRef(SymbolicModels, :GATExpr))}()
       )
     end
@@ -94,11 +110,12 @@ function symbolic_constructor(theoryname, j, theory, parentmod)
 end
 
 function symbolic_constructors(theoryname, theory::GAT, parentmod)::Vector{Expr}
-  Expr[symbolic_constructor(theoryname, judgment, theory, parentmod) for judgment in trmcons(theory)]
+  Expr[symbolic_constructor(theoryname, x, getvalue(theory[x]), theory, parentmod) for x in termcons(theory)]
 end
 
 macro symbolic_model(decl, theoryname, body)
   theory = macroexpand(__module__, :($theoryname.@theory))
+  
   (name, abstract_types) = @match decl begin
     Expr(:curly, name, abstract_types...) => (name, abstract_types)
     _ => throw(ParseError("Ill-formed head of @symbolic_model $decl"))

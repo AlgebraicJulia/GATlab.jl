@@ -2,7 +2,8 @@ module GATs
 export Constant, AlgTerm, AlgType,
   TypeScope, AlgSort, AlgSorts,
   AlgTermConstructor, AlgTypeConstructor, AlgAxiom, sortsignature,
-  JudgmentBinding, GATSegment, GAT, sortcheck, allnames, sorts
+  JudgmentBinding, GATSegment, GAT, sortcheck, allnames, sorts, sortname,
+  termcons, typecons, accessors, equations
 
 using ..Scopes
 
@@ -287,6 +288,10 @@ struct GAT <: Context
   end
 end
 
+Base.nameof(theory::GAT) = theory.name
+termcons(theory::GAT) = theory.termcons
+typecons(theory::GAT) = theory.typecons
+accessors(theory::GAT) = theory.accessors
 sorts(theory::GAT) = AlgSort.(theory.typecons)
 
 Scopes.getscopes(c::GAT) = getscopes(c.segments)
@@ -308,5 +313,75 @@ function allnames(theory::GAT; aliases=false)
   vcat(allnames.(theory.segments; aliases)...)
 end
 
+function sortname(theory::GAT, type::AlgType)
+  canonicalize(theory, only(type.head))
+end
+
+## Equations
+
+struct AccessorApplication
+  accessor::Ident
+  to::Union{Ident, AccessorApplication}
+end
+
+const InferExpr = Union{Ident, AccessorApplication}
+
+""" Implicit equations defined by a context.
+
+This function allows a generalized algebraic theory (GAT) to be expressed as
+an essentially algebraic theory, i.e., as partial functions whose domains are
+defined by equations.
+
+References:
+ - (Cartmell, 1986, Sec 6: "Essentially algebraic theories and categories with
+    finite limits")
+ - (Freyd, 1972, "Aspects of topoi")
+
+This function gives expressions for computing each of the elements of `context`
+  from the `args`, as well as checking that the args are well-typed.
+
+Example:
+> equations({f::Hom(a,b), g::Hom(b,c)}, {a::Ob, b::Ob, c::Ob}, ThCategory)
+ways_of_computing = Dict(a => [dom(f)], b => [codom(f), dom(g)], c => [codom(g)],   
+                         f => [f], g => [g])
+
+Algorithm:
+
+Start from the arguments. We know how to compute each of the arguments; they are
+given. Each argument tells us how to compute other arguments, and also elements
+of the context
+"""
+function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
+  ways_of_computing = Dict{Ident, Set{InferExpr}}()
+  to_expand = Pair{Ident, InferExpr}[x => x for x in idents(args)]
+
+  context = ScopeList([args, localcontext])
+   
+  while !isempty(to_expand)
+    x, expr = pop!(to_expand)
+    if !haskey(ways_of_computing, x)
+      ways_of_computing[x] = Set{InferExpr}()
+    end
+    push!(ways_of_computing[x], expr)
+
+    xtype = getvalue(context[x])
+    xtypecon = getvalue(theory[xtype.head])
+
+    for (i, arg) in enumerate(xtype.args)
+      if arg.head isa Constant
+        continue
+      elseif first(arg.head) ∈ theory
+        continue
+      else
+        @assert first(arg.head) ∈ context
+        a = ident(xtypecon.args, i)
+        y = first(arg.head)
+        expr′ = AccessorApplication(a, expr)
+        push!(to_expand, y => expr′)
+      end
+    end
+  end
+  ways_of_computing
+end
 
 end
