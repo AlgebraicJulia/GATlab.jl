@@ -1,29 +1,21 @@
 module FinSets
-export FinSetC, TypedFinSetC
+export FinSetC
 
 using ....Models
-using ....Dsl
 using ...StdTheories
 
-@model ThCategory{Int, Vector{Int}} (self::FinSetC) begin
-  Ob(x::Int) = x >= 0
-  Hom(x::Int, y::Int, f::Vector{Int}) = length(f) == x && all(j ∈ 1:y for j in f)
-
-  id(x::Int) = collect(1:x)
-  compose(x::Int, y::Int, z::Int, f::Vector{Int}, g::Vector{Int}) =
-    Int[g[j] for j in f]
+struct FinSetC <: Model{Tuple{Int, Vector{Int}}}
 end
 
-@model ThCategory{Vector{Int}, Vector{Int}} (self::TypedFinSetC) begin
-  ntypes::Int
+@instance ThCategory{Int, Vector{Int}} (;model::FinSetC) begin
+  Ob(x::Int) = x >= 0
+  Hom(f::Vector{Int}, x::Int, y::Int) =
+    length(f) == x && all(j ∈ 1:y for j in f)
 
-  Ob(v::Vector{Int}) = all(i ∈ 1:self.ntypes for i in v)
-  Hom(x::Vector{Int}, y::Vector{Int}, f::Vector{Int}) = length(f) == length(x) &&
-    all(1 <= j <= length(y) for j in f) &&
-    all(x[i] == y[f[i]] for i in 1:length(x))
+  id(x::Int) = collect(1:x)
+  compose(f::Vector{Int}, g::Vector{Int}) = g[f]
 
-  id(v::Vector{Int}) = collect(1:length(v))
-  compose(x, y, z, f::Vector{Int}, g::Vector{Int}) = Int[g[j] for j in f]
+  dom(f::Vector{Int}) = length(f)
 end
 
 end

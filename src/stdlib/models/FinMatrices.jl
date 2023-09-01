@@ -1,16 +1,21 @@
 module FinMatrices
-export FinMatC, TypedFinSetC
+export FinMatC
 
 using ....Models
-using ....Dsl
 using ...StdTheories
 
-@model ThCategory{Int, Matrix{T}} (self::FinMatC{T<:Number}) begin
+struct FinMatC{T<:Number} <: Model{Tuple{T}}
+end
+
+@instance ThCategory{Int, Matrix{T}} (;model::FinMatC{T<:Number}) where {T} begin
   Ob(n::Int) = n >= 0
-  Hom(n::Int, m::Int, A::Matrix{T}) = size(A) == (n,m)
+  Hom(A::Matrix{T}, n::Int, m::Int) = size(A) == (n,m)
 
   id(n::Int) = T[T(i == j) for i in 1:n, j in 1:n]
-  compose(_, _, _, A, B) = A * B
+  compose(A::Matrix{T}, B::Matrix{T}) = A * B
+
+  dom(A::Matrix{T}) = size(A)[1]
+  codom(A::Matrix{T}) = size(A)[2]
 end
 
 end
