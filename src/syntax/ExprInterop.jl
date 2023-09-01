@@ -1,7 +1,7 @@
 module ExprInterop
 export toexpr, fromexpr
 
-using ..Scopes, ..GATs
+using ..Scopes, ..GATs, ..Presentations
 using ...Util.MetaUtils
 using MLStyle 
 
@@ -173,6 +173,11 @@ function fromexpr(c::Context, e, ::Type{Binding{AlgType, Nothing}})
   end
 end
 
+"""Parse, e.g., `:([(a,b)::Ob, f::Hom(a,b)])`"""
+parsetypescope(c::Context, e::Expr) = 
+  e.head == :vect ? parsetypescope(c, e.args) : error("Cannot parse $e")
+
+"""Parse, e.g. `[:((a,b)::Ob), :(f::Hom(a,b))]`"""
 function parsetypescope(c::Context, exprs::AbstractVector)
   scope = TypeScope()
   c′ = AppendScope(c, scope)
@@ -298,4 +303,43 @@ function fromexpr(c::Context, e, ::Type{GATSegment})
   seg
 end
 
+"""Context of presentation is the underlying GAT"""
+toexpr(p::Presentation) = toexpr(p.theory, p)
+
+function toexpr(c::Context, p::Presentation)
+  c == p.theory || error("Invalid context for presentation")
+  decs = bindingexprs(c, p.scope)
+  eqs = map(p.eqs) do ts 
+    exprs = zip(toexpr.(Ref(getscope(p)), ts),Iterators.repeated(:(==)))
+    Expr(:comparison, collect(Iterators.flatten(exprs))[1:(end-1)]...)
+  end
+  Expr(:block, [decs..., eqs...]...)
 end
+
+"""
+Parse, e.g.,  (a,b,c)::Ob
+              f::Hom(a, b)
+              g::Hom(b, c)
+              h::Hom(a, c)
+              h′::Hom(a, c)
+              compose(f, g) == h == h′
+"""
+function fromexpr(c::Context, e, ::Type{Presentation})
+  e.head == :block || error("expected a block to parse into a GATSegment, got: $e")
+  scopelines, eqlines = Expr0[], Vector{Expr0}[]
+  for line in e.args
+    if line.head == :(==) 
+      push!(eqlines, line.args)
+    elseif line.head == :comparison
+      er = "Bad comparison: $line"
+      all(((i,v),)-> iseven(i) == (v == :(==)), enumerate(line.args)) || error(er)
+      push!(eqlines, line.args[1:2:end])
+    else
+      push!(scopelines, line)
+    end
+  end
+  scope = parsetypescope(c, scopelines)
+  apscope = AppendScope(c, scope)
+  Presentation(c, scope, [fromexpr.(Ref(apscope), ts, AlgTerm) for ts in eqlines])
+end
+end # module
