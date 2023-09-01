@@ -1,24 +1,23 @@
 module Naturals
 export ThNat, ThNatPlus, ThNatPlusTimes
 
-using ....Dsl
-using ....Syntax: ThEmpty
+using ....Syntax
 
 # Natural numbers
 
-@theory ThNat <: ThEmpty begin
-  ℕ :: TYPE ⊣ []
-  Z() :: ℕ ⊣ []
-  S(n) ::  ℕ ⊣ [n::ℕ]
+@theory ThNat begin
+  ℕ :: TYPE
+  Z :: ℕ
+  S(n::ℕ) ::  ℕ
 end
 
 @theory ThNatPlus <: ThNat begin
-  (x + y)::ℕ ⊣ [x::ℕ, y::ℕ]
+  ((x::ℕ) + (y::ℕ))::ℕ
   (n + S(m) == S(n+m) :: ℕ) ⊣ [n::ℕ,m::ℕ]
 end
 
 @theory ThNatPlusTimes <: ThNatPlus begin
-  (x * y)::ℕ ⊣ [x::ℕ, y::ℕ]
+  ((x::ℕ) * (y::ℕ))::ℕ
   (n * S(m) == ((n * m) + n) :: ℕ) ⊣ [n::ℕ,m::ℕ]
 end
 
