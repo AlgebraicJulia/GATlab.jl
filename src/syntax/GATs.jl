@@ -3,7 +3,7 @@ export Constant, AlgTerm, AlgType,
   TypeScope, AlgSort, AlgSorts,
   AlgTermConstructor, AlgTypeConstructor, AlgAxiom, sortsignature,
   JudgmentBinding, GATSegment, GAT, sortcheck, allnames, sorts, sortname,
-  termcons, typecons, accessors, equations
+  termcons, typecons, accessors, equations, build_infer_expr, compile
 
 using ..Scopes
 
@@ -326,6 +326,14 @@ end
 
 const InferExpr = Union{Ident, AccessorApplication}
 
+function build_infer_expr(theorymodule, e::InferExpr)
+  if e isa Ident
+    nameof(e)
+  else
+    Expr(:call, :($theorymodule.$(nameof(e.accessor))), build_infer_expr(theorymodule, e.to))
+  end
+end
+
 """ Implicit equations defined by a context.
 
 This function allows a generalized algebraic theory (GAT) to be expressed as
@@ -382,6 +390,22 @@ function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
     end
   end
   ways_of_computing
+end
+
+function compile(theorymodule, expr_lookup::Dict{Reference}, term::AlgTerm)
+  if term.head isa Constant
+    term.head.value
+  else
+    if haskey(expr_lookup, term.head)
+      expr_lookup[term.head]
+    else
+      Expr(
+        :call,
+        :($theorymodule.$(nameof(only(term.head)))),
+        AlgTerm[compile(theorymodule, expr_lookup, arg) for arg in term.args]
+      )
+    end
+  end
 end
 
 end

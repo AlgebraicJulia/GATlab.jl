@@ -84,26 +84,47 @@ function typename(theory::GAT, type::AlgType)
   esc(nameof(sortname(theory, type)))
 end
 
+struct SyntaxDomainError <: Exception
+  constructor::Symbol
+  args::Vector
+end
+
+function Base.showerror(io::IO, exc::SyntaxDomainError)
+  print(io, "Domain error in term constructor $(exc.constructor)(")
+  join(io, exc.args, ",")
+  print(io, ")")
+end
+
 function symbolic_constructor(theoryname, name::Ident, termcon::AlgTermConstructor, theory::GAT, parentmod)
   eqs = equations(termcon.args, termcon.localcontext, theory)
   eq_exprs = Expr[]
-  # for vs in values(eqs)
-  #   for (a,b) in zip(vs, vs[2:end])
-  #     errexpr = Expr(:call, GlobalRef(SyntaxSystems, :SyntaxDomainError),
-  #.                   Expr(:quote, cons.name),
-  #.                   Expr(:vect, cons.params...))
 
-  #     push!(eq_exprs, Expr(:(||), Expr(:==, a, b), errexpr))
-  #   end
-  # end
-  
+  theorymodule = :($parentmod.$theoryname)
+  for expr_set in values(eqs)
+    exprs = build_infer_expr.(Ref(theorymodule), [expr_set...])
+    for (a, b) in zip(exprs, exprs[2:end])
+      errexpr = Expr(:call, GlobalRef(SymbolicModels, :SyntaxDomainError),
+                     Expr(:quote, nameof(name)),
+                     Expr(:vect, nameof.(termcon.args)...))
+
+      push!(eq_exprs, Expr(:(||), Expr(:call, :(==), a, b), errexpr))
+    end
+  end
+
+  expr_lookup = Dict{Reference, Any}(
+    [Reference(x) => build_infer_expr(theorymodule, first(eqs[x]))
+     for x in [idents(termcon.args)..., idents(termcon.localcontext)...]]
+  )
+
   quote
-    function $parentmod.$theoryname.$(nameof(name))(
+    function $theorymodule.$(nameof(name))(
       $([Expr(:(::), nameof(binding), typename(theory, getvalue(binding))) for binding in termcon.args]...)
     )
+      $(eq_exprs...)
       $(typename(theory, termcon.type)){$(Expr(:quote, nameof(name)))}(
         $(Expr(:vect, nameof.(termcon.args)...)),
-        $(Vector){$(GlobalRef(SymbolicModels, :GATExpr))}()
+        $(Expr(:ref, GlobalRef(SymbolicModels, :GATExpr),
+          [compile(theorymodule, expr_lookup, arg) for arg in termcon.type.args]...))
       )
     end
   end
