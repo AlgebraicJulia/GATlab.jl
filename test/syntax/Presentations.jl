@@ -1,13 +1,13 @@
 module TestPresentations
 
 using Gatlab
-using Gatlab.Syntax.ExprInterop: parsetypescope
+using Gatlab.Syntax.GATs: parsetypescope
 using Test
 T = ThCategory.THEORY
 
 tscope = parsetypescope(
   T, 
-  :([(a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c), (h,h′)::Hom(a,c)])
+  :([(a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c), (h,h′)::Hom(a,c)]).args
 )
 _,_,_,f,g,h,h′ = idents(tscope)
 h,h′ = AlgTerm.([h,h′])

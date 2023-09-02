@@ -3,9 +3,20 @@ module TestSyntax
 using Test
 using Gatlab
 
-include("Scopes.jl")
-include("GATs.jl")
-include("ExprInterop.jl")
-include("TheoryInterface.jl")
+@testset "Scopes" begin
+  include("Scopes.jl")
+end
+
+@testset "ExprInterop" begin
+  include("ExprInterop.jl")
+end
+
+@testset "GATs" begin
+  include("GATs.jl")
+end
+
+@testset "TheoryInterface" begin
+  include("TheoryInterface.jl")
+end
 
 end
