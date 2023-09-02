@@ -1,6 +1,0 @@
-[deps]
-Gatlab = "f0ffcf3b-d13a-433e-917c-cc44ccf5ead2"
-JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-StructEquality = "6ec83bb0-ed9f-11e9-3b4c-2b04cb4e219c"
-TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
