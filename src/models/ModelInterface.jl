@@ -413,13 +413,13 @@ macro withmodel(model, subsexpr, body)
   ]
 
   subdefs = [
-    Expr(:(=), sub, :((args...;kwargs...) -> $var(args...;kwargs..., model=$modelvar)))
+    Expr(:(=), sub, :((args...;kwargs...) -> $var($modelvar, args...;kwargs...)))
     for (sub, var) in zip(subs, subvars)
   ]
  
   esc(
     Expr(:let,
-      Expr(:block, :($modelvar = $model), subvardefs...),
+      Expr(:block, :($modelvar = $(Expr(:call, TheoryInterface.WithModel, model))), subvardefs...),
       Expr(:let,
         Expr(:block, subdefs...),
         body
