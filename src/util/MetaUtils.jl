@@ -34,7 +34,7 @@ end
   name::Expr0
   types::Vector{Expr0}
   whereparams::Vector{Expr0}
-  function JuliaFunctionSig(name::Expr0, types::Vector, whereparams::Vector=Expr0[])
+  function JuliaFunctionSig(name::Expr0, types::Vector, whereparams::Vector{<:Expr0}=Expr0[])
     new(name, types, whereparams)
   end
 end
@@ -111,7 +111,12 @@ end
 """ Generate Julia expression for function definition.
 """
 function generate_function(fun::JuliaFunction; rename=n->n)::Expr
-  call_expr = Expr(:call, rename(fun.name), Expr(:parameters, fun.kwargs...), fun.args...)
+  kwargsblock = if !isempty(fun.kwargs)
+    [Expr(:parameters, fun.kwargs...)]
+  else
+    []
+  end
+  call_expr = Expr(:call, rename(fun.name), kwargsblock..., fun.args...)
   if !isempty(fun.whereparams)
     call_expr = Expr(:where, call_expr, fun.whereparams...)
   end
