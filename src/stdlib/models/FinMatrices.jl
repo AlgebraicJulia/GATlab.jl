@@ -7,7 +7,7 @@ using ...StdTheories
 struct FinMatC{T<:Number} <: Model{Tuple{T}}
 end
 
-@instance ThCategory{Int, Matrix{T}} (;model::FinMatC{T<:Number}) where {T} begin
+@instance ThCategory{Int, Matrix{T}} (;model::FinMatC{T}) where {T} begin
   Ob(n::Int) = n >= 0
   Hom(A::Matrix{T}, n::Int, m::Int) = size(A) == (n,m)
 
