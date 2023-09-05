@@ -4,7 +4,7 @@ using Gatlab, Test
 
 using .ThCategory
 
-@withmodel FinMatC{Float64}() (Ob, Hom, id, compose) begin
+@withmodel FinMatC{Float64}() (Ob, Hom, id, compose, dom, codom) begin
   @test Ob(0)
   @test !Ob(-1)
   @test Hom([1. 0; -1 1], 2, 2)
@@ -13,6 +13,10 @@ using .ThCategory
   @test id(2) == [1. 0; 0 1]
 
   @test compose(id(2), id(2)) == id(2)
+
+  @test dom(id(2)) == 2
+  @test codom(id(2)) == 2
+
 end
 
 end
