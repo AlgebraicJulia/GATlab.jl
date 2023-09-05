@@ -31,4 +31,24 @@ p2′ = fromexpr(T,x2, Presentation);
 @test getlevel(p1, :id) < getlevel(p1, :f)
 @test getlevel(p1, gettag(f)) == nscopes(p1)
 
+@present SchGraph(ThCategory) begin
+  (E,V)::Ob
+  src::Hom(E,V)
+  tgt::Hom(E,V)
+end
+
+src, tgt = idents(SchGraph; name=[:src, :tgt])
+Hom = ident(SchGraph; name=:Hom)
+
+@test getvalue(SchGraph[src]).head == Reference(Hom)
+
+@present Z(ThGroup) begin
+  (a,)
+end
+
+t = fromexpr(Z, :(i(a) ⋅ (2::default)), AlgTerm)
+a = ident(Z; name=:a)
+
+@test compile(ThGroup, Dict(Reference(a) => :a), t) == :($(ThGroup).:(⋅)($(ThGroup).i(a), 2))
+
 end # module 

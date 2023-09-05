@@ -1,10 +1,10 @@
 module Presentations
-export Presentation
+export Presentation, @present
 
 using ...Util
 using ..Scopes, ..GATs, ..ExprInterop
 using StructEquality
-import ..Scopes: getcontext, nscopes, hastag, hasname, getlevel
+using MLStyle
 
 """
 A presentation has a set of generators, given by a `TypeScope`, and a set of 
@@ -57,9 +57,11 @@ compose(f, g) == h == h′
 """
 function ExprInterop.fromexpr(ctx::Context, e, ::Type{Presentation})
   e.head == :block || error("expected a block to parse into a GATSegment, got: $e")
-  scopelines, eqlines = Expr0[], Vector{Expr0}[]
+  scopelines, eqlines = [], Vector{Expr0}[]
   for line in e.args
-    if line.head == :(==)
+    if line isa LineNumberNode
+      push!(scopelines, line)
+    elseif line.head == :(==)
       push!(eqlines, line.args)
     elseif line.head == :comparison
       er = "Bad comparison: $line"
@@ -72,6 +74,21 @@ function ExprInterop.fromexpr(ctx::Context, e, ::Type{Presentation})
   scope = GATs.parsetypescope(ctx, scopelines)
   apscope = AppendScope(ctx, scope)
   Presentation(ctx, scope, [fromexpr.(Ref(apscope), ts, AlgTerm) for ts in eqlines])
+end
+
+function construct_presentation(m::Module, e)
+  fromexpr(m.THEORY, e, Presentation)
+end
+
+macro present(head, body)
+  (theory, name) = @match head begin
+    Expr(:call, name, theory) => (theory, name)
+    _ => error("invalid head for @present macro: $head")
+  end
+
+  esc(quote
+    const $name = $(construct_presentation)($theory, $(QuoteNode(body)))
+  end)
 end
 
 end # module 
