@@ -71,7 +71,7 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{AlgTerm})
     Expr(:(::), val, type) =>
       AlgTerm(Constant(val, fromexpr(c, type, AlgType)))
     e::Expr => error("could not parse AlgTerm from $e")
-    constant::Contant => AlgTerm(constant)
+    constant::Constant => AlgTerm(constant)
     i::Ident => AlgTerm(Reference(i))
   end
 end
@@ -196,9 +196,6 @@ function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
     else 
       error("Unexpected judgment type $ref for AlgTerm $t")
     end
-  elseif t.head isa Constant
-  else 
-    error("Unexpected head for AlgTerm")
   end
   return AlgSort(ctx, t)
 end
@@ -466,7 +463,7 @@ function compile(theorymodule, expr_lookup::Dict{Reference}, term::AlgTerm)
       Expr(
         :call,
         :($theorymodule.$(nameof(only(term.head)))),
-        AlgTerm[compile(theorymodule, expr_lookup, arg) for arg in term.args]
+        [compile(theorymodule, expr_lookup, arg) for arg in term.args]...
       )
     end
   end
@@ -524,17 +521,22 @@ end
 function parsetypescope(c::Context, exprs::AbstractVector)
   scope = TypeScope()
   c′ = AppendScope(c, scope)
+  line = nothing
   for expr in exprs
     binding_exprs = @match expr begin
       a::Symbol => [:($a :: default)]
       Expr(:tuple, names...) => [:($name :: default) for name in names]
       Expr(:(::), Expr(:tuple, names...), T) => [:($name :: $T) for name in names]
       :($a :: $T) => [expr]
+      l::LineNumberNode => begin
+        line = l
+        []
+      end
       _ => error("invalid binding expression $expr")
     end
     for binding_expr in binding_exprs
       binding = fromexpr(c′, binding_expr, Binding{AlgType, Nothing})
-      Scopes.unsafe_pushbinding!(scope, binding)
+      Scopes.unsafe_pushbinding!(scope, setline(binding, line))
     end
   end
   scope

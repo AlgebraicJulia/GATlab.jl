@@ -5,6 +5,10 @@ using Gatlab, Test
 # GAT ASTs
 ##########
 
+function basicprinted(x)
+  sprint(show, x; context=(:color=>false))
+end
+
 scope = Scope(:number, :(+), :(*))
 
 number, plus, times = Reference.(idents(scope; name=[:number, :(+), :(*)]))
@@ -16,6 +20,20 @@ two = AlgTerm(Constant(2, AlgType(number)))
 three = AlgTerm(plus, [one, two])
 
 @test toexpr(scope, three) == :((1::number) + (2::number))
+
+@test fromexpr(EmptyContext(), two.head, AlgTerm) == two
+@test_throws Exception fromexpr(EmptyContext(), :(x = 3), AlgTerm)
+
+@test basicprinted(two) == "AlgTerm(:(2::number))"
+
+@test_throws Exception AlgSort(scope, three)
+
+@test sortcheck(scope, two) == AlgSort(number)
+
+@test_throws Exception sortcheck(scope, three)
+
+@test_throws Exception AlgSort(scope, three)
+
 
 # This throws a type error because it tries to look up `+` with a signature,
 # of AlgSorts, but `scope` only has nothing-typed signatures.

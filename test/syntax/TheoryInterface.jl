@@ -30,5 +30,19 @@ using .ThLawlessCategory
 @test compose == (⋅)
 @test parentmodule(id) == ThLawlessCategory
 @test Set(allnames(ThLawlessCategory.THEORY)) == Set([:Ob, :Hom, :dom, :codom, :compose, :id])
+@test nameof(ThLawlessCategory.THEORY) == :ThLawlessCategory
+@test keys(accessors(ThLawlessCategory.THEORY)) == Set([:dom, :codom])
+
+@test_throws Exception @eval @theory ThDoubleCategory <: ThCategory begin
+  Hom(dom::Ob, codom::Ob) :: TYPE
+end
+
+@test_throws Exception @eval @theory ThWeirdCategory <: ThCategory begin
+  dom(x::Ob, f::Hom(a, b)) :: Hom(a, b) ⊣ [(a,b)::Ob]
+end
+
+@test_throws Exception @eval @theory ThBadAliases <: ThCategory begin
+  @op 1 + 1
+end
 
 end
