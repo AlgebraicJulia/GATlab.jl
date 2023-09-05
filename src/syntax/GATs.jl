@@ -115,6 +115,12 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{AlgType})
   end
 end
 
+function Base.show(io::IO, type::AlgType)
+  print(io, "AlgType(")
+  print(io, toexpr(EmptyContext(), type))
+  print(io, ")")
+end
+
 """
 `Constant`
 
