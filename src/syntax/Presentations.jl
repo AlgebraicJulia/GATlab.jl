@@ -27,7 +27,7 @@ equations among terms which can refer to those generators. Each element of
   end
 end
 
-getcontext(p::Presentation) = AppendScope(p.theory, p.scope)
+Scopes.getcontext(p::Presentation) = AppendScope(p.theory, p.scope)
 
 """Context of presentation is the underlying GAT"""
 ExprInterop.toexpr(p::Presentation) = toexpr(p.theory, p)
