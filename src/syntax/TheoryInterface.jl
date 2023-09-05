@@ -1,9 +1,15 @@
 module TheoryInterface
-export @theory
+export @theory, Model
 
 using ..Scopes, ..GATs, ..ExprInterop
 
 using MLStyle
+
+abstract type Model{Tup <: Tuple} end
+
+struct WithModel{M <: Model}
+  model::M
+end
 
 """
 Each theory corresponds to a module, which has the following items.
@@ -62,9 +68,18 @@ macro theory(head, body)
 
   push!(modulelines, :(macro theory() $theory end))
 
-  for name in allnames(newsegment)
+  for name in Set(allnames(newsegment))
     # TODO: also push an automatically generated docstring
-    push!(modulelines, :(function $name end))
+    push!(
+      modulelines,
+      :(function $name(args...; model=nothing, context=nothing)
+          if !isnothing(model)
+            $name($(WithModel)(model), args...; context)
+          else
+            throw(MethodError($name, args))
+          end
+        end)
+    )
   end
 
   for binding in newsegment

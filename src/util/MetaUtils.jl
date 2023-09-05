@@ -19,19 +19,24 @@ const Expr0 = Union{Symbol,Expr}
   name::Expr0
   args::Vector{Expr0}
   kwargs::Vector{Expr0}
+  whereparams::Vector{Expr0}
   return_type::Union{Expr0,Nothing}
   impl::Union{Expr,Nothing}
   doc::Union{String,Nothing}
   
-  function JuliaFunction(name::Expr0, args=Expr0[], kwargs=Expr0[], 
-                         return_type=nothing,impl=nothing, doc=nothing)
-    new(name, args, kwargs, return_type, impl, doc)
+  function JuliaFunction(name::Expr0, args=Expr0[], kwargs=Expr0[], whereparams=Expr0[],
+                         return_type=nothing, impl=nothing, doc=nothing)
+    new(name, args, kwargs, whereparams, return_type, impl, doc)
   end
 end
 
 @struct_hash_equal struct JuliaFunctionSig
   name::Expr0
   types::Vector{Expr0}
+  whereparams::Vector{Expr0}
+  function JuliaFunctionSig(name::Expr0, types::Vector, whereparams::Vector=Expr0[])
+    new(name, types, whereparams)
+  end
 end
 
 # Parsing Julia functions
@@ -60,11 +65,15 @@ function parse_function(expr::Expr)::JuliaFunction
     Expr(:function, args...) => args
     _ => throw(ParseError("Ill-formed function definition $expr"))
   end
+  fun_head, whereparams = @match fun_expr begin
+    Expr(:where, fun_head, whereparams...) => (fun_head, whereparams)
+    _ => (fun_expr, Expr0[])
+  end
   (call_expr, return_type, impl, doc) = @match fun_expr begin
-    (Expr(:(::), Expr(:call, args...), return_type) =>
-      (Expr(:call, args...), return_type, impl, doc))
-    (Expr(:call, args...) =>
-      (Expr(:call, args...), nothing, impl, doc))
+    Expr(:(::), Expr(:call, args...), return_type) =>
+      (Expr(:call, args...), return_type, impl, doc)
+    Expr(:call, args...) =>
+      (Expr(:call, args...), nothing, impl, doc)
     _ => throw(ParseError("Ill-formed function header $fun_expr"))
   end
   (name, args, kwargs) = @match call_expr begin
@@ -72,7 +81,7 @@ function parse_function(expr::Expr)::JuliaFunction
     Expr(:call, name, args...) => (name, args, Expr0[])
     _ => throw(ParseError("Ill-formed call expression $call_expr"))
   end
-  JuliaFunction(name, args, kwargs, return_type, impl, doc)
+  JuliaFunction(name, args, kwargs, whereparams, return_type, impl, doc)
 end
 
 """ Parse signature of Julia function.
@@ -85,7 +94,7 @@ function parse_function_sig(fun::JuliaFunction)::JuliaFunctionSig
       _ => :Any
     end
   end
-  JuliaFunctionSig(fun.name, types)
+  JuliaFunctionSig(fun.name, types, fun.whereparams)
 end
 
 """ Wrap Julia expression with docstring.
@@ -103,6 +112,9 @@ end
 """
 function generate_function(fun::JuliaFunction; rename=n->n)::Expr
   call_expr = Expr(:call, rename(fun.name), Expr(:parameters, fun.kwargs...), fun.args...)
+  if !isempty(fun.whereparams)
+    call_expr = Expr(:where, call_expr, fun.whereparams...)
+  end
   head = if isnothing(fun.return_type)
     call_expr
   else 

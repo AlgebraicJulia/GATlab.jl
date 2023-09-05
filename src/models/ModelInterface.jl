@@ -56,8 +56,9 @@ need the domains and codomains of the FinFunctions explicitly supplied.
 
 A model `m::Model{Tup}` implements a theory iff it implements all of the GATSegments
 in the theory.
+
+Models are defined in TheoryInterface because reasons
 """
-abstract type Model{Tup <: Tuple} end
 
 """
 `ImplementationNotes`
@@ -128,12 +129,7 @@ macro instance(head, model, body)
 
   # Get the model type that we are overloading for, or nothing if this is the
   # default instance for `instance_types`
-  model_type = @match model begin
-    Expr(:tuple, Expr(:parameters, Expr(:(::), :model, model_type))) => model_type
-    nothing => nothing
-    _ => error("invalid syntax for declaring model type: $model")
-  end
-
+  model_type, whereparams = parse_model_param(model)
   # Parse the body into functions defined here and functions defined elsewhere
   functions, ext_functions = parse_instance_body(body)
 
@@ -146,13 +142,13 @@ macro instance(head, model, body)
   # `theory_module`, i.e. changes `Ob(x) = blah` to `ThCategory.Ob(x; model::M,
   # context=nothing) = blah`
   qualified_functions = 
-    map(fun -> qualify_function(fun, theory_module, model_type), typechecked_functions)
+    map(fun -> qualify_function(fun, theory_module, model_type, whereparams), typechecked_functions)
 
   # Declare that this model implements the theory
 
   implements_declarations = if !isnothing(model_type)
     map(theory.segments.scopes) do scope
-      implements_declaration(model_type, scope)
+      implements_declaration(model_type, scope, whereparams)
     end
   else
     []
@@ -166,6 +162,21 @@ end
 
 macro instance(head, body)
   esc(:(@instance $head $(nothing) $body))
+end
+
+function parse_model_param(e)
+  paramdecl, whereparams = @match e begin
+    Expr(:where, paramdecl, whereparams...) => (paramdecl, whereparams)
+    _ => (e, [])
+  end
+
+  model_type = @match paramdecl begin
+    Expr(:tuple, Expr(:parameters, Expr(:(::), :model, model_type))) => model_type
+    nothing => nothing
+    _ => error("invalid syntax for declaring model type: $model")
+  end
+
+  (model_type, whereparams)
 end
 
 """
@@ -196,7 +207,7 @@ function default_typecon_impl(X::Ident, theory::GAT, jltype_by_sort::Dict{AlgSor
   JuliaFunction(
     nameof(X),
     Expr0[Expr(:(::), at) for at in argtypes],
-    Expr0[], :Bool, :(return true), nothing
+    Expr0[], Expr0[], :Bool, :(return true), nothing
   )
 end
 
@@ -208,7 +219,7 @@ function default_accessor_impl(
   jltype = jltype_by_sort[AlgSort(X)]
   errormsg = "$(accessor) not defined for $(jltype)"
   JuliaFunction(
-    accessor, Expr0[Expr(:(::), jltype)], Expr0[],
+    accessor, Expr0[Expr(:(::), jltype)], Expr0[], Expr0[],
     nothing, :(error($errormsg * " in model $model"))
   )
 end
@@ -352,31 +363,37 @@ Qualify method name to be in theory module
 Add `context` kwargs if not already present
   
 TODO: throw error if there's junk kwargs present already?
-TODO: possibly add `where` clause if the model_type has a parameter
 """
-function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{Expr0, Nothing})
-  kwargs = if isnothing(model_type)
-    Expr0[Expr(:kw, :context, nothing)]
+function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{Expr0, Nothing}, whereparams)
+  kwargs = Expr0[Expr(:kw, :context, nothing)]
+
+  (args, impl) = if !isnothing(model_type)
+    m = gensym(:m)
+    (
+      [Expr(:(::), m, Expr(:curly, TheoryInterface.WithModel, model_type)), fun.args...],
+      Expr(:let, Expr(:(=), :model, :($m.model)), fun.impl)
+    )
   else
-    Expr0[Expr(:kw, :context, nothing), Expr(:(::), :model, model_type)]
+    (fun.args, fun.impl)
   end
 
   JuliaFunction(
     Expr(:., theory_module, QuoteNode(fun.name)),
-    fun.args,
+    args,
     kwargs,
+    vcat(fun.whereparams, whereparams),
     fun.return_type,
-    fun.impl,
+    impl,
     fun.doc
   )
 end
 
-function implements_declaration(model_type, scope)
+function implements_declaration(model_type, scope, whereparams)
   notes = ImplementationNotes(nothing)
   quote
     $(GlobalRef(ModelInterface, :implements))(
       ::$(model_type), ::Type{Val{$(gettag(scope))}}
-    ) = $notes
+    ) where {$(whereparams...)} = $notes
   end
 end
 

@@ -61,7 +61,7 @@ end
   codom::FinSet 
 end 
 
-@instance ThCategory{FinSet,FinFunction} begin 
+@instance ThCategory{FinSet, FinFunction} begin
   dom(f::FinFunction) = f.dom 
   codom(f::FinFunction) = f.codom
   
@@ -80,7 +80,7 @@ g = FinFunction([1,1,1],B,A)
   @test mcompose(id(2), id(2); context=(;B₁=2)) == id(4)
 end
 
-@test_throws UndefKeywordError id(2) # the macro does not globally overload methods
+@test_throws MethodError id(2)
 
 @test_throws LoadError @eval @instance ThCategory{Int, Vector{Int}} (;model::FinSetC) begin
 end
