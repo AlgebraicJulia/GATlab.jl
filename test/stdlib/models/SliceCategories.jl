@@ -12,6 +12,7 @@ using .ThCategory
   @test !Ob(MkOb(3, [1,3,2,4]))
   @test !Ob(MkOb(3, [1,3,9]))
   @test Hom([1,2,2], MkOb(3, [1,3,3]), MkOb(2, [1,3]))
+  @test id(MkOb(3,[1,3,2])) == compose([1,3,2],[1,3,2])
 end
 
-end
+end # module
