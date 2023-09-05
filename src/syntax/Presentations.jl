@@ -14,16 +14,16 @@ equations among terms which can refer to those generators. Each element of
   theory::GAT
   scope::TypeScope
   eqs::Vector{Vector{AlgTerm}}
-  function Presentation(g, s, eqs=[])
-    gs = AppendScope(g, s)
+  function Presentation(gat, scope, eqs=[])
+    gatscope = AppendScope(gat, scope)
     # scope terms must be defined in GAT 
-    sortcheck.(Ref(gs), getvalue.(s))
+    sortcheck.(Ref(gatscope), getvalue.(scope))
     # eq terms must be defined in GAT ++ scope
     for eq in eqs 
       length(eq) > 1 || error("At least two things must be equated")
-      sortcheck.(Ref(gs), eq)
+      sortcheck.(Ref(gatscope), eq)
     end
-    new(g, s, collect.(eqs))
+    new(gat, scope, collect.(eqs))
   end
 end
 
@@ -43,14 +43,18 @@ function ExprInterop.toexpr(c::Context, p::Presentation)
 end
 
 """
-Parse, e.g.,  (a,b,c)::Ob
-              f::Hom(a, b)
-              g::Hom(b, c)
-              h::Hom(a, c)
-              h′::Hom(a, c)
-              compose(f, g) == h == h′
+Parse, e.g.:
+
+```
+(a,b,c)::Ob
+f::Hom(a, b)
+g::Hom(b, c)
+h::Hom(a, c)
+h′::Hom(a, c)
+compose(f, g) == h == h′
+```
 """
-function ExprInterop.fromexpr(c::Context, e, ::Type{Presentation})
+function ExprInterop.fromexpr(ctx::Context, e, ::Type{Presentation})
   e.head == :block || error("expected a block to parse into a GATSegment, got: $e")
   scopelines, eqlines = Expr0[], Vector{Expr0}[]
   for line in e.args
@@ -64,9 +68,9 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{Presentation})
       push!(scopelines, line)
     end
   end
-  scope = GATs.parsetypescope(c, scopelines)
-  apscope = AppendScope(c, scope)
-  Presentation(c, scope, [fromexpr.(Ref(apscope), ts, AlgTerm) for ts in eqlines])
+  scope = GATs.parsetypescope(ctx, scopelines)
+  apscope = AppendScope(ctx, scope)
+  Presentation(ctx, scope, [fromexpr.(Ref(apscope), ts, AlgTerm) for ts in eqlines])
 end
 
 end # module 
