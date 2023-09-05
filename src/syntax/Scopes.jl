@@ -10,7 +10,7 @@ export
   HasContext, getcontext,
   hasident, ident, idents, canonicalize,
   HasScope, haslid, getscope, getbindings, getbinding,
-  valtype, sigtype, identvalues, namevalues,
+  sigtype, identvalues, namevalues,
   Scope, ScopeList, HasScopeList, AppendScope,
   EmptyContext
 
@@ -580,8 +580,8 @@ function namevalues(hs::HasScope)
   end
 end
 
-valtype(hs::HasScope{T}) where {T} = T
-sigtype(hs::HasScope{T, Sig}) where {T, Sig} = Sig
+Base.valtype(::HasScope{T}) where {T} = T
+sigtype(::HasScope{T, Sig}) where {T, Sig} = Sig
 
 # Overloads of methods in Base
 

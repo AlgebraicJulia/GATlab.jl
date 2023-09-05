@@ -54,8 +54,8 @@ nameless = Ident(tag1, LID(1), nothing)
 ############
 
 y = Ident(tag2, LID(1), :y)
-
-xdoty = Reference(x, y)
+xdoty = Reference(x, Reference(y))
+@test xdoty == Reference(x,y)
 
 @test first(xdoty) == x
 @test rest(xdoty) == Reference(y)
@@ -83,6 +83,8 @@ xsub1 = Reference(x, nameless)
 
 bind_x = Binding{String}(:x, Set([:x, :X]), "ex")
 bind_y = Binding{String}(:y, Set([:y, :Y]), "why")
+
+@test retag(Dict(tag1 => tag2), bind_x) == bind_x
 
 @test nameof(bind_x) == :x
 @test getvalue(bind_x) == "ex"
@@ -132,12 +134,15 @@ xy_scope′ = Scope([bind_x]; tag=tag1)
 @test nameof(ident(xy_scope; name=:X)) == :X
 @test ident(xy_scope; lid=LID(1)) == x
 @test_throws BoundsError ident(xy_scope; name=:x, level=2)
+@test hasident(xy_scope, x)
+@test !hasident(xy_scope; tag=tag1)
 
 s = Scope{String, Int}()
 
 bind_x_typed = Binding{String, Int}(:x, Set([:x]), "ex", 2)
 
 Scopes.unsafe_pushbinding!(s, bind_x_typed)
+@test_throws ErrorException Scopes.unsafe_pushbinding!(s, bind_x_typed)
 
 s_tag = gettag(s)
 
@@ -186,6 +191,15 @@ bind_z = Binding{String}(:z, Set([:z]), "zee")
 
 xz_scope = Scope([bind_x, bind_z])
 
+@test_throws ErrorException Scope([bind_z, bind_z])
+
+@test LID(1) == getlid(xz_scope; lid=LID(1))
+@test_throws KeyError getlid(xz_scope; lid=LID(-1))
+@test_throws KeyError getbinding(xz_scope, LID(-1))
+@test_throws ScopeTagError getbinding(xz_scope, y)
+@test namevalues(xz_scope) == [:x=>"ex",:z => "zee"]
+@test valtype(xz_scope) == String
+
 c = ScopeList([xy_scope, xz_scope])
 
 @test getscope(c, 1) == xy_scope
@@ -201,6 +215,7 @@ c = ScopeList([xy_scope, xz_scope])
 @test ident(c; name=:x) == Ident(gettag(xz_scope), LID(1), :x)
 @test ident(c; name=:x, level=1) == Ident(gettag(xy_scope), LID(1), :x)
 @test nameof(ident(c; level=1, lid=LID(2))) == :y
+@test_throws ErrorException ident(c)
 
 # AppendScope
 #############
@@ -223,4 +238,10 @@ c = AppendScope(ScopeList([xy_scope]), xz_scope)
 @test ident(c; name=:x, level=1) == Ident(gettag(xy_scope), LID(1), :x)
 @test nameof(ident(c; level=1, lid=LID(2))) == :y
 
+# EmptyContext 
+e = EmptyContext()
+@test_throws BoundsError getscope(e, 1)
+@test_throws KeyError getlevel(e, :x) 
+@test_throws KeyError getlevel(e, gettag(x))
+@test !hasname(e, :x)
 end

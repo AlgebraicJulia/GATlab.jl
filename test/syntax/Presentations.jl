@@ -22,4 +22,13 @@ x2 = toexpr(p2)
 p2′ = fromexpr(T,x2, Presentation);
 @test length(only(p2′.eqs)) == 3
 
+# HasContext interface
+@test nscopes(p1) == nscopes(T) + 1 
+@test length(getscope(p1, nscopes(p1))) == 7
+@test !hastag(p1, newscopetag())
+@test hasname(p1, :f)
+@test !hasname(p1, :q)
+@test getlevel(p1, :id) < getlevel(p1, :f)
+@test getlevel(p1, gettag(f)) == nscopes(p1)
+
 end # module 

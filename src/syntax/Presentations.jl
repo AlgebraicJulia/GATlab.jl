@@ -3,7 +3,8 @@ export Presentation
 
 using ...Util
 using ..Scopes, ..GATs, ..ExprInterop
-using StructEquality 
+using StructEquality
+import ..Scopes: getcontext, nscopes, hastag, hasname, getlevel
 
 """
 A presentation has a set of generators, given by a `TypeScope`, and a set of 
