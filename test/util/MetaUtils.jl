@@ -52,4 +52,6 @@ bindings = Dict((:r => :R, :s => :S, :t => :T))
 @test replace_symbols(bindings, :(foo(x::r,y::s)::t)) == :(foo(x::R,y::S)::T)
 @test replace_symbols(bindings, :(foo(xs::Vararg{r}))) == :(foo(xs::Vararg{R}))
 
+@test replace_symbols(bindings, parse_fun(:(f(r,s) = r))) == parse_fun(:(f(R, S) = R))
+
 end
