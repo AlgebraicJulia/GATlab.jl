@@ -446,6 +446,10 @@ function Scope(pairs::Pair{Symbol, T}...; tag=newscopetag()) where {T}
   Scope(Binding{T, Nothing}[Binding{T, Nothing}(x, Set([x]), v) for (x, v) in pairs]; tag)
 end
 
+function Scope{T}(pairs::Pair{Symbol, <:T}...; tag=newscopetag()) where {T}
+  Scope(Binding{T, Nothing}[Binding{T, Nothing}(x, Set([x]), v) for (x, v) in pairs]; tag)
+end
+
 function Scope(symbols::Symbol...; tag=newscopetag())
   Scope(Pair{Symbol, Nothing}[x => nothing for x in symbols]...; tag)
 end
@@ -729,6 +733,8 @@ end
 
 Base.getindex(c::Context, x::Ident) = getbinding(getscope(c, x), x)
 Base.getindex(c::Context, x::Reference) = c[only(x)]
+
+getvalue(c::Context, x::Ident) = getvalue(c[x])
 
 # ScopeList
 ###########
