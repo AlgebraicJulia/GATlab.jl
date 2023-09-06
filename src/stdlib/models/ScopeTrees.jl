@@ -1,55 +1,60 @@
 module ScopeTrees
-export ScopeTree, pure, wrap, unwrap, isleaf, isnode,
+export ScopeTree, ScopeLeaf, ScopeNode, pure, wrap, unwrap, isleaf, isnode,
   ScopeTreeHom
 
-using ....Util
 using ....Syntax, ....Models, ...StdTheories
 using MLStyle
 
 # Scope Tree
 ############
 
-struct ScopeTree{T}
-  val::Either{T, Scope{ScopeTree{T}, Nothing}}
+@data ScopeTree{T} <: HasContext begin
+  ScopeLeaf(T)
+  ScopeNode(Scope{ScopeTree{T}, Nothing})
 end
 
-pure(x::T) where {T} = ScopeTree{T}(Left(x))
+Scopes.getcontext(t::ScopeTree) = @match t begin
+  ScopeLeaf(_) => EmptyContext()
+  ScopeNode(s) => s
+end
 
-wrap(s::Scope{ScopeTree{T}, Nothing}) where {T} = ScopeTree{T}(Right(s))
+pure(x::T) where {T} = ScopeLeaf{T}(x)
 
-wrap(p::Pair{Symbol, ScopeTree{T}}...) where {T} = wrap(Scope(p...))
+wrap(s::Scope{ScopeTree{T}}) where {T} = ScopeNode{T}(s)
 
-unwrap(t::ScopeTree) = t.val.val
+wrap(p::Pair{Symbol,<:ScopeTree{T}}...) where {T} = wrap(Scope{ScopeTree{T}}(p...))
 
-isnode(t::ScopeTree) = isright(t.val)
+unwrap(t::ScopeTree) = @match t begin
+  ScopeLeaf(x) => x
+  ScopeNode(s) => s
+end
 
-isleaf(t::ScopeTree) = isleft(t.val)
+isleaf(t::ScopeTree) = @match t begin
+  ScopeLeaf(_) => true
+  ScopeNode(_) => false
+end
 
-Base.keys(t::ScopeTree) =
-  if isleaf(t)
-    [Reference()]
-  else
-    s = unwrap(t)
-    vcat([map(r -> Reference(x, r), keys(t′)) for (x,t′) in identvalues(s)]...)
-  end
+isnode(t::ScopeTree) = @match t begin
+  ScopeLeaf(_) => false
+  ScopeNode(_) => true
+end
 
-Base.haskey(t::ScopeTree, k::Reference) =
-  if isleaf(t) && isempty(k)
-    true
-  elseif isnode(t) && !isempty(k) && hasident(s, first(k))
-    haskey(getvalue(unwrap(t), first(k)), rest(k))
-  else
-    false
-  end
+Base.keys(t::ScopeTree) = @match t begin
+  ScopeLeaf(_) => [Reference()]
+  ScopeNode(s) => vcat([map(r -> Reference(x, r), keys(t)) for (x,t) in identvalues(s)]...)
+end
 
-Base.getindex(t::ScopeTree, k::Reference) =
-  if isleaf(t) && isempty(k)
-    unwrap(t)
-  elseif isnode(t) && !isempty(k) && hasident(s, first(k))
-    getvalue(unwrap(t), first(k))[rest(k)]
-  else
-    throw(KeyError(k))
-  end
+Base.haskey(t::ScopeTree, k::Reference) = @match t begin
+  ScopeLeaf(_) && if isempty(k) end => true
+  ScopeNode(s) && if !isempty(k) && hasident(s, first(k)) end => haskey(getvalue(s, first(k)), rest(k))
+  _ => false
+end
+
+Base.getindex(t::ScopeTree, k::Reference) = @match t begin
+  ScopeLeaf(x) && if isempty(k) end => x
+  ScopeNode(s) && if !isempty(k) && hasident(s, first(k)) end => getvalue(s, first(k))[rest(k)]
+  _ => throw(KeyError(k))
+end
 
 struct ScopeTreeHom{S}
   map::Dict{Reference, Tuple{Reference, S}}
@@ -60,12 +65,10 @@ struct ScopeTreeC{Ob, Hom, C<:Model{Tuple{Ob, Hom}}} <: Model{Tuple{ScopeTree{Ob
 end
 
 @instance ThCategory{ScopeTree{Ob}, ScopeTreeHom{Hom}} (;model::ScopeTreeC{Ob, Hom, C}) where {Ob, Hom, C} begin
-  Ob(t::ScopeTree{Ob}) =
-    if isleaf(t)
-      Ob(unwrap(t); model=model.c)
-    else
-      all(t′ -> Ob(t′; model), getvalues(unwrap(s)))
-    end
+  Ob(t::ScopeTree{Ob}) = @match t begin
+    ScopeLeaf(x) => Ob(x; model=model.c)
+    ScopeNode(s) => all(t′ -> Ob(t′; model), getvalues(s))
+  end
 
   function Hom(f::ScopeTreeHom{Hom}, x::ScopeTree{Ob}, y::ScopeTree{Ob})
     Set(keys(f.map)) == keys(x) && Set(first.(values(f.map))) == keys(y) || return false
