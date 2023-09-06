@@ -1,5 +1,5 @@
 module SymbolicModels
-export GATExpr, @symbolic_model
+export GATExpr, @symbolic_model, SyntaxDomainError
 
 using ...Syntax
 
@@ -103,9 +103,9 @@ function symbolic_constructor(theoryname, name::Ident, termcon::AlgTermConstruct
   for expr_set in values(eqs)
     exprs = build_infer_expr.(Ref(theorymodule), [expr_set...])
     for (a, b) in zip(exprs, exprs[2:end])
-      errexpr = Expr(:call, GlobalRef(SymbolicModels, :SyntaxDomainError),
+      errexpr = Expr(:call, throw, Expr(:call, GlobalRef(SymbolicModels, :SyntaxDomainError),
                      Expr(:quote, nameof(name)),
-                     Expr(:vect, nameof.(termcon.args)...))
+                     Expr(:vect, nameof.(termcon.args)...)))
 
       push!(eq_exprs, Expr(:(||), Expr(:call, :(==), a, b), errexpr))
     end
