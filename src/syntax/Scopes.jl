@@ -28,8 +28,34 @@ using ...Util
 """
 The tag that makes reference to a specific scope possible.
 """
-const ScopeTag = UUID
-newscopetag() = uuid4()
+@struct_hash_equal struct ScopeTag
+  val::UUID
+end
+
+newscopetag() = ScopeTag(uuid4())
+
+const DARK_MODE = Ref(true)
+
+function tagcrayon(tag::ScopeTag)
+  lightnessrange = if DARK_MODE[]
+    (50., 100.)
+  else
+    (0., 50.)
+  end
+  hashcrayon(tag; lightnessrange, chromarange=(50., 100.))
+end
+
+function Base.show(io::IO, tag::ScopeTag)
+  print(io, "ScopeTag(")
+  if get(io, :color, true)
+    crayon = tagcrayon(tag)
+    print(io, crayon, "•")
+    print(io, inv(crayon))
+  else
+    print(io, tag.val)
+  end
+  print(io, ")")
+end
 
 """
 `retag(replacements::Dict{ScopeTag, ScopeTag}, x::T) where {T} -> T`
@@ -61,17 +87,6 @@ end
 
 Base.showerror(io::IO, e::ScopeTagError) =
   print(io, "tag from ", e.thing, " does not match anything in ", e.expectedcontext)
-
-const DARK_MODE = Ref(true)
-
-function tagcrayon(tag::ScopeTag)
-  lightnessrange = if DARK_MODE[]
-    (50., 100.)
-  else
-    (0., 50.)
-  end
-  hashcrayon(tag; lightnessrange, chromarange=(50., 100.))
-end
 
 # Local IDs
 ###########
@@ -162,36 +177,46 @@ A path of identifiers. We optimize for the (frequent) case where there is only
 one identifier by making this a linked list.
 """
 @struct_hash_equal struct Reference
-  first::Ident
-  rest::Union{Reference, Nothing}
-  function Reference(first::Ident, rest::Union{Reference, Nothing}=nothing)
-    new(first, rest)
-  end
+  body::Union{Nothing, Tuple{Ident, Reference}}
 end
 
-function Reference(first::Ident, rest...)
-  if isempty(rest)
-    Reference(first)
+function Reference(xs::Ident...)
+  if isempty(xs)
+    Reference(nothing)
   else
-    Reference(first, Reference(rest...))
+    Reference(xs[1], Reference(xs[2:end]...))
   end
 end
 
-Base.first(p::Reference) = p.first
+function Reference(first::Ident, rest::Reference)
+  Reference((first, rest))
+end
 
-Base.rest(p::Reference) = p.rest
+Base.isempty(p::Reference) = isnothing(p.body)
+
+Base.first(p::Reference) = !isempty(p) ? p.body[1] : throw(BoundsError(p, 1))
+
+Base.rest(p::Reference) = !isempty(p) ? p.body[2] : p
 
 function Base.only(p::Reference)
-  if !isnothing(rest(p))
+  if isempty(p)
+    throw(ArgumentError("Reference is empty, must contain exactly 1 element"))
+  end
+  (x, r) = p.body
+  if !isempty(r)
     throw(ArgumentError("Reference has multiple elements, must contain exactly 1 element"))
   end
-  first(p)
+  x
 end
 
 function Base.show(io::IO, p::Reference)
+  if isempty(p)
+    print(io, "_")
+    return
+  end
   cur = p
-  show(io, cur.first)
-  while !isnothing(rest(cur))
+  show(io, first(cur))
+  while !isempty(rest(cur))
     cur = rest(cur)
     id = first(cur)
     if isnamed(id)
@@ -206,10 +231,10 @@ function Base.show(io::IO, p::Reference)
 end
 
 retag(replacements::Dict{ScopeTag, ScopeTag}, p::Reference) =
-  Reference(retag(replacements, first(p)), retag(replacements, rest(p)))
+  isempty(p) ? p : Reference(retag(replacements, first(p)), retag(replacements, rest(p)))
 
 rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, p::Reference) =
-  Reference(rename(tag, replacements, first(p)), rename(tag, replacements, rest(p)))
+  isempty(p) ? p : Reference(rename(tag, replacements, first(p)), rename(tag, replacements, rest(p)))
 
 # Bindings
 ##########

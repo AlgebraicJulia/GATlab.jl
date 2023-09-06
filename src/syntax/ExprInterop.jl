@@ -69,7 +69,7 @@ function fromexpr(c::Context, e, ::Type{Ident}; sig=nothing)
 end
 
 function toexpr(c::Context, ref::Reference)
-  if isnothing(rest(ref))
+  if isempty(rest(ref))
     toexpr(c, first(ref))
   else
     error("paths not supported yet")
