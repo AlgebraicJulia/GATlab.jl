@@ -8,7 +8,7 @@ abstract type ObExpr{T} <: CategoryExpr{T} end
 
 abstract type HomExpr{T} <: CategoryExpr{T} end
 
-@macroexpand @symbolic_model FreeCategory{ObExpr, HomExpr} ThCategory begin
+@symbolic_model FreeCategory{ObExpr, HomExpr} ThCategory begin
 end
 
 x, y = FreeCategory.Ob{:generator}([:x], []), FreeCategory.Ob{:generator}([:y], [])
