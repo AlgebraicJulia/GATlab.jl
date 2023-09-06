@@ -19,4 +19,10 @@ f = FreeCategory.Hom{:generator}([:f], [x, y])
 @test ThCategory.compose(ThCategory.id(x), f) isa HomExpr{:compose}
 @test_throws SyntaxDomainError ThCategory.compose(f, f)
 
+try
+  ThCategory.compose(f, f)
+catch e
+  @test sprint(show, e) isa String
+end
+
 end
