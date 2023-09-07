@@ -609,6 +609,12 @@ function namevalues(hs::HasScope)
   end
 end
 
+function Base.values(hs::HasScope)
+  map(getbindings(hs)) do binding
+    getvalue(binding)
+  end
+end
+
 Base.valtype(::HasScope{T}) where {T} = T
 sigtype(::HasScope{T, Sig}) where {T, Sig} = Sig
 
@@ -735,6 +741,7 @@ Base.getindex(c::Context, x::Ident) = getbinding(getscope(c, x), x)
 Base.getindex(c::Context, x::Reference) = c[only(x)]
 
 getvalue(c::Context, x::Ident) = getvalue(c[x])
+getvalue(c::Context, name::Symbol) = getvalue(c[ident(c; name)])
 
 # ScopeList
 ###########

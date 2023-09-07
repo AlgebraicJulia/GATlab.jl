@@ -1,6 +1,6 @@
 module ScopeTrees
 export ScopeTree, ScopeLeaf, ScopeNode, pure, wrap, unwrap, isleaf, isnode,
-  ScopeTreeHom
+  ScopeTreeHom, ScopeTreeC
 
 using ....Syntax, ....Models, ...StdTheories
 using MLStyle
@@ -60,29 +60,39 @@ struct ScopeTreeHom{S}
   map::Dict{Reference, Tuple{Reference, S}}
 end
 
-struct ScopeTreeC{Ob, Hom, C<:Model{Tuple{Ob, Hom}}} <: Model{Tuple{ScopeTree{Ob}, ScopeTreeHom{Hom}}}
+function ScopeTreeHom(pairs::Pair{Reference, Tuple{Reference, S}}...) where {S}
+  ScopeTreeHom{S}(Dict{Reference, Tuple{Reference, S}}(pairs...))
+end
+
+struct ScopeTreeC{ObT, HomT, C<:Model{Tuple{ObT, HomT}}} <: Model{Tuple{ScopeTree{ObT}, ScopeTreeHom{HomT}}}
   c::C
 end
 
-@instance ThCategory{ScopeTree{Ob}, ScopeTreeHom{Hom}} (;model::ScopeTreeC{Ob, Hom, C}) where {Ob, Hom, C} begin
-  Ob(t::ScopeTree{Ob}) = @match t begin
+using .ThCategory
+
+function seteq(x, y)
+  (x ⊆ y) && (y ⊆ x)
+end
+
+@instance ThCategory{ScopeTree{ObT}, ScopeTreeHom{HomT}} (;model::ScopeTreeC{ObT, HomT, C}) where {ObT, HomT, C} begin
+  Ob(t::ScopeTree{ObT}) = @match t begin
     ScopeLeaf(x) => Ob(x; model=model.c)
-    ScopeNode(s) => all(t′ -> Ob(t′; model), getvalues(s))
+    ScopeNode(s) => all(t′ -> Ob(t′; model), values(s))
   end
 
-  function Hom(f::ScopeTreeHom{Hom}, x::ScopeTree{Ob}, y::ScopeTree{Ob})
-    Set(keys(f.map)) == keys(x) && Set(first.(values(f.map))) == keys(y) || return false
-    all(Hom(f₀, x[i], y[j]; model=model.c) for (i, (j, f)) in f.map)
+  function Hom(f::ScopeTreeHom{HomT}, x::ScopeTree{ObT}, y::ScopeTree{ObT})
+    seteq(keys(f.map), keys(x)) && seteq(first.(values(f.map)), keys(y)) || return false
+    all(Hom(f₀, x[i], y[j]; model=model.c) for (i, (j, f₀)) in f.map)
   end
 
-  id(x::ScopeTree{Ob}) = ScopeTreeHom{Hom}(k => (k, id(x[k]; model=model.c)))
+  id(x::ScopeTree{ObT}) = ScopeTreeHom{HomT}(k => (k, id(x[k]; model=model.c)))
 
-  function compose(f::ScopeTreeHom{Hom}, g::ScopeTreeHom{Hom}; context)
+  function compose(f::ScopeTreeHom{HomT}, g::ScopeTreeHom{HomT}; context)
     if !isnothing(context)
       [:a,:b,:c] ⊂ keys(context) || error("must provide full context or nothing")
     end
 
-    ScopeTreeHom{Hom}(
+    ScopeTreeHom{HomT}(
       k => begin
         (k′, f₀) = f.map[k]
         (k″, g₀) = g.map[k′]
