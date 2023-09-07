@@ -5,6 +5,8 @@ export ScopeTree, ScopeLeaf, ScopeNode, pure, wrap, unwrap, isleaf, isnode,
 using ....Syntax, ....Models, ...StdTheories
 using MLStyle
 
+using StructEquality
+
 # Scope Tree
 ############
 
@@ -56,7 +58,7 @@ Base.getindex(t::ScopeTree, k::Reference) = @match t begin
   _ => throw(KeyError(k))
 end
 
-struct ScopeTreeHom{S}
+@struct_hash_equal struct ScopeTreeHom{S}
   map::Dict{Reference, Tuple{Reference, S}}
 end
 
@@ -64,8 +66,12 @@ function ScopeTreeHom(pairs::Pair{Reference, Tuple{Reference, S}}...) where {S}
   ScopeTreeHom{S}(Dict{Reference, Tuple{Reference, S}}(pairs...))
 end
 
-struct ScopeTreeC{ObT, HomT, C<:Model{Tuple{ObT, HomT}}} <: Model{Tuple{ScopeTree{ObT}, ScopeTreeHom{HomT}}}
+@struct_hash_equal struct ScopeTreeC{ObT, HomT, C<:Model{Tuple{ObT, HomT}}} <: Model{Tuple{ScopeTree{ObT}, ScopeTreeHom{HomT}}}
   c::C
+end
+
+function ScopeTreeC(c::C) where {ObT, HomT, C<:Model{Tuple{ObT, HomT}}}
+  ScopeTreeC{ObT, HomT, C}(c)
 end
 
 using .ThCategory
@@ -85,7 +91,7 @@ end
     all(Hom(f₀, x[i], y[j]; model=model.c) for (i, (j, f₀)) in f.map)
   end
 
-  id(x::ScopeTree{ObT}) = ScopeTreeHom{HomT}(k => (k, id(x[k]; model=model.c)))
+  id(x::ScopeTree{ObT}) = ScopeTreeHom{HomT}(Dict(k => (k, id(x[k]; model=model.c)) for k in keys(x)))
 
   function compose(f::ScopeTreeHom{HomT}, g::ScopeTreeHom{HomT}; context)
     if !isnothing(context)
@@ -93,7 +99,7 @@ end
     end
 
     ScopeTreeHom{HomT}(
-      k => begin
+      Dict{Reference, Tuple{Reference, HomT}}(k => begin
         (k′, f₀) = f.map[k]
         (k″, g₀) = g.map[k′]
         localcontext = if !isnothing(context)
@@ -101,9 +107,9 @@ end
         else
           nothing
         end
-        (k″, compose(f₀, g₀; localcontext))
+        (k″, compose(f₀, g₀; context=localcontext, model=model.c))
       end
-      for k in keys(f.map)
+      for k in keys(f.map))
     )
   end
 end
