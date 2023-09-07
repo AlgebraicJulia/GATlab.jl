@@ -30,4 +30,7 @@ c = ScopeList([scope, scope′])
 @test toexpr(c, Reference(x)) == :x!1
 @test fromexpr(c, :x!1, Reference) == Reference(x)
 
+@test toexpr(c, Reference()) == :(_)
+@test fromexpr(c, :(_), Reference) == Reference()
+
 end
