@@ -37,7 +37,7 @@ id_t1 = ScopeTreeHom(a => (a, [1]), b => (b, [1]), c => (c, [1,2]))
   @test_throws TypeCheckFail Ob(wrap(:x => pure(-1)))
   @test Hom(f, t1, t2) == f
   @test_throws TypeCheckFail Hom(f, t1, t1)
-  @test_throws TypeCheckFail Hom(ScopeTreeHom(a => (a, [2]), b => (b, [1]), c => (c, [1,2])))
+  @test_throws TypeCheckFail Hom(ScopeTreeHom(a => (a, [2]), b => (b, [1]), c => (c, [1,2])), t1, t2)
   @test id(t1) == id_t1
   @test compose(id(t1), f) == f
 end
