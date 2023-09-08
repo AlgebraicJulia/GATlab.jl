@@ -29,6 +29,7 @@ GatlabSciMLExt = ["ModelingToolkit"]
 
 [compat]
 Colors = "0.12"
+Crayons = "4"
 DataStructures = "0.18"
 JSON = "0.21"
 MLStyle = "0.4"
