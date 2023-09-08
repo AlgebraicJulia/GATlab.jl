@@ -1,14 +1,14 @@
 using Documenter
 using Literate
 
-@info "Loading Gatlab"
-using Gatlab
+@info "Loading GATlab"
+using GATlab
 
 # Set Literate.jl config if not being compiled on recognized service.
 config = Dict{String,String}()
 if !(haskey(ENV, "GITHUB_ACTIONS") || haskey(ENV, "GITLAB_CI"))
-  config["nbviewer_root_url"] = "https://nbviewer.jupyter.org/github/AlgebraicJulia/Gatlab.jl/blob/gh-pages/dev"
-  config["repo_root_url"] = "https://github.com/AlgebraicJulia/Gatlab.jl/blob/main/docs"
+  config["nbviewer_root_url"] = "https://nbviewer.jupyter.org/github/AlgebraicJulia/GATlab.jl/blob/gh-pages/dev"
+  config["repo_root_url"] = "https://github.com/AlgebraicJulia/GATlab.jl/blob/main/docs"
 end
 
 const literate_dir = joinpath(@__DIR__, "..", "examples")
@@ -29,13 +29,13 @@ end
 
 @info "Building Documenter.jl docs"
 makedocs(
-  modules=[Gatlab],
+  modules=[GATlab],
   format=Documenter.HTML(),
-  sitename="Gatlab.jl",
+  sitename="GATlab.jl",
   doctest=false,
   checkdocs=:none,
   pages=Any[
-    "Gatlab.jl" => "index.md",
+    "GATlab.jl" => "index.md",
     "Concepts" => Any[
       "concepts/overview.md",
       "concepts/theories.md",
@@ -49,6 +49,6 @@ makedocs(
 @info "Deploying docs"
 deploydocs(
   target="build",
-  repo="github.com/AlgebraicJulia/Gatlab.jl.git",
+  repo="github.com/AlgebraicJulia/GATlab.jl.git",
   branch="gh-pages"
 )

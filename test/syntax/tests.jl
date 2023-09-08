@@ -1,7 +1,7 @@
 module TestSyntax
 
 using Test
-using Gatlab
+using GATlab
 
 @testset "Scopes" begin
   include("Scopes.jl")

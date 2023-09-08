@@ -1,6 +1,6 @@
 module TestModelInterface 
 
-using Gatlab
+using GATlab
 using Test
 using StructEquality
 

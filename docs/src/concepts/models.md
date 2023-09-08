@@ -1,6 +1,6 @@
 # Model families
 
-The semantics part of Gatlab is the *model family* infrastructure.
+The semantics part of GATlab is the *model family* infrastructure.
 
 Given a theory, one can declare a model family for that theory. This consists of the following.
 

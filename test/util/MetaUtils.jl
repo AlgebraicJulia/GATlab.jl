@@ -4,7 +4,7 @@ using Test
 
 using Base.Meta: ParseError
 
-using Gatlab
+using GATlab
 
 strip_all(expr) = strip_lines(expr, recurse=true)
 parse_fun(expr) = parse_function(strip_all(expr))

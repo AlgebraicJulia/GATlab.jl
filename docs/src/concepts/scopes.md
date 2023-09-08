@@ -37,7 +37,7 @@ context, for instance what type it is expected to be, or what arguments is it
 receiving. The second way is via *shadowing*. In shadowing, a name is resolved
 by making it point to the "most recently defined" thing with that name.
 
-In Gatlab, we handle overloading and shadowing with a notion of *scope*.
+In GATlab, we handle overloading and shadowing with a notion of *scope*.
 Anything which binds variables introduces a scope, for instance a `@theory`
 declaration or a context. Each scope is identified with a ScopeTag, which is an
 opaque identifier (i.e. a UUID). We take this idea from Racket, but we don't

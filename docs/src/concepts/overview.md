@@ -1,6 +1,6 @@
 # For Catlab users
 
-Gatlab is a refactoring of the core GAT system in Catlab. There are three main differences between the Gatlab GAT system and the Catlab GAT system, in addition to a variety of new features enabled by these differences.
+GATlab is a refactoring of the core GAT system in Catlab. There are three main differences between the GATlab GAT system and the Catlab GAT system, in addition to a variety of new features enabled by these differences.
 
 ## 1. Models as values
 
@@ -14,7 +14,7 @@ end
 
 This is not ideal, but the larger problem is that this made it difficult to have models of a GAT that were parameterized by other models, because there was no way of referring to a particular model. So constructions like slice categories, dual categories, or cospan categories were not easy to do.
 
-In Gatlab, we instead do models of GATs in a more "Standard ML" style. That is, each model is a *value* that can be passed around dynamically. Then the implementations of the GAT term constructors are attached via multiple dispatch to that value. In simple cases, that value might be the unique instance of a zero-field struct, but more generally there could be more data inside the value, as is the case for slice categories. If the struct has fields, then we can think of it like a "functor" in ML parlance (which has little to do with the standard categorical use of the word functor); i.e. it is a parameterized model of the theory.
+In GATlab, we instead do models of GATs in a more "Standard ML" style. That is, each model is a *value* that can be passed around dynamically. Then the implementations of the GAT term constructors are attached via multiple dispatch to that value. In simple cases, that value might be the unique instance of a zero-field struct, but more generally there could be more data inside the value, as is the case for slice categories. If the struct has fields, then we can think of it like a "functor" in ML parlance (which has little to do with the standard categorical use of the word functor); i.e. it is a parameterized model of the theory.
 
 Sometimes we refer to this by "categories as contexts", because the category (i.e., the model of the theory of categories) serves as a context for disambiguating which method to use, and this is a pun off of the famous category theory book "Categories in Context" by Emily Riehl.
 
@@ -25,7 +25,7 @@ An e-graph is a data structure used to store congruence relations on a collectio
 - finding simple representations of terms
 - deciding whether two terms are equal
 
-The syntax systems we use for GATs in Gatlab are built from the ground-up to be compatible with a purpose-built e-graph implementation. This allows us to make use of the axioms in a GAT to rewrite terms and perform equational reasoning.
+The syntax systems we use for GATs in GATlab are built from the ground-up to be compatible with a purpose-built e-graph implementation. This allows us to make use of the axioms in a GAT to rewrite terms and perform equational reasoning.
 
 Additionally, it allows us to perform a weak form of typechecking. Typechecking in general for a GAT requires deciding the equality of arbitrary terms, which is undecidable. However, we can typecheck "up to" the collection of equivalences that we have recorded in an e-graph. Any well-typed term can be typechecked using this procedure by first placing the necessary equalities in the e-graph and then running the type-checking algorithm. Moreover, whenever this algorithm finds a positive result, one can be sure that the term does in fact typecheck. This is analogous to the termination-checking in proof assistants; we circumvent undecidability by putting the burden on the user to give us some additional data to show that their program is valid. And in many circumstances, very little additional data is required. For instance, in the bare theory of categories, there are no term constructors that produce objects. So checking whether two objects are equal in a presentation of a category is a simple problem of computing an equivalence relation (instead of a congruence relation). Thus, typechecking is very easy in this circumstance.
 
@@ -37,7 +37,7 @@ Mathematically, this can be interpreted as a requirement that models of GATs int
 
 The practical downside to this is that if you want to store several morphisms that have the same domain/codomain, you have to redundantly store the domain and codomain. So although a C-set consists of a collection of objects and morphisms in `FinSet`, we do not actually define it in this way in Catlab, because we don't want to redundantly store the objects in each morphism.
 
-In Gatlab, we fix this in the following way. When you declares a model in Gatlab, you associate types to it that correspond to the "bare" data. I.e., we would just associate `Vector{Int}` to `Hom` in an implementation of `FinSet`. Then various methods expect you to pass in the domain and codomain of a morphism in addition to the data of the morphism, rather than assuming that you can infer the domain and codomain from the data.
+In GATlab, we fix this in the following way. When you declares a model in GATlab, you associate types to it that correspond to the "bare" data. I.e., we would just associate `Vector{Int}` to `Hom` in an implementation of `FinSet`. Then various methods expect you to pass in the domain and codomain of a morphism in addition to the data of the morphism, rather than assuming that you can infer the domain and codomain from the data.
 
 Mathematically, we interpret this by saying that we interpret the dependent types as *indexed*. That is, we assign a set to each pair of objects, *and those sets can intersect*. I.e., `Hom(a,b)` could intersect non-trivially `Hom(c,d)`. So whenever we handle a morphism, we need external data that tells us what the domain and codomain is.
 

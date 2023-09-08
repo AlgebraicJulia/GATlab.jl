@@ -1,6 +1,6 @@
 module TestExprInterop
 
-using Gatlab, Test
+using GATlab, Test
 
 bind_x = Binding{String}(:x, Set([:x, :X]), "ex")
 bind_y = Binding{String}(:y, Set([:y, :Y]), "why")

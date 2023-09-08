@@ -1,6 +1,6 @@
 # Theories
 
-A theory in Gatlab consists of two parts.
+A theory in GATlab consists of two parts.
 
 1. A Julia value of type `Theory` that describes the theory.
 2. A module named by the theory with various Julia types that give us handles
@@ -19,7 +19,7 @@ Example:
 
 ```julia
 module Category
-using Gatlab.Theories
+using GATlab.Theories
 
 struct Th <: AbstractTheory end
 

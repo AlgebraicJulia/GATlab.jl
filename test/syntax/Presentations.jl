@@ -1,7 +1,7 @@
 module TestPresentations
 
-using Gatlab
-using Gatlab.Syntax.GATs: parsetypescope
+using GATlab
+using GATlab.Syntax.GATs: parsetypescope
 using Test
 T = ThCategory.THEORY
 

@@ -1,6 +1,6 @@
 module TestScopeTrees
 
-using Test, Gatlab
+using Test, GATlab
 
 t = wrap(
   :a => pure(1),

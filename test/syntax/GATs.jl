@@ -1,6 +1,6 @@
 module TestGATs 
 
-using Gatlab, Test
+using GATlab, Test
 
 # GAT ASTs
 ##########
