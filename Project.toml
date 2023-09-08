@@ -28,6 +28,7 @@ GatlabAlgebraicPetriExt = ["AlgebraicPetri", "Catlab"]
 GatlabSciMLExt = ["ModelingToolkit"]
 
 [compat]
+Crayons = "4"
 DataStructures = "0.18"
 JSON = "0.21"
 MLStyle = "0.4"
