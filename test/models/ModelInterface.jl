@@ -41,6 +41,7 @@ catch e
   @test e.val == [1, 2, 3]
   @test e.args == [3, 2]
   @test e.reason == "index not in codomain: 3"
+  @test sprint(showerror, e) isa String
 end
 
 @test_throws TypeCheckFail ThCategory.Hom([1,2,3], 3, 2; model=FinSetC())
@@ -120,6 +121,16 @@ end
   dom(f::Vector{Int}) = length(f)
 end
 
+try
+  @eval @instance ThCategory{Int, Vector{Int}} (;model::FinSetC) begin
+    id(f::Vector{Int}) = f
+    compose(f::Vector{Int}, g::Vector{Int}) = g[f]
+    dom(f::Vector{Int}) = length(f)
+  end
+catch e
+  @test e.error isa SignatureMismatchError
+  @test sprint(showerror, e.error) isa String
+end
 
 @test_throws LoadError @eval @instance ThStrictMonCat{Int, Vector{Int}} (;model::FinSetC) begin
   @import Ob, Hom, id, compose, dom, codom

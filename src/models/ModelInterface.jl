@@ -1,6 +1,6 @@
 module ModelInterface
 
-export Model, implements, TypeCheckFail, @model, @instance, @withmodel, @fail
+export Model, implements, TypeCheckFail, SignatureMismatchError, @model, @instance, @withmodel, @fail
 
 using ...Syntax
 using ...Util.MetaUtils
