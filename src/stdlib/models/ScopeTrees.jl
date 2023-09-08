@@ -70,10 +70,6 @@ end
   c::C
 end
 
-function ScopeTreeC(c::C) where {ObT, HomT, C<:Model{Tuple{ObT, HomT}}}
-  ScopeTreeC{ObT, HomT, C}(c)
-end
-
 using .ThCategory
 
 function seteq(x, y)
