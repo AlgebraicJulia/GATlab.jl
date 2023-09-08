@@ -1,19 +1,19 @@
 # Library Reference
 
 ```@autodocs
-Modules = [Gatlab]
+Modules = [GATlab]
 ```
 
 ## Syntax
 
 ```@autodocs
 Modules = [
-  Gatlab.Syntax,
-  Gatlab.Syntax.Scopes,
-  Gatlab.Syntax.GATs,
-  Gatlab.Syntax.Presentations,
-  Gatlab.Syntax.ExprInterop,
-  Gatlab.Syntax.TheoryInterface,
+  GATlab.Syntax,
+  GATlab.Syntax.Scopes,
+  GATlab.Syntax.GATs,
+  GATlab.Syntax.Presentations,
+  GATlab.Syntax.ExprInterop,
+  GATlab.Syntax.TheoryInterface,
 ]
 ```
 
@@ -21,9 +21,9 @@ Modules = [
 
 ```@autodocs
 Modules = [
-  Gatlab.Models,
-  Gatlab.Models.ModelInterface,
-  Gatlab.Models.SymbolicModels,
+  GATlab.Models,
+  GATlab.Models.ModelInterface,
+  GATlab.Models.SymbolicModels,
   ]
 ```
 
@@ -31,7 +31,7 @@ Modules = [
 
 ```@autodocs
 Modules = [
-  Gatlab.Util,
-  Gatlab.Util.MetaUtils,
+  GATlab.Util,
+  GATlab.Util.MetaUtils,
   ]
 ```

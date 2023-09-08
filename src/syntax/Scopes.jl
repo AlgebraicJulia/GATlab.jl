@@ -389,7 +389,7 @@ nscopes(hs::HasScope) = 1
 """
 `Scope{T, Sig}`
 
-In Gatlab, we handle overloading and shadowing with a notion of *scope*.
+In GATlab, we handle overloading and shadowing with a notion of *scope*.
 Anything which binds variables introduces a scope, for instance a `@theory`
 declaration or a context. For example, a scope with 3 elements:
 

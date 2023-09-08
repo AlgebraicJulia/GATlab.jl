@@ -1,6 +1,6 @@
 module TestNothings
 
-using Test, Gatlab
+using Test, GATlab
 
 using .ThCategory
 

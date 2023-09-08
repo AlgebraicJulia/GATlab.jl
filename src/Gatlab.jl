@@ -1,4 +1,4 @@
-module Gatlab
+module GATlab
 using Reexport
 
 # Util contains code that could be a separate package, but we include in gatlab
@@ -13,4 +13,4 @@ include("stdlib/module.jl")
 @reexport using .Models
 @reexport using .Stdlib
 
-end # module Gatlab
+end # module GATlab

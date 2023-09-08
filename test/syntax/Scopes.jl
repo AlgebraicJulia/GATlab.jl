@@ -1,6 +1,6 @@
 module TestScopes
 
-using Test, Gatlab
+using Test, GATlab
 
 # ScopeTags
 ###########

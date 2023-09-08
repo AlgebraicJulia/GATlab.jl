@@ -1,6 +1,6 @@
 module TestSymbolicModels
 
-using Gatlab, Test
+using GATlab, Test
 
 abstract type CategoryExpr{T} <: GATExpr{T} end
 

@@ -1,6 +1,6 @@
 module TestTheoryInterface
 
-using Test, Gatlab
+using Test, GATlab
 
 @theory ThCategoryTypes begin
   Ob::TYPE

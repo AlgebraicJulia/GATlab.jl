@@ -1,6 +1,6 @@
 module TestFinMatrices
 
-using Gatlab, Test
+using GATlab, Test
 
 using .ThCategory
 
