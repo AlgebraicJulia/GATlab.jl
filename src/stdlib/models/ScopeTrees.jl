@@ -77,14 +77,38 @@ function seteq(x, y)
 end
 
 @instance ThCategory{ScopeTree{ObT}, ScopeTreeHom{HomT}} (;model::ScopeTreeC{ObT, HomT, C}) where {ObT, HomT, C} begin
-  Ob(t::ScopeTree{ObT}) = @match t begin
-    ScopeLeaf(x) => Ob(x; model=model.c)
-    ScopeNode(s) => all(t′ -> Ob(t′; model), values(s))
+  function Ob(t::ScopeTree{ObT})
+    @match t begin
+      ScopeLeaf(x) => try
+        Ob(x; model=model.c)
+      catch e
+        @fail ("leaf failed", e)
+      end
+      ScopeNode(s) => begin
+        for (x, t′) in identvalues(s)
+          try
+            Ob(t′; model)
+          catch e
+            @fail ("branch $x failed", e)
+          end
+        end
+      end
+    end
+    t
   end
 
   function Hom(f::ScopeTreeHom{HomT}, x::ScopeTree{ObT}, y::ScopeTree{ObT})
-    seteq(keys(f.map), keys(x)) && seteq(first.(values(f.map)), keys(y)) || return false
-    all(Hom(f₀, x[i], y[j]; model=model.c) for (i, (j, f₀)) in f.map)
+    # TODO: report exactly which key was not in
+    seteq(keys(f.map), keys(x)) || @fail "keys of morphism not equal to keys of domain"
+    seteq(first.(values(f.map)), keys(y)) || @fail "values of morphism not equal to keys of codomain"
+    for (i, (j, f₀)) in f.map
+      try
+        Hom(f₀, x[i], y[j]; model=model.c)
+      catch e
+        @fail ("morphism at $i not valid", e)
+      end
+    end
+    f
   end
 
   id(x::ScopeTree{ObT}) = ScopeTreeHom{HomT}(Dict(k => (k, id(x[k]; model=model.c)) for k in keys(x)))

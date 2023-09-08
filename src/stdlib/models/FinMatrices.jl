@@ -8,8 +8,9 @@ struct FinMatC{T<:Number} <: Model{Tuple{T}}
 end
 
 @instance ThCategory{Int, Matrix{T}} (;model::FinMatC{T}) where {T} begin
-  Ob(n::Int) = n >= 0
-  Hom(A::Matrix{T}, n::Int, m::Int) = size(A) == (n,m)
+  Ob(n::Int) = n >= 0 ? n : @fail "expected nonnegative integer"
+  Hom(A::Matrix{T}, n::Int, m::Int) =
+    size(A) == (n,m) ? A : @fail "expected dimensions to be $((n,m))"
 
   id(n::Int) = T[T(i == j) for i in 1:n, j in 1:n]
   compose(A::Matrix{T}, B::Matrix{T}) = A * B
