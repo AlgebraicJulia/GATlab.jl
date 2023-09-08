@@ -30,19 +30,19 @@ end
 # Function parsing
 @test_throws ParseError parse_fun(:(f(x,y)))
 @test (parse_fun(:(function f(x,y) x end)) ==
-       JuliaFunction(:f, [:x, :y], [], [], nothing, quote x end))
+       JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end))
 
 @test parse_fun((quote
   """ My docstring
   """
   function f(x,y) x end
-end).args[1]) == JuliaFunction(:f, [:x, :y], [], [], nothing, quote x end, " My docstring\n")
+end).args[1]) == JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end, " My docstring\n")
 
 @test (parse_fun(:(function f(x::Int,y::Int)::Int x end)) ==
        JuliaFunction(:f, [:(x::Int),:(y::Int)], [], [], :Int, quote x end))
 
 @test (parse_fun(:(f(x,y) = x)) ==
-       JuliaFunction(:f, [:x, :y], [], [], nothing, quote x end))
+       JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end))
 
 sig = JuliaFunctionSig(:f, [:Int,:Int])
 @test parse_function_sig(parse_fun(:(function f(x::Int,y::Int)::Int end))) == sig

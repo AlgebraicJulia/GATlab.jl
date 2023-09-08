@@ -1,7 +1,8 @@
 """ General-purpose tools for metaprogramming in Julia.
 """
 module MetaUtils
-export JuliaFunction, JuliaFunctionSig, parse_docstring, parse_function,
+export JuliaFunction, setimpl,
+  JuliaFunctionSig, parse_docstring, parse_function,
   parse_function_sig, generate_docstring, generate_function,
   replace_symbols, strip_lines,
   Expr0
@@ -29,6 +30,9 @@ const Expr0 = Union{Symbol,Expr}
     new(name, args, kwargs, whereparams, return_type, impl, doc)
   end
 end
+
+setimpl(f::JuliaFunction, impl) =
+  JuliaFunction(f.name, f.args, f.kwargs, f.whereparams, f.return_type, impl, f.doc)
 
 @struct_hash_equal struct JuliaFunctionSig
   name::Expr0
@@ -80,6 +84,14 @@ function parse_function(expr::Expr)::JuliaFunction
     Expr(:call, name, Expr(:parameters, kwargs...), args...) => (name, args, kwargs)
     Expr(:call, name, args...) => (name, args, Expr0[])
     _ => throw(ParseError("Ill-formed call expression $call_expr"))
+  end
+  args = map(args) do arg
+    @match arg begin
+      Expr(:(::), x, T) => arg
+      x::Symbol => :($x::Any)
+      Expr(:(::), T) => Expr(:(::), gensym(), T)
+      _ => throw(ParseError("Ill-formed argument expression $arg"))
+    end
   end
   JuliaFunction(name, args, kwargs, whereparams, return_type, impl, doc)
 end

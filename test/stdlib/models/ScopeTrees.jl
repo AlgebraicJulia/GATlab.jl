@@ -32,14 +32,13 @@ xp, xq, y = fromexpr.(Ref(t2), [:(x.p), :(x.q), :y], Ref(Reference))
 f = ScopeTreeHom(a => (y, [6]), b => (xp, [2]), c => (xq, [2,2]))
 id_t1 = ScopeTreeHom(a => (a, [1]), b => (b, [1]), c => (c, [1,2]))
 
-id_t1.map == id(t1; model=ScopeTreeC(FinSetC()))
-
 @withmodel ScopeTreeC(FinSetC()) (Ob, Hom, compose, id) begin
-  @test Ob(t)
-  @test Hom(f, t1, t2)
+  @test Ob(t) == t
+  @test_throws TypeCheckFail Ob(wrap(:x => pure(-1)))
+  @test Hom(f, t1, t2) == f
+  @test_throws TypeCheckFail Hom(f, t1, t1)
   @test id(t1) == id_t1
   @test compose(id(t1), f) == f
 end
-
 
 end

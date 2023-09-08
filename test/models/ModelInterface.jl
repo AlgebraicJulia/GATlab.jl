@@ -4,12 +4,23 @@ using Gatlab
 using Test
 using StructEquality
 
-struct FinSetC <: Model{Tuple{Int, Vector{Int}}}
+@struct_hash_equal struct FinSetC <: Model{Tuple{Int, Vector{Int}}}
 end
 
 @instance ThCategory{Int, Vector{Int}} (;model::FinSetC) begin
-  Hom(f::Vector{Int}, n::Int, m::Int) = # check f is Hom: n -> m
-     length(f) == n && all(1 <= y <= m for y in f) 
+  # check f is Hom: n -> m
+  function Hom(f::Vector{Int}, n::Int, m::Int)
+    if length(f) == n
+      for i in 1:n
+        if f[i] ∉ 1:m
+          @fail "index not in codomain: $i"
+        end
+      end
+      f
+    else
+      @fail "length of morphism does not match domain: $(length(f)) != $m"
+    end
+  end
 
   id(m::Int) = collect(1:m)
   compose(f::Vector{Int}, g::Vector{Int}) = g[f]
@@ -17,10 +28,23 @@ end
   dom(f::Vector{Int}) = length(f)
 end
 
-@test ThCategory.Ob(-1; model=FinSetC()) # Yikes!
-@test ThCategory.Hom([1,2,3], 3, 3; model=FinSetC())
-@test !ThCategory.Hom([1,2,3], 3, 2; model=FinSetC())
-@test !ThCategory.Hom([1,2,3], 2, 3; model=FinSetC())
+@test ThCategory.Ob(-1; model=FinSetC()) == -1
+@test ThCategory.Hom([1,2,3], 3, 3; model=FinSetC()) == [1,2,3]
+@test_throws TypeCheckFail ThCategory.Hom([1,2,3], 3, 2; model=FinSetC())
+
+try
+  ThCategory.Hom([1,2,3], 3, 2; model=FinSetC())
+catch e
+  @test e.model == FinSetC()
+  @test e.theory == ThCategory.THEORY
+  @test e.type == ident(ThCategory.THEORY; name=:Hom)
+  @test e.val == [1, 2, 3]
+  @test e.args == [3, 2]
+  @test e.reason == "index not in codomain: 3"
+end
+
+@test_throws TypeCheckFail ThCategory.Hom([1,2,3], 3, 2; model=FinSetC())
+@test_throws TypeCheckFail ThCategory.Hom([1,2,3], 2, 3; model=FinSetC())
 @test ThCategory.compose([1,3,2], [1,3,2]; model=FinSetC()) == [1,2,3]
 
 @test ThCategory.id(2; model=FinSetC()) == [1,2]

@@ -1,6 +1,6 @@
 module ModelInterface
 
-export Model, implements, @model, @instance, @withmodel
+export Model, implements, TypeCheckFail, @model, @instance, @withmodel, @fail
 
 using ...Syntax
 using ...Util.MetaUtils
@@ -26,15 +26,15 @@ Let `M` be the module corresponding to `seg`.
 
 Then for each type constructor `ty` in `seg`, we must overload
 
-`M.ty(x, args...; model::typeof(m), context::Union{Nothing, NamedTuple})::Bool`
+`M.ty(wm::WithModel{typeof(m)}, x, args...; context::Union{Nothing, NamedTuple})::Bool`
 
-to return whether `x` is a valid element of `tc(args...)` with explicit context
+to attempt to coerce `x` to a valid element of `tc(args...)` with explicit context
 `context` according to `m` (it is rare that you need a context for a type
 constructor; notable examples include 2-cells for a bicategory).
 
 For each argument `a` to `ty`, we must overload
 
-`M.a(x; model::typeof(m), context::Union{Nothing, NamedTuple})`
+`M.a(wm::WithModel{typeof(m)}, x;, context::Union{Nothing, NamedTuple})`
 
 to either error or return the argument `a` of `x`. It is perfectly
 valid for this to always error, (e.g. CSetTransformations which do 
@@ -44,7 +44,7 @@ compatibility.
 
 Finally, for each term constructor `tc` in `seg`, we must overload
 
-`M.tc(args...; model::Typeof(m), context::Union{Nothing, NamedTuple})`
+`M.tc(wm::WithModel{typeof(m)}, args...; context::Union{Nothing, NamedTuple})`
 
 to apply the term constructor to the args. The implementation of `M.tc` should do no
 validity checking; that should be assumed to have already been done. In general,
@@ -83,6 +83,23 @@ implements(m::Model, tag::ScopeTag) = implements(m, Val{tag})
 
 implements(m::Model, theory_module::Module) =
   all(!isnothing(implements(m, gettag(scope))) for scope in theory_module.THEORY.segments.scopes)
+
+struct TypeCheckFail <: Exception
+  model::Model
+  theory::GAT
+  type::Ident
+  val::Any
+  args::AbstractVector
+  reason::Any
+end
+
+function Base.showerror(io::IO, err::TypeCheckFail)
+  println(io, "TypeCheckFail:")
+  print(io, "$(err.val) is not a valid $(err.type)(")
+  join(io, err.args, ", ")
+  println(io, ") in model $(err.model) of theory $(nameof(err.theory)) because:")
+  println(io, err.reason)
+end
 
 """
 Usage:
@@ -203,11 +220,15 @@ end
 
 function default_typecon_impl(X::Ident, theory::GAT, jltype_by_sort::Dict{AlgSort})
   typecon = getvalue(theory[X])
-  argtypes = [jltype_by_sort[x] for x in [AlgSort(X), sortsignature(typecon)...]]
+  valname = gensym(:val)
+  args = [
+    Expr(:(::), name, jltype_by_sort[x])
+    for (name, x) in [(valname, AlgSort(X)); [(gensym(), x) for x in sortsignature(typecon)]]
+  ]
   JuliaFunction(
     nameof(X),
-    Expr0[Expr(:(::), at) for at in argtypes],
-    Expr0[], Expr0[], :Bool, :(return true), nothing
+    args,
+    Expr0[], Expr0[], jltype_by_sort[AlgSort(X)], :(return $valname), nothing
   )
 end
 
@@ -270,6 +291,12 @@ end
 Base.showerror(io::IO, e::SignatureMismatchError) =
   print(io, "signature for ", e.name, ": ", e.sig,
         " does not match any of [", join(e.options, ", "), "]")
+
+const fail_var = gensym(:fail)
+
+macro fail(str)
+  esc(Expr(:call, fail_var, str))
+end
 
 """
 Throw error if missing a term constructor. Provides default instances for type
@@ -335,6 +362,16 @@ function typecheck_instance(
     sig ∈ keys(undefined_signatures) ||
       throw(SignatureMismatchError(f.name, toexpr(sig), expected_signatures[f.name]))
 
+    x = undefined_signatures[sig]
+
+    if x isa Ident
+      judgment = getvalue(theory, x)
+
+      if judgment isa AlgTypeConstructor
+        f = expand_fail(judgment, theory, x, f)
+      end
+    end
+
     delete!(undefined_signatures, sig)
 
     push!(typechecked, f)
@@ -355,6 +392,22 @@ function typecheck_instance(
   end
 
   typechecked
+end
+
+function expand_fail(typecon::AlgTypeConstructor, theory::GAT, x::Ident, f::JuliaFunction)
+  argname(arg::Expr) = first(arg.args)
+  setimpl(
+    f,
+    quote
+      let $(fail_var) =
+        reason -> throw(
+          $(TypeCheckFail)(
+            model, $theory, $x, $(argname(f.args[1])), $(Expr(:vect, argname.(f.args[2:end])...)), reason
+          ))
+        $(f.impl)
+      end
+    end
+  )
 end
 
 """

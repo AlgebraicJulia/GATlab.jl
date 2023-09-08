@@ -7,8 +7,8 @@ struct NothingC <: Model{Tuple{Nothing, Nothing}}
 end
 
 @instance ThCategory{Nothing, Nothing} (;model::NothingC) begin
-  Ob(::Nothing) = true
-  Hom(::Nothing, ::Nothing, ::Nothing) = true
+  Ob(::Nothing) = nothing
+  Hom(::Nothing, ::Nothing, ::Nothing) = nothing
 
   dom(::Nothing) = nothing
   codom(::Nothing) = nothing
