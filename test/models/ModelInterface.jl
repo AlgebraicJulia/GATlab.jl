@@ -28,9 +28,11 @@ end
   dom(f::Vector{Int}) = length(f)
 end
 
-@test ThCategory.Ob(-1; model=FinSetC()) == -1
-@test ThCategory.Hom([1,2,3], 3, 3; model=FinSetC()) == [1,2,3]
-@test_throws TypeCheckFail ThCategory.Hom([1,2,3], 3, 2; model=FinSetC())
+using .ThCategory
+
+@test Ob(-1; model=FinSetC()) == -1
+@test Hom([1,2,3], 3, 3; model=FinSetC()) == [1,2,3]
+@test_throws TypeCheckFail Hom([1,2,3], 3, 2; model=FinSetC())
 
 try
   ThCategory.Hom([1,2,3], 3, 2; model=FinSetC())
@@ -44,14 +46,14 @@ catch e
   @test sprint(showerror, e) isa String
 end
 
-@test_throws TypeCheckFail ThCategory.Hom([1,2,3], 3, 2; model=FinSetC())
-@test_throws TypeCheckFail ThCategory.Hom([1,2,3], 2, 3; model=FinSetC())
-@test ThCategory.compose([1,3,2], [1,3,2]; model=FinSetC()) == [1,2,3]
+@test_throws TypeCheckFail Hom([1,2,3], 3, 2; model=FinSetC())
+@test_throws TypeCheckFail Hom([1,2,3], 2, 3; model=FinSetC())
+@test compose([1,3,2], [1,3,2]; model=FinSetC()) == [1,2,3]
 
-@test ThCategory.id(2; model=FinSetC()) == [1,2]
+@test id(2; model=FinSetC()) == [1,2]
 
-@test ThCategory.dom([1,2,3]; model=FinSetC()) == 3
-@test_throws ErrorException ThCategory.codom([1,2,3]; model=FinSetC())
+@test dom([1,2,3]; model=FinSetC()) == 3
+@test_throws ErrorException codom([1,2,3]; model=FinSetC())
 
 @test implements(FinSetC(), ThCategory)
 
@@ -83,10 +85,25 @@ end
 @struct_hash_equal struct FinFunction 
   values::Vector{Int}
   dom::FinSet 
-  codom::FinSet 
+  codom::FinSet
+  function FinFunction(values::AbstractVector, dom::FinSet, codom::FinSet)
+    new(ThCategory.Hom(Vector{Int}(values), dom.n, codom.n; model=FinSetC()), dom, codom)
+  end
 end 
 
 @instance ThCategory{FinSet, FinFunction} begin
+  Ob(x::FinSet) = x.n ≥ 0 ? x : @fail "expected nonnegative integer"
+
+  function Hom(f::FinFunction, x::FinSet, y::FinSet)
+    dom(f) == x || @fail "domain mismatch"
+    codom(f) == y || @fail "codomain mismatch"
+    f
+  end
+
+  function Hom(values::Vector{Int}, dom::FinSet, codom::FinSet)
+    FinFunction(values, dom, codom)
+  end
+
   dom(f::FinFunction) = f.dom 
   codom(f::FinFunction) = f.codom
   
@@ -100,6 +117,9 @@ f = FinFunction([2,3],A,B)
 g = FinFunction([1,1,1],B,A)
 @test id(A) == FinFunction([1,2], A, A)
 @test compose(f,g) == FinFunction([1,1], A, A)
+@test Hom(f, A, B) == f
+@test Hom([2,3], A, B) == f
+@test_throws TypeCheckFail Hom(f, A, A)
 
 @withmodel FinSetC() (mcompose, id) begin
   @test mcompose(id(2), id(2); context=(;B₁=2)) == id(4)
