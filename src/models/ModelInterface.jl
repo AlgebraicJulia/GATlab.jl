@@ -85,7 +85,7 @@ implements(m::Model, theory_module::Module) =
   all(!isnothing(implements(m, gettag(scope))) for scope in theory_module.THEORY.segments.scopes)
 
 struct TypeCheckFail <: Exception
-  model::Model
+  model::Union{Model, Nothing}
   theory::GAT
   type::Ident
   val::Any
@@ -359,22 +359,34 @@ function typecheck_instance(
   for f in functions
     sig = parse_function_sig(f)
 
-    sig ∈ keys(undefined_signatures) ||
-      throw(SignatureMismatchError(f.name, toexpr(sig), expected_signatures[f.name]))
-
-    x = undefined_signatures[sig]
-
-    if x isa Ident
-      judgment = getvalue(theory, x)
-
-      if judgment isa AlgTypeConstructor
-        f = expand_fail(judgment, theory, x, f)
+    if !haskey(undefined_signatures, sig)
+      try
+        x = ident(theory; name=f.name)
+      catch e
+        throw(SignatureMismatchError(f.name, toexpr(sig), expected_signatures[f.name]))
       end
+      judgment = getvalue(theory, x)
+      # We allow overloading for type constructors
+      if !(judgment isa AlgTypeConstructor)
+        throw(SignatureMismatchError(f.name, toexpr(sig), expected_signatures[f.name]))
+      end
+
+      push!(typechecked, expand_fail(judgment, theory, x, f))
+    else
+      x = undefined_signatures[sig]
+
+      if x isa Ident
+        judgment = getvalue(theory, x)
+
+        if judgment isa AlgTypeConstructor
+          f = expand_fail(judgment, theory, x, f)
+        end
+      end
+
+      delete!(undefined_signatures, sig)
+
+      push!(typechecked, f)
     end
-
-    delete!(undefined_signatures, sig)
-
-    push!(typechecked, f)
   end
 
   for (_, n) in undefined_signatures
@@ -427,7 +439,7 @@ function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{E
       Expr(:let, Expr(:(=), :model, :($m.model)), fun.impl)
     )
   else
-    (fun.args, fun.impl)
+    (fun.args, Expr(:let, Expr(:(=), :model, nothing), fun.impl))
   end
 
   JuliaFunction(
