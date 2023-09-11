@@ -58,17 +58,11 @@ compose(f, g) == h == h′
 function ExprInterop.fromexpr(ctx::Context, e, ::Type{Presentation})
   e.head == :block || error("expected a block to parse into a GATSegment, got: $e")
   scopelines, eqlines = [], Vector{Expr0}[]
-  for line in e.args
-    if line isa LineNumberNode
-      push!(scopelines, line)
-    elseif line.head == :(==)
-      push!(eqlines, line.args)
-    elseif line.head == :comparison
-      er = "Bad comparison: $line"
-      all(((i,v),)-> iseven(i) == (v == :(==)), enumerate(line.args)) || error(er)
-      push!(eqlines, line.args[1:2:end])
-    else
-      push!(scopelines, line)
+  for line in filter(x->!(x isa LineNumberNode), e.args)
+    @match line begin
+      Expr(:call, :(==), a, b) => push!(eqlines, [a, b])
+      Expr(:comparison, xs...) => push!(eqlines, xs[1:2:end])
+      _ => push!(scopelines, line)
     end
   end
   scope = GATs.parsetypescope(ctx, scopelines)

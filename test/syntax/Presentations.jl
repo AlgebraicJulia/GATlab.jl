@@ -9,8 +9,8 @@ tscope = parsetypescope(
   T, 
   :([(a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c), (h,h′)::Hom(a,c)]).args
 )
-_,_,_,f,g,h,h′ = idents(tscope)
-h,h′ = AlgTerm.([h,h′])
+_, _, _, f, g, h, h′ = idents(tscope)
+h, h′ = AlgTerm.([h,h′])
 fg = fromexpr(AppendScope(T, tscope), :(compose(f,g)), AlgTerm)
 p1 = Presentation(T, tscope, [[fg, h]])
 x1 = toexpr(p1)
@@ -50,5 +50,12 @@ t = fromexpr(Z, :(i(a) ⋅ (2::default)), AlgTerm)
 a = ident(Z; name=:a)
 
 @test compile(ThGroup, Dict(Reference(a) => :a), t) == :($(ThGroup).:(⋅)($(ThGroup).i(a), 2))
+
+@present D₄(ThGroup) begin
+  (r,f) :: default
+
+  (f⋅f) == e 
+  (r⋅r⋅r⋅r) == e
+end
 
 end # module 
