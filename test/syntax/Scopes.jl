@@ -5,6 +5,8 @@ using Test, GATlab
 # ScopeTags
 ###########
 
+basicprinted(x; color=false) = sprint(show, x; context=(:color=>color))
+
 tag1 = newscopetag()
 tag2 = newscopetag()
 
@@ -15,6 +17,9 @@ tag2 = newscopetag()
 err = ScopeTagError(nothing, nothing)
 
 @test sprint(showerror, err) isa String
+
+@test basicprinted(tag1) != basicprinted(tag2)
+@test basicprinted(tag1; color=true) != basicprinted(tag2)
 
 # Local IDs
 ###########
@@ -52,6 +57,8 @@ nameless = Ident(tag1, LID(1), nothing)
 
 # References
 ############
+@test_throws ArgumentError only(Reference())
+@test basicprinted(Reference()) == "_"
 
 y = Ident(tag2, LID(1), :y)
 xdoty = Reference(x, Reference(y))

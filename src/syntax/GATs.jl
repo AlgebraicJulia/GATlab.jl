@@ -110,7 +110,7 @@ headof(t::TrmTyp) = t.head
 argsof(t::TrmTyp) = t.args
 
 rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::T) where T<:TrmTyp =
-  T(rename(tag, reps, headof(t)), rename.(Ref(tag), Ref(reps), argsof(t)))
+  T(rename(tag, reps, headof(t)), AlgTerm[rename.(Ref(tag), Ref(reps), argsof(t))...])
 
 function Base.show(io::IO, type::T) where T<:TrmTyp
   print(io, "$(nameof(T))(")
@@ -256,11 +256,6 @@ sortsignature(tc::Union{AlgTypeConstructor, AlgTermConstructor}) =
 """Local context of an AlgTermConstructor, including the arguments themselves"""
 argcontext(t::Union{AlgTypeConstructor,AlgTermConstructor}) = 
   t.localcontext + t.args
-
-function retag_args(t::AlgTermConstructor) 
-  ac = gettag(argcontext(t))
-  Dict(gettag(t.localcontext)=>ac, gettag(t.args)=>ac)
-end
 
 """
 `AlgAxiom`
@@ -735,11 +730,6 @@ end
 
 ExprInterop.toexpr(c::Context, ts::TypeScope) =
   Expr(:vect,[Expr(:(::), nameof(b), toexpr(c, getvalue(b))) for b in ts]...)
-
-ExprInterop.fromexpr(c::Context, e, ::Type{TypeScope}) = @match e begin 
-  Expr(:vect, ps...) => parsetypescope(c, ps)
-  _ => error("Here $e $(dump(e))")
-end
 
 ExprInterop.toexpr(c::Context, at::Binding{AlgType, Nothing}) =
   Expr(:(::), nameof(at), ExprInterop.toexpr(c, getvalue(at)))

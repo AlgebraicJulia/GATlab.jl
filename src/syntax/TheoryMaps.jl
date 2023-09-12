@@ -22,29 +22,22 @@ thought of in many ways.
 3. X is a syntax for Y's semantics. 
 
 The main methods for an AbsTheoryMap to implement are: 
-  dom, codom, typemap, termmap
+  - dom, codom, 
+  - typemap: A dictionary of Ident (of AlgTypeConstructor in domain) to AlgSort
+             (This must be a AlgSort of the same arity.) 
+  - termmap: A dictionary of Ident (of AlgTermConstructor in domain) to 
+             TermInCtx. (The TypeScope of the TrmInCtx must be structurally 
+             identical to the localcontext + args of the term constructor 
+             associated with the key.)
+  
 """
 abstract type AbsTheoryMap end
 
-"""
-A dictionary of Ident (of AlgTypeConstructor in domain) to AlgSort
-
-This must be a AlgSort of the same arity.
-"""
-typemap(::AbsTheoryMap)::Dict{Ident, AlgSort} = error("Not implemented")
-
-"""
-A dictionary of Ident (of AlgTermConstructor in domain) to TermInCtx.
-The TypeScope of the TrmInCtx must be structurally identical to the 
-localcontext + args of the term constructor associated with the key.
-"""
-termmap(::AbsTheoryMap)::Dict{Ident, TermInCtx} = error("Not implemented")
-
 # Category of GATs
 #-----------------
-dom(f::AbsTheoryMap)::GAT = f.dom
+dom(f::AbsTheoryMap)::GAT = f.dom # assume this exists by default
 
-codom(f::AbsTheoryMap)::GAT = f.codom
+codom(f::AbsTheoryMap)::GAT = f.codom # assume this exists by default
 
 function compose(f::AbsTheoryMap, g::AbsTheoryMap)
   typmap = Dict(k => typemap(g)[only(v.ref)] for (k,v) in pairs(typemap(f)))
@@ -127,6 +120,8 @@ end
 dom(f::IdTheoryMap)::GAT = f.gat
 
 codom(f::IdTheoryMap)::GAT = f.gat
+
+compose(f::IdTheoryMap, ::IdTheoryMap) = f
 
 compose(::IdTheoryMap, g::AbsTheoryMap) = g
 
@@ -240,7 +235,6 @@ end
 
 macro theorymap(head, body)
   (domname, codomname) = @match head begin
-    (name::Symbol) => (name, nothing)
     Expr(:call,:(=>), name, parent) => (name, parent)
     _ => error("could not parse head of @theory: $head")
   end
@@ -251,6 +245,6 @@ macro theorymap(head, body)
 end
 
 """Invert a theory iso"""
-Base.inv(::TheoryMap) = error("Not implemented")
+# Base.inv(::TheoryMap) = error("Not implemented")
 
 end # module

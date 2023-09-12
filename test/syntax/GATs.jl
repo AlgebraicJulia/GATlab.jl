@@ -59,6 +59,8 @@ O, H, i, cmp = idents(seg; lid=LID.(1:4))
 # Extend seg with a context of (A: Ob)
 sortscope = Scope([Binding{AlgType}(:A, Set([:A]), AlgType(O))])
 A = ident(sortscope; name=:A)
+ATerm = AlgTerm(A)
+
 
 ss = AppendScope(ScopeList([seg]), sortscope)
 @test sortcheck(ss, AlgTerm(A)) == AlgSort(O)
@@ -77,6 +79,12 @@ haa = AlgType(H,[AlgTerm(A),AlgTerm(A)])
 haia = AlgType(H,[AlgTerm(A),ida])
 @test sortcheck(ss, haa)
 @test_throws Exception sortcheck(ss, haia)
+
+# Renaming 
+BTerm = rename(gettag(sortscope), Dict(:A=>:B), ATerm)
+Bsortscope = Scope([Binding{AlgType}(:B, Set([:B]), AlgType(O))]; tag=gettag(sortscope))
+BTerm_expected = AlgTerm(ident(Bsortscope;name=:B))
+@test BTerm == BTerm_expected
 
 # Subset 
 #-------
