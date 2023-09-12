@@ -467,20 +467,6 @@ retag(replacements::Dict{ScopeTag,ScopeTag}, s::Scope{T,Sig}) where {T,Sig} =
                retag.(Ref(replacements), s.bindings), 
                s.names)
 
-function rename(tag::ScopeTag, 
-                replacements::Dict{Symbol, Symbol}, 
-                scope::Scope{T, Sig}) where {T, Sig}
-  if tag == gettag(scope)
-    Scope{T,Sig}(tag, map(scope.bindings) do b
-      Binding{T,Sig}(get(replacements,b.primary,b.primary), 
-              Set([get(replacements, a, a) for a in b.aliases]), 
-              rename(tag, replacements, b.value), b.sig, b.line)
-    end, Dict(get(replacements, k, k)=>v for (k,v) in collect(scope.names)))
-  else 
-    Scope{T,Sig}(tag, retag(Ref(replacements), ))
-  end
-end
-
 function Base.:(+)(x::Scope{T,Sig}, y::Scope{T,Sig}) where {T,Sig}
   newtag = x.tag+y.tag
   rep = Dict(gettag(x) => newtag, gettag(y)=>newtag)

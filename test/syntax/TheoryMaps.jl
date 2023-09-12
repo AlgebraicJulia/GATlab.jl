@@ -57,6 +57,8 @@ end
 @test PreorderCat(Cmp) isa TermInCtx
 @test PreorderCat(argcontext(getvalue(T[Cmp]))) isa TypeScope
 
+@test_throws KeyError PreorderCat(first(typecons(T2)))
+
 xterm = fromexpr(ThMonoid.THEORY, :(x ⊣ [x]), TermInCtx)
 res = NatPlusMonoid(xterm)
 toexpr(ThNat.THEORY, res)
@@ -70,7 +72,24 @@ expected = fromexpr(ThNatPlus.THEORY, :(Z+(Z+x) ⊣ [x::ℕ]), TermInCtx)
 #############
 TLC = ThLawlessCat.THEORY
 incl = TheoryIncl(TLC, T)
+@test TheoryMaps.dom(incl) == TLC
+@test TheoryMaps.codom(incl) == T
+incl2 = TheoryIncl(ThGraph.THEORY, TLC)
+incl3 = TheoryIncl(ThGraph.THEORY, T)
+
+@test TheoryMaps.compose(incl2, incl) == incl3
+
 toexpr(incl)
 @test_throws ErrorException TheoryIncl(T, TLC)
+@test_throws ErrorException inv(incl)
+
+# Identity 
+##########
+i = IdTheoryMap(T)
+@test TheoryMaps.dom(i) == T
+@test TheoryMaps.codom(i) == T
+@test TheoryMaps.compose(i,i) == i
+@test TheoryMaps.compose(incl,i) == incl
+
 
 end # module
