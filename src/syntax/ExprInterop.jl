@@ -22,8 +22,9 @@ Converts a Julia Expr into type T, in a certain scope.
 """
 function fromexpr end
 
-function toexpr(c::Context, x::Ident)
+function toexpr(c::Context, x::Ident; showing=false)
   if !hasident(c, x)
+    showing || error("Unknown ident $x in context $c")
     return x
   end
   tag_level = getlevel(c, gettag(x))
@@ -68,11 +69,11 @@ function fromexpr(c::Context, e, ::Type{Ident}; sig=nothing)
   end
 end
 
-function reftolist(c::Context, ref::Reference)
+function reftolist(c::Context, ref::Reference; kw...)
   symbols = []
   while !isempty(ref)
     x = first(ref)
-    push!(symbols, toexpr(c, x))
+    push!(symbols, toexpr(c, x; kw...))
     ref = rest(ref)
     if !isempty(ref)
       c = getvalue(c, x)
@@ -81,8 +82,8 @@ function reftolist(c::Context, ref::Reference)
   symbols
 end
 
-function toexpr(c::Context, ref::Reference)
-  symbols = reftolist(c, ref)
+function toexpr(c::Context, ref::Reference; kw...)
+  symbols = reftolist(c, ref; kw...)
   if isempty(symbols)
     :(_)
   else

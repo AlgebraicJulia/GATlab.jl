@@ -1,6 +1,6 @@
 module Algebra
 export ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing,
-  ThCRing, ThRig, ThCRig, ThElementary
+  ThCRing, ThRig, ThCRig, ThElementary, ThPreorder
 
 using ....Syntax
 
@@ -64,5 +64,13 @@ end
 #   exp(x) ⊣ [x]
 #   sigmoid(x) ⊣ [x]
 # end
+
+@theory ThPreorder <: ThSet begin
+  Leq(dom, codom)::TYPE
+  @op (≤) := Leq
+  refl(p)::Leq(p,p)
+  trans(f::Leq(p,q),g::Leq(q,r))::Leq(p,r)  ⊣ [p,q,r]
+  irrev := f == g ::Leq(p,q) ⊣ [p,q, (f,g)::Leq(p,q)]
+end
 
 end

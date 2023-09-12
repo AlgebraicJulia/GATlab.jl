@@ -32,6 +32,10 @@ The tag that makes reference to a specific scope possible.
   val::UUID
 end
 
+"""Deterministically combine two scope tags into a third"""
+Base.:(+)(x::ScopeTag, y::ScopeTag) =
+  ScopeTag(Base.UUID(hash(x.val.value, hash(y.val.value))))
+
 newscopetag() = ScopeTag(uuid4())
 
 const DARK_MODE = Ref(true)
@@ -419,7 +423,11 @@ Base.:(==)(s1::Scope, s2::Scope) = s1.tag == s2.tag
 
 Base.hash(s::Scope, h::UInt64) = hash(s.tag, h)
 
-Scope{T, Sig}() where {T, Sig} = Scope{T, Sig}(newscopetag(), Binding{T, Sig}[], Dict{Symbol, Dict{Sig, LID}}())
+"""Compare two scopes, ignoring the difference in the top-level scope tag."""
+equiv(s1::Scope, s2::Scope) = s1.bindings == retag(Dict(s2.tag => s1.tag), s2).bindings
+
+Scope{T, Sig}() where {T, Sig} = 
+  Scope{T, Sig}(newscopetag(), Binding{T, Sig}[], Dict{Symbol, Dict{Sig, LID}}())
 
 function make_name_dict(bindings::AbstractVector{Binding{T, Sig}}) where {T, Sig}
   d = Dict{Symbol, Dict{Sig, LID}}()
@@ -454,6 +462,32 @@ function Scope(symbols::Symbol...; tag=newscopetag())
   Scope(Pair{Symbol, Nothing}[x => nothing for x in symbols]...; tag)
 end
 
+retag(replacements::Dict{ScopeTag,ScopeTag}, s::Scope{T,Sig}) where {T,Sig} =
+  Scope{T,Sig}(get(replacements, gettag(s), gettag(s)), 
+               retag.(Ref(replacements), s.bindings), 
+               s.names)
+
+function rename(tag::ScopeTag, 
+                replacements::Dict{Symbol, Symbol}, 
+                scope::Scope{T, Sig}) where {T, Sig}
+  if tag == gettag(scope)
+    Scope{T,Sig}(tag, map(scope.bindings) do b
+      Binding{T,Sig}(get(replacements,b.primary,b.primary), 
+              Set([get(replacements, a, a) for a in b.aliases]), 
+              rename(tag, replacements, b.value), b.sig, b.line)
+    end, Dict(get(replacements, k, k)=>v for (k,v) in collect(scope.names)))
+  else 
+    Scope{T,Sig}(tag, retag(Ref(replacements), ))
+  end
+end
+
+function Base.:(+)(x::Scope{T,Sig}, y::Scope{T,Sig}) where {T,Sig}
+  newtag = x.tag+y.tag
+  rep = Dict(gettag(x) => newtag, gettag(y)=>newtag)
+  Scope(Binding{T,Sig}[retag(rep,x).bindings..., retag(rep,y).bindings...]; 
+        tag=newtag)
+end
+              
 function Base.show(io::IO, x::Scope)
   print(io, "{")
   for (i, b) in enumerate(x.bindings)

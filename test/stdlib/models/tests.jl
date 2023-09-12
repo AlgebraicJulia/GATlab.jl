@@ -5,5 +5,6 @@ include("FinMatrices.jl")
 include("SliceCategories.jl")
 include("Nothings.jl")
 include("ScopeTrees.jl")
+include("GATs.jl")
 
 end
