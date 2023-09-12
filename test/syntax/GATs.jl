@@ -24,7 +24,7 @@ three = AlgTerm(plus, [one, two])
 @test fromexpr(EmptyContext(), two.head, AlgTerm) == two
 @test_throws Exception fromexpr(EmptyContext(), :(x = 3), AlgTerm)
 
-@test basicprinted(two) == "AlgTerm(:(2::number))"
+@test basicprinted(two) == "AlgTerm(2::number)"
 
 @test_throws Exception AlgSort(scope, three)
 
@@ -77,5 +77,24 @@ haa = AlgType(H,[AlgTerm(A),AlgTerm(A)])
 haia = AlgType(H,[AlgTerm(A),ida])
 @test sortcheck(ss, haa)
 @test_throws Exception sortcheck(ss, haia)
+
+# Subset 
+#-------
+T = ThCategory.THEORY
+TG = ThGraph.THEORY
+@test TG ⊆ T
+@test T ⊈ TG
+
+# TermInCtx
+#----------
+tic = fromexpr(T, :(compose(f,compose(id(b),id(b))) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TermInCtx);
+tic2 = fromexpr(T,toexpr(T, tic),TermInCtx) # same modulo scope tags
+
+# Type inference 
+#---------------
+
+t = fromexpr(T,:(id(x)⋅(p⋅q) ⊣ [(x,y,z)::Ob, p::Hom(x,y), q::Hom(y,z)]), TermInCtx)
+expected = fromexpr(AppendScope(T, t.ctx), :(Hom(x,z)), AlgType)
+@test Syntax.GATs.infer_type(T, t) == expected
 
 end # module

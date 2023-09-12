@@ -3,10 +3,13 @@ export Constant, AlgTerm, AlgType,
   TypeScope, AlgSort, AlgSorts,
   AlgTermConstructor, AlgTypeConstructor, AlgAxiom, sortsignature,
   JudgmentBinding, GATSegment, GAT, sortcheck, allnames, sorts, sortname,
-  termcons, typecons, accessors, equations, build_infer_expr, compile
+  termcons, typecons, accessors, equations, build_infer_expr, compile, 
+  TermInCtx, headof, argsof, argcontext
 
 using ..Scopes
 using ..ExprInterop
+
+import ..Scopes: retag, rename
 
 using StructEquality
 using MLStyle
@@ -21,6 +24,7 @@ using MLStyle
 We need this to resolve a mutual reference loop; the only subtype is Constant
 """
 abstract type AbstractConstant end
+abstract type TrmTyp end # AlgTerm or AlgType
 
 """
 `AlgTerm`
@@ -28,7 +32,7 @@ abstract type AbstractConstant end
 One syntax tree to rule all the terms.
 Head can be a reference to an AlgTermConstructor, to a Binding{AlgType, Nothing}, or simply an AbstractConstant
 """
-@struct_hash_equal struct AlgTerm
+@struct_hash_equal struct AlgTerm <: TrmTyp
   head::Union{Reference, AbstractConstant}
   args::Vector{AlgTerm}
   function AlgTerm(head::Union{Reference, AbstractConstant}, args::Vector{AlgTerm}=EMPTY_ARGS)
@@ -40,19 +44,12 @@ const EMPTY_ARGS = AlgTerm[]
 
 AlgTerm(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgTerm(Reference(head), args)
 
-function ExprInterop.toexpr(c::Context, term::AlgTerm)
-  if term.head isa Constant
-    toexpr(c, term.head)
-  else
-    if isempty(term.args)
-      toexpr(c, term.head)
-    else
-      Expr(:call, toexpr(c, term.head), toexpr.(Ref(c), term.args)...)
-    end
-  end
-end
-
-function ExprInterop.fromexpr(c::Context, e, ::Type{AlgTerm})
+"""
+Some expr may have already been bound (e.g. by an explicit context) and thus 
+oughtn't be interpreted as `default` type.
+"""
+function ExprInterop.fromexpr(c::Context, e, ::Type{AlgTerm}; bound=nothing)
+  bound = isnothing(bound) ? Dict{Symbol,AlgType}() : bound
   @match e begin
     s::Symbol => begin
       scope = getscope(c, getlevel(c, s))
@@ -68,19 +65,14 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{AlgTerm})
       argsorts = AlgSorts(AlgSort.(Ref(c), args))
       AlgTerm(fromexpr(c, head, Reference; sig=argsorts), args)
     end
-    Expr(:(::), val, type) =>
-      AlgTerm(Constant(val, fromexpr(c, type, AlgType)))
+    Expr(:(::), val, type) => 
+      AlgTerm(Constant(val, get(bound, val, fromexpr(c, type, AlgType; bound=bound))))
     e::Expr => error("could not parse AlgTerm from $e")
     constant::Constant => AlgTerm(constant)
     i::Ident => AlgTerm(Reference(i))
   end
 end
 
-function Base.show(io::IO, t::AlgTerm)
-  print(io, "AlgTerm(")
-  show(io, toexpr(EmptyContext(), t))
-  print(io, ")")
-end
 
 """
 `AlgType`
@@ -88,7 +80,7 @@ end
 One syntax tree to rule all the types.
 `head` must be reference to a `AlgTypeConstructor`
 """
-@struct_hash_equal struct AlgType
+@struct_hash_equal struct AlgType <: TrmTyp
   head::Reference
   args::Vector{AlgTerm}
   function AlgType(head::Reference, args::Vector{AlgTerm}=EMPTY_ARGS)
@@ -98,28 +90,36 @@ end
 
 AlgType(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgType(Reference(head), args)
 
-function ExprInterop.toexpr(c::Context, type::AlgType)
-  if isempty(type.args)
-    toexpr(c, type.head)
-  else
-    Expr(:call, toexpr(c, type.head), toexpr.(Ref(c), type.args)...)
-  end
-end
-
-function ExprInterop.fromexpr(c::Context, e, ::Type{AlgType})
+"""
+Some expr may have already been bound (e.g. by an explicit context) and thus 
+oughtn't be interpreted as `default` type.
+"""
+function ExprInterop.fromexpr(c::Context, e, ::Type{AlgType}; bound=nothing)::AlgType
+  bound = isnothing(bound) ? Dict{Symbol, AlgType}() : bound
   @match e begin
     s::Symbol => AlgType(fromexpr(c, s, Reference))
     Expr(:call, head, args...) =>
-      AlgType(fromexpr(c, head, Reference), fromexpr.(Ref(c), args, Ref(AlgTerm)))
+      AlgType(fromexpr(c, head, Reference), fromexpr.(Ref(c), args, Ref(AlgTerm); bound=bound))
     _ => error("could not parse AlgType from $e")
   end
 end
 
-function Base.show(io::IO, type::AlgType)
-  print(io, "AlgType(")
-  print(io, toexpr(EmptyContext(), type))
+# Common code to Terms and Types
+#-------------------------------
+headof(t::TrmTyp) = t.head 
+argsof(t::TrmTyp) = t.args
+
+rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::T) where T<:TrmTyp =
+  T(rename(tag, reps, headof(t)), rename.(Ref(tag), Ref(reps), argsof(t)))
+
+function Base.show(io::IO, type::T) where T<:TrmTyp
+  print(io, "$(nameof(T))(")
+  print(io, toexpr(EmptyContext(), type; showing=true))
   print(io, ")")
 end
+
+retag(replacements::Dict{ScopeTag,ScopeTag}, t::T) where {T<:TrmTyp} = 
+  T(retag(replacements, t.head), AlgTerm[retag.(Ref(replacements), t.args)...])
 
 """
 `Constant`
@@ -131,9 +131,6 @@ A Julia value in an algebraic context. Checked elsewhere.
   type::AlgType
 end
 
-function ExprInterop.toexpr(c::Context, constant::Constant)
-  Expr(:(::), constant.value, toexpr(c, constant.type))
-end
 
 """
 `AlgSort`
@@ -146,6 +143,7 @@ A *sort*, which is essentially a type constructor without arguments
 end
 
 AlgSort(i::Ident) = AlgSort(Reference(i))
+AlgSort(t::AlgType) = AlgSort(t.head)
 
 function AlgSort(c::Context, t::AlgTerm)
   if t.head isa AbstractConstant
@@ -180,6 +178,19 @@ permitted.
 const SortScope = Scope{AlgSort, Nothing}
 
 """
+A term with an accompanying type scope, e.g.
+
+ (a,b)::R
+-----------
+  a*(a+b)
+"""
+@struct_hash_equal struct TermInCtx
+  ctx::TypeScope 
+  trm::AlgTerm
+end
+
+
+"""
 `sortcheck(ctx::Context, t::AlgTerm)`
 
 Throw an error if a the head of an AlgTerm (which refers to a term constructor)
@@ -199,6 +210,10 @@ function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
   end
   return AlgSort(ctx, t)
 end
+
+
+sortcheck(ctx::Context, t::TermInCtx)::AlgSort =
+  sortcheck(AppendScope(ctx, t.ctx), t.trm)
 
 """
 `sortcheck(ctx::Context, t::AlgType)`
@@ -237,6 +252,15 @@ end
 
 sortsignature(tc::Union{AlgTypeConstructor, AlgTermConstructor}) =
   AlgSort.([a.head for a in getvalue.(tc.args)])
+
+"""Local context of an AlgTermConstructor, including the arguments themselves"""
+argcontext(t::Union{AlgTypeConstructor,AlgTermConstructor}) = 
+  t.localcontext + t.args
+
+function retag_args(t::AlgTermConstructor) 
+  ac = gettag(argcontext(t))
+  Dict(gettag(t.localcontext)=>ac, gettag(t.args)=>ac)
+end
 
 """
 `AlgAxiom`
@@ -378,6 +402,9 @@ function sortname(theory::GAT, type::AlgType)
   canonicalize(theory, only(type.head))
 end
 
+Base.issubset(t1::GAT, t2::GAT) = 
+  all(s->hastag(t2, s), gettag.(Scopes.getscopelist(t1).scopes))
+
 ## Equations
 
 struct AccessorApplication
@@ -453,6 +480,11 @@ function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
   ways_of_computing
 end
 
+"""Get equations for a term or type constructor"""
+equations(theory::GAT, x::Ident) = let x = getvalue(theory[x]);
+  equations(x.args, x.localcontext, theory) 
+end
+
 function compile(theorymodule, expr_lookup::Dict{Reference}, term::AlgTerm)
   if term.head isa Constant
     term.head.value
@@ -469,8 +501,127 @@ function compile(theorymodule, expr_lookup::Dict{Reference}, term::AlgTerm)
   end
 end
 
+"""Get the canonical term associated with a term constructor"""
+function TermInCtx(g::GAT, k::Ident)
+  tcon = getvalue(g[k])
+  lc = argcontext(tcon)
+  ids = reverse(reverse(idents(lc))[1:(length(tcon.args))])
+  TermInCtx(lc, AlgTerm(Reference(k), AlgTerm.(ids)))
+end
+
+"""
+Infer the type of the term of a term. If it is not in context, recurse on its 
+arguments. The term constructor's output type yields the resulting type once
+its localcontext variables are substituted with the relevant AlgTerms. 
+
+              (x,y,z)::Ob, p::Hom(x,y), q::Hom(y,z)
+E.g. given    --------------------------------------
+                           id(x)⋅(p⋅q)
+
+                 (a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c)
+and output type:  ------------------------------------
+                              Hom(a,c)
+                              
+We first recursively find `{id(x) => Hom(x,x), p⋅q => Hom(x,z)}`. We ultimately 
+want an AlgTerm for everything in the output type's context such that we can 
+substitute into `Hom(a,c)` to get the final answer. It will help to also compute 
+the AlgType for everything in the context. We work backwards, since we start by
+knowing `{f => id(x)::Hom(x,x), g=> p⋅q :: Hom(x,z)}`. For `a` `b` and `c`, 
+we use `equations` which tell us, e.g., that `a = dom(f)`. So we can grab the 
+first argument of the *type* of `f` (i.e. grab `x` from `Hom(x,x)`). 
+"""
+function infer_type(theory::GAT, t::TermInCtx)
+  head = only(headof(t.trm))
+  if hasident(t.ctx, head) 
+    getvalue(t.ctx[head]) # base case
+  else
+    tc = getvalue(theory[head])
+    eqs = equations(theory, head)
+    typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
+    for (i,a) in zip(tc.args, t.trm.args)
+      tt = (a => infer_type(theory, TermInCtx(t.ctx, a)))
+      typed_terms[ident(tc.args, name=nameof(i))] = tt 
+    end
+    for lc_arg in reverse(idents(tc.localcontext))
+      # one way of determining lc_arg's value
+      filt(e) = e isa AccessorApplication && e.to isa Ident
+      app = first(filter(filt, eqs[lc_arg])) 
+
+      inferred_term = typed_terms[app.to][2].args[app.accessor.lid.val]
+      inferred_type = infer_type(theory, TermInCtx(t.ctx,inferred_term))
+      typed_terms[lc_arg] = inferred_term => inferred_type
+    end
+    AlgType(headof(tc.type), map(argsof(tc.type)) do arg
+      substitute_term(arg, Dict([k=>v[1] for (k,v) in pairs(typed_terms)]))
+    end)
+  end
+end
+
+"""
+Take a term constructor and determine terms of its local context.
+
+This function is mutually recursive with `infer_type`. 
+""" 
+function bind_localctx(theory::GAT, t::TermInCtx)
+  head = only(headof(t.trm))
+
+  tc = getvalue(theory[head])
+  eqs = equations(theory, head)
+
+  typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
+  for (i,a) in zip(tc.args, t.trm.args)
+    tt = (a => infer_type(theory, TermInCtx(t.ctx, a)))
+    typed_terms[ident(tc.args, name=nameof(i))] = tt 
+  end
+
+  for lc_arg in reverse(idents(tc.localcontext))
+    # one way of determining lc_arg's value
+    filt(e) = e isa AccessorApplication && e.to isa Ident
+    app = first(filter(filt, eqs[lc_arg])) 
+    inferred_term = typed_terms[app.to][2].args[app.accessor.lid.val]
+    inferred_type = infer_type(theory, TermInCtx(t.ctx,inferred_term))
+    typed_terms[lc_arg] = inferred_term => inferred_type
+  end
+
+  Dict([k=>v[1] for (k,v) in pairs(typed_terms)])
+end
+
+""" Replace idents with AlgTerms. """
+function substitute_term(t::TrmTyp, dic::Dict{Ident,AlgTerm})
+  iden = only(headof(t))
+  if haskey(dic, iden)
+    isempty(t.args) || error("Cannot substitute a term with arguments")
+    dic[iden]
+  else 
+    AlgTerm(headof(t), substitute_term.(argsof(t), Ref(dic)))
+  end
+end
+
 # ExprInterop
 #############
+
+function ExprInterop.toexpr(c::Context, term::T; kw...) where {T<:TrmTyp}
+  if term.head isa Constant
+    toexpr(c, term.head; kw...)
+  else
+    if isempty(term.args)
+      toexpr(c, term.head; kw...)
+    else
+      Expr(:call, toexpr(c, term.head; kw...), toexpr.(Ref(c), term.args; kw...)...)
+    end
+  end
+end
+
+ExprInterop.toexpr(c::Context, constant::Constant; kw...) =
+  Expr(:(::), constant.value, toexpr(c, constant.type; kw...))
+
+
+ExprInterop.toexpr(c::Context, term::AlgSort; kw...) = 
+  ExprInterop.toexpr(c, term.ref; kw...)
+
+ExprInterop.fromexpr(c::Context, e, ::Type{AlgSort}) = 
+  AlgSort(ExprInterop.fromexpr(c, e, Reference))
+
 
 function bindingexprs(c::Context, s::Scope)
   c′ = AppendScope(c, s)
@@ -500,32 +651,30 @@ function ExprInterop.toexpr(c::Context, binding::JudgmentBinding)
 end
 
 """
-@theory ThLawlessCat <: ThGraph begin
-  compose(f::Hom(a,b), g::Hom(b,c))::Hom(a,c) ⊣ [a::Ob, b::Ob, c::Ob]
-  @op begin
-    (⋅) := compose
-  end
-end
-assoc := ((f ⋅ g) ⋅ h) == (f ⋅ (g ⋅ h)) :: Hom(a,d) ⊣ [a::Ob, b::Ob, c::Ob, d::Ob]
-otimes(a::Hom(X,Y),b::Hom(P,Q)) ⊣ [(X,Y,P,Q)::Ob]
+Return `nothing` if the binding we parse has already been bound.
 """
-
 function ExprInterop.fromexpr(c::Context, e, ::Type{Binding{AlgType, Nothing}})
   @match e begin
-    Expr(:(::), name::Symbol, type_expr) =>
-      Binding{AlgType, Nothing}(name, Set([name]), fromexpr(c, type_expr, AlgType))
+    Expr(:(::), name::Symbol, type_expr) => 
+        Binding{AlgType, Nothing}(name, Set([name]), fromexpr(c, type_expr, AlgType))
     _ => error("could not parse binding of name to type from $e")
   end
 end
 
-function parsetypescope(c::Context, exprs::AbstractVector)
+"""
+Keep track of variables already bound (e.g. in local context) so that they need
+not be redefined, e.g. `compose(f,g::Hom(b,c)) ⊣ [(a,b,c)::Ob, f::Hom(a,b)]`
+(If `f` were not defined in the local context, it would be parsed as `default`.)
+"""
+function parsetypescope(c::Context, exprs::AbstractVector; bound=nothing)
+  bound = isnothing(bound) ? Set{Symbol}() : bound
   scope = TypeScope()
   c′ = AppendScope(c, scope)
   line = nothing
   for expr in exprs
     binding_exprs = @match expr begin
-      a::Symbol => [:($a :: default)]
-      Expr(:tuple, names...) => [:($name :: default) for name in names]
+      a::Symbol => a ∈ bound ? [] : [:($a :: default)]
+      Expr(:tuple, names...) => [:($name :: default) for name in names if name ∉ bound]
       Expr(:(::), Expr(:tuple, names...), T) => [:($name :: $T) for name in names]
       :($a :: $T) => [expr]
       l::LineNumberNode => begin
@@ -542,14 +691,17 @@ function parsetypescope(c::Context, exprs::AbstractVector)
   scope
 end
 
-function normalize_decl(e)
+"""
+`axiom=true` adds a `::default` to exprs like `f(a,b) ⊣ [a::A, b::B]`
+"""
+function normalize_decl(e; axiom=false)
   @match e begin
     :($name := $lhs == $rhs :: $typ ⊣ $ctx) => :((($name := ($lhs == $rhs)) :: $typ) ⊣ $ctx)
     :($lhs == $rhs :: $typ ⊣ $ctx) => :((($lhs == $rhs) :: $typ) ⊣ $ctx)
     :(($lhs == $rhs :: $typ) ⊣ $ctx) => :((($lhs == $rhs) :: $typ) ⊣ $ctx)
     :($lhs == $rhs ⊣ $ctx) => :((($lhs == $rhs) :: default) ⊣ $ctx)
     :($trmcon :: $typ ⊣ $ctx) => :(($trmcon :: $typ) ⊣ $ctx)
-    :($trmcon ⊣ $ctx) => :(($trmcon :: default) ⊣ $ctx)
+    :($trmcon ⊣ $ctx) => axiom ? :(($trmcon :: default) ⊣ $ctx) : e
     e => e
   end
 end
@@ -566,8 +718,34 @@ function parseaxiom(c::Context, localcontext, type_expr, e; name=nothing)
   end
 end
 
-function ExprInterop.fromexpr(c::Context, e, ::Type{JudgmentBinding})
+function ExprInterop.fromexpr(c::Context, e, ::Type{TermInCtx})
   (binding, localcontext) = @match normalize_decl(e) begin
+    Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
+    e => (e, TypeScope())
+  end
+  c′ = AppendScope(c, localcontext)
+  bound = Dict([nameof(b) => getvalue(b) for b in getbindings(localcontext)])
+  t = ExprInterop.fromexpr(c′, binding, AlgTerm; bound=bound)
+  TermInCtx(localcontext, t)
+end
+
+ExprInterop.toexpr(c::Context, tic::TermInCtx) = let c′=AppendScope(c,tic.ctx);
+  Expr(:call, :(⊣), ExprInterop.toexpr(c′, tic.trm), ExprInterop.toexpr(c′, tic.ctx))
+end
+
+ExprInterop.toexpr(c::Context, ts::TypeScope) =
+  Expr(:vect,[Expr(:(::), nameof(b), toexpr(c, getvalue(b))) for b in ts]...)
+
+ExprInterop.fromexpr(c::Context, e, ::Type{TypeScope}) = @match e begin 
+  Expr(:vect, ps...) => parsetypescope(c, ps)
+  _ => error("Here $e $(dump(e))")
+end
+
+ExprInterop.toexpr(c::Context, at::Binding{AlgType, Nothing}) =
+  Expr(:(::), nameof(at), ExprInterop.toexpr(c, getvalue(at)))
+
+function ExprInterop.fromexpr(c::Context, e, ::Type{JudgmentBinding})
+  (binding, localcontext) = @match normalize_decl(e; axiom=true) begin
     Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
     e => (e, TypeScope())
   end
@@ -588,7 +766,7 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{JudgmentBinding})
         name::Symbol => (name, [])
         _ => error("failed to parse head of term constructor $call")
       end
-      args = parsetypescope(c′, arglist)
+      args = parsetypescope(c′, arglist; bound=Set(nameof.(localcontext)))
       @match type_expr begin
         :TYPE => begin
           typecon = AlgTypeConstructor(localcontext, args)
@@ -598,7 +776,7 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{JudgmentBinding})
           c″ = AppendScope(c′, args)
           type = fromexpr(c″, type_expr, AlgType)
           termcon = AlgTermConstructor(localcontext, args, type)
-          argsorts = map(type -> AlgSort(type.head), getvalue.(args))
+          argsorts = AlgSort.(getvalue.(args))
           JudgmentBinding(name, Set([name]), termcon, argsorts)
         end
       end
