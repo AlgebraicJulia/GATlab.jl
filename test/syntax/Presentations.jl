@@ -49,7 +49,7 @@ end
 t = fromexpr(Z, :(i(a) ⋅ (2::default)), AlgTerm)
 a = ident(Z; name=:a)
 
-@test compile(ThGroup, Dict(Reference(a) => :a), t) == :($(ThGroup).:(⋅)($(ThGroup).i(a), 2))
+@test compile(Dict(Reference(a) => :a), t; theorymodule=ThGroup) == :($(ThGroup).:(⋅)($(ThGroup).i(a), 2))
 
 @present D₄(ThGroup) begin
   (r,f) :: default
