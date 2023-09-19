@@ -18,7 +18,7 @@ using .ThCategory
 
 rename(::Nothing, ::Dict{Symbol,Symbol}) = nothing
 rename(nt::NamedTuple, d::Dict{Symbol,Symbol}) = 
-  NamedTuple(Dict([get(d, k, k) => v for (k, v) in pairs(nt)]))
+  NamedTuple(get(d, k, k) => v for (k, v) in pairs(nt))
 
 
 @instance ThCategory{ObT, HomT} (;model::OpC{ObT, HomT, C}) where {ObT, HomT, C} begin
