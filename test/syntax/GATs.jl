@@ -11,7 +11,7 @@ end
 
 scope = Scope(:number, :(+), :(*))
 
-number, plus, times = Reference.(idents(scope; name=[:number, :(+), :(*)]))
+number, plus, times = idents(scope; name=[:number, :(+), :(*)])
 
 one = AlgTerm(Constant(1, AlgType(number)))
 

@@ -33,16 +33,14 @@ One syntax tree to rule all the terms.
 Head can be a reference to an AlgTermConstructor, to a Binding{AlgType, Nothing}, or simply an AbstractConstant
 """
 @struct_hash_equal struct AlgTerm <: TrmTyp
-  head::Union{Reference, AbstractConstant}
+  head::Union{Ident, AbstractConstant}
   args::Vector{AlgTerm}
-  function AlgTerm(head::Union{Reference, AbstractConstant}, args::Vector{AlgTerm}=EMPTY_ARGS)
+  function AlgTerm(head::Union{Ident, AbstractConstant}, args::Vector{AlgTerm}=EMPTY_ARGS)
     new(head, args)
   end
 end
 
 const EMPTY_ARGS = AlgTerm[]
-
-AlgTerm(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgTerm(Reference(head), args)
 
 """
 Some expr may have already been bound (e.g. by an explicit context) and thus 
@@ -54,22 +52,22 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{AlgTerm}; bound=nothing)
     s::Symbol => begin
       scope = getscope(c, getlevel(c, s))
       ref = if sigtype(scope) == Union{Nothing, AlgSorts}
-        fromexpr(c, s, Reference; sig=AlgSort[])
+        fromexpr(c, s, Ident; sig=AlgSort[])
       else
-        fromexpr(c, s, Reference)
+        fromexpr(c, s, Ident)
       end
       AlgTerm(ref)
     end
     Expr(:call, head, argexprs...) => begin
       args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
       argsorts = AlgSorts(AlgSort.(Ref(c), args))
-      AlgTerm(fromexpr(c, head, Reference; sig=argsorts), args)
+      AlgTerm(fromexpr(c, head, Ident; sig=argsorts), args)
     end
     Expr(:(::), val, type) => 
       AlgTerm(Constant(val, get(bound, val, fromexpr(c, type, AlgType; bound=bound))))
     e::Expr => error("could not parse AlgTerm from $e")
     constant::Constant => AlgTerm(constant)
-    i::Ident => AlgTerm(Reference(i))
+    i::Ident => AlgTerm(i)
   end
 end
 
@@ -81,14 +79,12 @@ One syntax tree to rule all the types.
 `head` must be reference to a `AlgTypeConstructor`
 """
 @struct_hash_equal struct AlgType <: TrmTyp
-  head::Reference
+  head::Ident
   args::Vector{AlgTerm}
-  function AlgType(head::Reference, args::Vector{AlgTerm}=EMPTY_ARGS)
+  function AlgType(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS)
     new(head, args)
   end
 end
-
-AlgType(head::Ident, args::Vector{AlgTerm}=EMPTY_ARGS) = AlgType(Reference(head), args)
 
 """
 Some expr may have already been bound (e.g. by an explicit context) and thus 
@@ -97,9 +93,9 @@ oughtn't be interpreted as `default` type.
 function ExprInterop.fromexpr(c::Context, e, ::Type{AlgType}; bound=nothing)::AlgType
   bound = isnothing(bound) ? Dict{Symbol, AlgType}() : bound
   @match e begin
-    s::Symbol => AlgType(fromexpr(c, s, Reference))
+    s::Symbol => AlgType(fromexpr(c, s, Ident))
     Expr(:call, head, args...) =>
-      AlgType(fromexpr(c, head, Reference), fromexpr.(Ref(c), args, Ref(AlgTerm); bound=bound))
+      AlgType(fromexpr(c, head, Ident), fromexpr.(Ref(c), args, Ref(AlgTerm); bound=bound))
     _ => error("could not parse AlgType from $e")
   end
 end
@@ -139,17 +135,16 @@ A *sort*, which is essentially a type constructor without arguments
 `ref` must be reference to a `AlgTypeConstructor`
 """
 @struct_hash_equal struct AlgSort
-  ref::Reference
+  ref::Ident
 end
 
-AlgSort(i::Ident) = AlgSort(Reference(i))
 AlgSort(t::AlgType) = AlgSort(t.head)
 
 function AlgSort(c::Context, t::AlgTerm)
   if t.head isa AbstractConstant
     AlgSort(t.head.type.head)
   else
-    binding = c[only(t.head)]
+    binding = c[t.head]
     value = getvalue(binding)
     if value isa AlgType
       AlgSort(value.head)
@@ -197,7 +192,7 @@ Throw an error if a the head of an AlgTerm (which refers to a term constructor)
 has arguments of the wrong sort. Returns the sort of the term.
 """
 function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
-  if t.head isa Reference
+  if t.head isa Ident
     judgment = ctx[t.head] |> getvalue
     if judgment isa AlgType
       isempty(t.args) || error("Cannot apply a variable to arguments: $t")
@@ -394,7 +389,7 @@ function allnames(theory::GAT; aliases=false)
 end
 
 function sortname(theory::GAT, type::AlgType)
-  canonicalize(theory, only(type.head))
+  canonicalize(theory, type.head)
 end
 
 Base.issubset(t1::GAT, t2::GAT) = 
@@ -467,12 +462,12 @@ function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
     for (i, arg) in enumerate(xtype.args)
       if arg.head isa Constant
         continue
-      elseif first(arg.head) ∈ theory
+      elseif arg.head ∈ theory
         continue
       else
-        @assert first(arg.head) ∈ context
+        @assert arg.head ∈ context
         a = ident(xtypecon.args; lid=LID(i))
-        y = first(arg.head)
+        y = arg.head
         expr′ = AccessorApplication(a, expr)
         push!(to_expand, y => expr′)
       end
@@ -486,14 +481,14 @@ equations(theory::GAT, x::Ident) = let x = getvalue(theory[x]);
   equations(x.args, x.localcontext, theory) 
 end
 
-function compile(expr_lookup::Dict{Reference}, term::AlgTerm; theorymodule=nothing)
+function compile(expr_lookup::Dict{Ident}, term::AlgTerm; theorymodule=nothing)
   if term.head isa Constant
     term.head.value
   else
     if haskey(expr_lookup, term.head)
       expr_lookup[term.head]
     else
-      name = nameof(only(term.head))
+      name = nameof(term.head)
       fun = if !isnothing(theorymodule)
         :($theorymodule.$name)
       else
@@ -509,7 +504,7 @@ function TermInCtx(g::GAT, k::Ident)
   tcon = getvalue(g[k])
   lc = argcontext(tcon)
   ids = reverse(reverse(idents(lc))[1:(length(tcon.args))])
-  TermInCtx(lc, AlgTerm(Reference(k), AlgTerm.(ids)))
+  TermInCtx(lc, AlgTerm(k, AlgTerm.(ids)))
 end
 
 """
@@ -534,7 +529,7 @@ we use `equations` which tell us, e.g., that `a = dom(f)`. So we can grab the
 first argument of the *type* of `f` (i.e. grab `x` from `Hom(x,x)`). 
 """
 function infer_type(theory::GAT, t::TermInCtx)
-  head = only(headof(t.trm))
+  head = headof(t.trm)
   if hasident(t.ctx, head) 
     getvalue(t.ctx[head]) # base case
   else
@@ -566,7 +561,7 @@ Take a term constructor and determine terms of its local context.
 This function is mutually recursive with `infer_type`. 
 """ 
 function bind_localctx(theory::GAT, t::TermInCtx)
-  head = only(headof(t.trm))
+  head = headof(t.trm)
 
   tc = getvalue(theory[head])
   eqs = equations(theory, head)
@@ -591,7 +586,7 @@ end
 
 """ Replace idents with AlgTerms. """
 function substitute_term(t::TrmTyp, dic::Dict{Ident,AlgTerm})
-  iden = only(headof(t))
+  iden = headof(t)
   if haskey(dic, iden)
     isempty(t.args) || error("Cannot substitute a term with arguments")
     dic[iden]
@@ -623,7 +618,7 @@ ExprInterop.toexpr(c::Context, term::AlgSort; kw...) =
   ExprInterop.toexpr(c, term.ref; kw...)
 
 ExprInterop.fromexpr(c::Context, e, ::Type{AlgSort}) = 
-  AlgSort(ExprInterop.fromexpr(c, e, Reference))
+  AlgSort(ExprInterop.fromexpr(c, e, Ident))
 
 
 function bindingexprs(c::Context, s::Scope)

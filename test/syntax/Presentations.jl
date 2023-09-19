@@ -40,7 +40,7 @@ end
 src, tgt = idents(SchGraph; name=[:src, :tgt])
 Hom = ident(SchGraph; name=:Hom)
 
-@test getvalue(SchGraph[src]).head == Reference(Hom)
+@test getvalue(SchGraph[src]).head == Hom
 
 @present Z(ThGroup) begin
   (a,)
@@ -49,7 +49,7 @@ end
 t = fromexpr(Z, :(i(a) ⋅ (2::default)), AlgTerm)
 a = ident(Z; name=:a)
 
-@test compile(Dict(Reference(a) => :a), t; theorymodule=ThGroup) == :($(ThGroup).:(⋅)($(ThGroup).i(a), 2))
+@test compile(Dict(a => :a), t; theorymodule=ThGroup) == :($(ThGroup).:(⋅)($(ThGroup).i(a), 2))
 
 @present D₄(ThGroup) begin
   (r,f) :: default

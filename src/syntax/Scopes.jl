@@ -4,7 +4,6 @@ export
   ScopeTagError,
   LID,
   Ident, gettag, getlid, isnamed,
-  Reference, rest,
   Binding, getaliases, getvalue, getsignature, getline, setline,
   Context, getscope, nscopes, getlevel, hasname, hastag,
   HasContext, getcontext,
@@ -170,75 +169,6 @@ rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x::Ident) =
   else
     x
   end
-
-# References
-############
-
-"""
-`Reference`
-
-A path of identifiers. We optimize for the (frequent) case where there is only
-one identifier by making this a linked list.
-"""
-@struct_hash_equal struct Reference
-  body::Union{Nothing, Tuple{Ident, Reference}}
-end
-
-function Reference(xs::Ident...)
-  if isempty(xs)
-    Reference(nothing)
-  else
-    Reference(xs[1], Reference(xs[2:end]...))
-  end
-end
-
-function Reference(first::Ident, rest::Reference)
-  Reference((first, rest))
-end
-
-Base.isempty(p::Reference) = isnothing(p.body)
-
-Base.first(p::Reference) = !isempty(p) ? p.body[1] : throw(BoundsError(p, 1))
-
-Base.rest(p::Reference) = !isempty(p) ? p.body[2] : p
-
-function Base.only(p::Reference)
-  if isempty(p)
-    throw(ArgumentError("Reference is empty, must contain exactly 1 element"))
-  end
-  (x, r) = p.body
-  if !isempty(r)
-    throw(ArgumentError("Reference has multiple elements, must contain exactly 1 element"))
-  end
-  x
-end
-
-function Base.show(io::IO, p::Reference)
-  if isempty(p)
-    print(io, "_")
-    return
-  end
-  cur = p
-  show(io, first(cur))
-  while !isempty(rest(cur))
-    cur = rest(cur)
-    id = first(cur)
-    if isnamed(id)
-      print(io, ".")
-      show(io, id)
-    else
-      print(io, "[")
-      print(io, getlid(id))
-      print(io, "]")
-    end
-  end
-end
-
-retag(replacements::Dict{ScopeTag, ScopeTag}, p::Reference) =
-  isempty(p) ? p : Reference(retag(replacements, first(p)), retag(replacements, rest(p)))
-
-rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, p::Reference) =
-  isempty(p) ? p : Reference(rename(tag, replacements, first(p)), rename(tag, replacements, rest(p)))
 
 # Bindings
 ##########
@@ -758,7 +688,6 @@ function idents(
 end
 
 Base.getindex(c::Context, x::Ident) = getbinding(getscope(c, x), x)
-Base.getindex(c::Context, x::Reference) = c[only(x)]
 
 getvalue(c::Context, x::Ident) = getvalue(c[x])
 getvalue(c::Context, name::Symbol) = getvalue(c[ident(c; name)])
