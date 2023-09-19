@@ -55,32 +55,6 @@ nameless = Ident(tag1, LID(1), nothing)
 @test gettag(retag(Dict(tag1 => tag2), x)) == tag2
 @test nameof(rename(tag1, Dict(:x => :y), x)) == :y
 
-# References
-############
-@test_throws ArgumentError only(Reference())
-@test basicprinted(Reference()) == "_"
-
-y = Ident(tag2, LID(1), :y)
-xdoty = Reference(x, Reference(y))
-@test xdoty == Reference(x,y)
-
-@test first(xdoty) == x
-@test rest(xdoty) == Reference(y)
-@test_throws ArgumentError only(xdoty)
-@test only(Reference(x)) == x
-
-@test basicprinted(xdoty) == "x.y"
-
-xsub1 = Reference(x, nameless)
-
-@test basicprinted(xsub1) == "x[1]"
-
-@test gettag(first(retag(Dict(tag1 => tag2), xdoty))) == tag2
-@test gettag(first(retag(Dict(tag2 => tag2), xdoty))) == tag1
-@test gettag(first(rest(retag(Dict(tag2 => tag1), xdoty)))) == tag1
-@test basicprinted(rename(tag1, Dict(:x => :y, :y => :z), xdoty)) == "y.y"
-@test basicprinted(rename(tag2, Dict(:x => :y, :y => :z), xdoty)) == "x.z"
-
 # Bindings
 ##########
 

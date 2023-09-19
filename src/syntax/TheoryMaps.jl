@@ -40,7 +40,7 @@ dom(f::AbsTheoryMap)::GAT = f.dom # assume this exists by default
 codom(f::AbsTheoryMap)::GAT = f.codom # assume this exists by default
 
 function compose(f::AbsTheoryMap, g::AbsTheoryMap)
-  typmap = Dict(k => typemap(g)[only(v.ref)] for (k,v) in pairs(typemap(f)))
+  typmap = Dict(k => typemap(g)[v.ref] for (k,v) in pairs(typemap(f)))
   trmmap = Dict(k => g(v) for (k, v) in pairs(termmap(f)))
   TheoryMap(dom(f), codom(g), typmap, trmmap)
 end
@@ -63,8 +63,8 @@ function (f::AbsTheoryMap)(ctx::TypeScope)
   scope = TypeScope()
   cache = Dict{Symbol, AlgTerm}()
   for b in ctx
-    argnames = nameof.(only.(headof.(b.value.args)))
-    val = AlgType(f(only(b.value.head)).ref, AlgTerm[cache[a] for a in argnames])
+    argnames = nameof.(headof.(b.value.args))
+    val = AlgType(f(b.value.head).ref, AlgTerm[cache[a] for a in argnames])
     new_binding = Binding{AlgType, Nothing}(b.primary, b.aliases, val, b.sig)
     cache[nameof(b)] = AlgTerm(Ident(gettag(scope), LID(length(scope)+1), 
                                nameof(new_binding)))
@@ -81,7 +81,7 @@ end
 """ Map a term `t` in context `c` along `f`. """
 function (f::AbsTheoryMap)(ctx::TypeScope, t::AlgTerm, fctx=nothing)::AlgTerm
   fctx = isnothing(fctx) ? f(ctx) : fctx
-  head = only(headof(t))
+  head = headof(t)
   if hasident(ctx, head)
     retag(Dict(gettag(ctx)=>gettag(fctx)), t) # term is already in the context
   else 
@@ -182,7 +182,7 @@ TODO: check that it is well-formed, axioms are preserved.
     # Check type constructors are coherent
     for (k, v) in pairs(typmap)
       f_args = f(argcontext(getvalue(dom[k])))
-      arg_fs = argcontext(getvalue(codom[only(v.ref)]))
+      arg_fs = argcontext(getvalue(codom[v.ref]))
       err = "Bad type map $k => $v ($f_args != $arg_fs)"
       Scopes.equiv(f_args, arg_fs) || error(err)
     end
@@ -223,7 +223,7 @@ function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
       key = fromexpr(dom, e1, TermInCtx)
 
       # Check that dom ctx is the same (modulo retagging) with term argcontext
-      khead = only(key.trm.head)
+      khead = key.trm.head
       a_c = argcontext(getvalue(dom[khead]))
       Scopes.equiv(key.ctx, a_c) || error("CONTEXT ERROR\n$(key.ctx)\n$a_c")
 

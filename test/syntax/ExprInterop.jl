@@ -27,10 +27,4 @@ c = ScopeList([scope, scope′])
 @test fromexpr(c, :(var"#1!1"), Ident) == x
 @test fromexpr(c, :(var"#1"), Ident) == x′
 
-@test toexpr(c, Reference(x)) == :x!1
-@test fromexpr(c, :x!1, Reference) == Reference(x)
-
-@test toexpr(c, Reference()) == :(_)
-@test fromexpr(c, :(_), Reference) == Reference()
-
 end
