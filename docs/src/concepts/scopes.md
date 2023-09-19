@@ -2,17 +2,26 @@
 
 Design rationale:
 
-Namespacing should be first class. This doesn't play nicely with deBruijn
-levels; we don't want to do a bunch of math to convert between flattened and
-unflattened versions of contexts. There is an accepted solution to the problem
-of organizing names: use refs! Mathematically speaking, a ref is just a list
+Namespacing, i.e. references which look like `britain.economy.GDP`, should be
+first class. This doesn't play nicely with the internal representation of names
+via [deBruijn levels](https://en.wikipedia.org/wiki/De_Bruijn_index); we don't
+want to do a bunch of math to convert between flattened and nested versions
+of contexts. Conceptually, we should then switch our identifiers to be *lists*
 of deBruijn levels.
 
-However, deBruijn levels are unfriendly for users; we want to be able to give
-names to our variables!
+But there are also significant subtleties in the translation between named and
+nameless representations of identifiers. Also in practice if we are referencing
+something that might change over time, like a C-set, we don't want to use
+deBruijn levels, because we don't want have to change all of our identifiers
+when we delete something, so in the rest of this I will instead say "local
+identifier" instead of deBruijn level to refer to a nameless representation of
+an identifier.
 
-In general, naming is given by a *relation* between symbols and bindings (as
-referred to by deBruijn levels). Each binding may be associated with zero or
+(the name "local identifier" and also some of this philosophy is taken from
+[chit](https://github.com/davidad/chit))
+
+In general, naming is given by a *relation* between symbols and *bindings* (as
+refered to by local identifiers).  Each binding may be associated with zero or
 more symbols, and each symbol might be associated with zero or more bindings.
 
 We name the failure of this relation to be a bijection in several ways.
@@ -55,11 +64,11 @@ scopes, and the most recent scope "wins".
 
 Parsing turns a `Symbol` into an `Ident`. The `Ident` contains the original
 `Symbol` for printing, but it also contains a reference to a scope via ScopeTag,
-and an deBruijn level within that scope. Thus, the name in the `Ident` is never
-needed for later stages of programatic manipulation.
+and an local identifier ("lid") within that scope. Thus, the name in the `Ident`
+is never needed for later stages of programatic manipulation.
 
 Scopes cache the relation between names and bindings, by providing a way to go
-from binding (as reified by deBruijn level) to a set of aliases with
+from binding (as reified by local identifier) to a set of aliases with
 distinguished primary alias, and to go from name to the set of bindings that
 have that name that we need to disambiguate between in the case of an overload.
 

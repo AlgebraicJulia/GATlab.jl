@@ -1,7 +1,7 @@
 """ General-purpose tools for metaprogramming in Julia.
 """
 module MetaUtils
-export JuliaFunction, setimpl,
+export JuliaFunction, setimpl, setname,
   JuliaFunctionSig, parse_docstring, parse_function,
   parse_function_sig, generate_docstring, generate_function,
   replace_symbols, strip_lines,
@@ -29,10 +29,18 @@ const Expr0 = Union{Symbol,Expr}
                          return_type=nothing, impl=nothing, doc=nothing)
     new(name, args, kwargs, whereparams, return_type, impl, doc)
   end
+
+  function JuliaFunction(;name::Expr0, args=Expr0[], kwargs=Expr0[], whereparams=Expr0[],
+                         return_type=nothing, impl=nothing, doc=nothing)
+    new(name, args, kwargs, whereparams, return_type, impl, doc)
+  end
 end
 
 setimpl(f::JuliaFunction, impl) =
   JuliaFunction(f.name, f.args, f.kwargs, f.whereparams, f.return_type, impl, f.doc)
+
+setname(f::JuliaFunction, name) =
+  JuliaFunction(name, f.args, f.kwargs, f.whereparams, f.return_type, f.impl, f.doc)
 
 @struct_hash_equal struct JuliaFunctionSig
   name::Expr0
@@ -155,7 +163,7 @@ end
 """
 function replace_symbols(bindings::AbstractDict, f::JuliaFunction)::JuliaFunction
   JuliaFunction(
-    replace_symbols(bindings, f.name),
+    f.name,
     replace_symbols.(Ref(bindings), f.args),
     replace_symbols.(Ref(bindings), f.kwargs),
     replace_symbols.(Ref(bindings), f.whereparams),
