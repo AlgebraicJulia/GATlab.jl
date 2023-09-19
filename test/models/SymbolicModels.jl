@@ -9,6 +9,7 @@ abstract type ObExpr{T} <: CategoryExpr{T} end
 abstract type HomExpr{T} <: CategoryExpr{T} end
 
 @symbolic_model FreeCategory{ObExpr, HomExpr} ThCategory begin
+  compose(f::Hom, g::Hom) = associate_unit(new(f,g), ThCategory.id)
 end
 
 x, y = FreeCategory.Ob{:generator}([:x], []), FreeCategory.Ob{:generator}([:y], [])
@@ -16,100 +17,100 @@ f = FreeCategory.Hom{:generator}([:f], [x, y])
 
 @test x isa ObExpr{:generator}
 @test ThCategory.id(x) isa HomExpr{:id}
-@test ThCategory.compose(ThCategory.id(x), f) isa HomExpr{:compose}
-@test_throws SyntaxDomainError ThCategory.compose(f, f)
-
-try
-  ThCategory.compose(f, f)
-catch e
-  @test sprint(showerror, e) isa String
-end
+@test ThCategory.compose(ThCategory.id(x), f) == f
 
 # Monoid
 ########
 
-# """ Theory of monoids.
-# """
-# @theory ThMonoid begin
-#   Elem::TYPE
-#   munit()::Elem
-#   mtimes(x::Elem,y::Elem)::Elem
-# end
+""" Theory of monoids.
+"""
 
-# """ Syntax for the theory of monoids.
-# """
-# @symbolic_model FreeMonoid{GATExpr} ThMonoid begin
-# end
+@theory ThMonoid begin
+  Elem::TYPE
+  munit()::Elem
+  mtimes(x::Elem,y::Elem)::Elem
+end
 
-# Elem(mod::Module, args...) = Elem(mod.Elem, args...)
+""" Syntax for the theory of monoids.
+"""
 
-# @test isa(FreeMonoid, Module)
+@symbolic_model FreeMonoid{GATExpr} ThMonoid
+
+import .ThMonoid: Elem
+using .ThMonoid
+
+Elem(mod::Module, args...) = Elem(mod.Elem, args...)
+
+@test isa(FreeMonoid, Module)
 # @test occursin("theory of monoids", string(Docs.doc(FreeMonoid)))
 # @test sort(names(FreeMonoid)) == sort([:FreeMonoid, :Elem])
 
-# x, y, z = Elem(FreeMonoid,:x), Elem(FreeMonoid,:y), Elem(FreeMonoid,:z)
-# @test isa(mtimes(x,y), FreeMonoid.Elem)
-# @test isa(munit(FreeMonoid.Elem), FreeMonoid.Elem)
+x, y, z = Elem(FreeMonoid,:x), Elem(FreeMonoid,:y), Elem(FreeMonoid,:z)
+@test isa(mtimes(x,y), FreeMonoid.Elem)
+@test isa(munit(FreeMonoid.Elem), FreeMonoid.Elem)
 # @test gat_typeof(x) == :Elem
 # @test gat_typeof(mtimes(x,y)) == :Elem
-# @test mtimes(mtimes(x,y),z) != mtimes(x,mtimes(y,z))
+@test mtimes(mtimes(x,y),z) != mtimes(x,mtimes(y,z))
 
 # # Test equality
-# @test x == Elem(FreeMonoid,:x)
-# @test x != y
-# @test Elem(FreeMonoid,"X") == Elem(FreeMonoid,"X")
-# @test Elem(FreeMonoid,"X") != Elem(FreeMonoid,"Y")
+@test x == Elem(FreeMonoid,:x)
+@test x != y
+@test Elem(FreeMonoid,"X") == Elem(FreeMonoid,"X")
+@test Elem(FreeMonoid,"X") != Elem(FreeMonoid,"Y")
 
-# # Test hash
-# @test hash(x) == hash(x)
-# @test hash(x) != hash(y)
-# @test hash(mtimes(x,y)) == hash(mtimes(x,y))
-# @test hash(mtimes(x,y)) != hash(mtimes(x,z))
+# Test hash
+@test hash(x) == hash(x)
+@test hash(x) != hash(y)
+@test hash(mtimes(x,y)) == hash(mtimes(x,y))
+@test hash(mtimes(x,y)) != hash(mtimes(x,z))
 
-# @syntax FreeMonoidAssoc ThMonoid begin
-#   mtimes(x::Elem, y::Elem) = associate(new(x,y))
-# end
+@symbolic_model FreeMonoidAssoc{GATExpr} ThMonoid begin
+  mtimes(x::Elem, y::Elem) = associate(new(x,y))
+end
 
-# x, y, z = [ Elem(FreeMonoidAssoc,sym) for sym in [:x,:y,:z] ]
-# e = munit(FreeMonoidAssoc.Elem)
-# @test mtimes(mtimes(x,y),z) == mtimes(x,mtimes(y,z))
-# @test mtimes(e,x) != x && mtimes(x,e) != x
+x, y, z = [ Elem(FreeMonoidAssoc,sym) for sym in [:x,:y,:z] ]
+e = munit(FreeMonoidAssoc.Elem)
+@test mtimes(mtimes(x,y),z) == mtimes(x,mtimes(y,z))
+@test mtimes(e,x) != x && mtimes(x,e) != x
 
-# @syntax FreeMonoidAssocUnit ThMonoid begin
-#   mtimes(x::Elem, y::Elem) = associate_unit(new(x,y), munit)
-# end
+@symbolic_model FreeMonoidAssocUnit{GATExpr} ThMonoid begin
+  mtimes(x::Elem, y::Elem) = associate_unit(new(x,y), munit)
+end
 
-# x, y, z = [ Elem(FreeMonoidAssocUnit,sym) for sym in [:x,:y,:z] ]
-# e = munit(FreeMonoidAssocUnit.Elem)
-# @test mtimes(mtimes(x,y),z) == mtimes(x,mtimes(y,z))
-# @test mtimes(e,x) == x && mtimes(x,e) == x
+x, y, z = [ Elem(FreeMonoidAssocUnit,sym) for sym in [:x,:y,:z] ]
+e = munit(FreeMonoidAssocUnit.Elem)
+@test mtimes(mtimes(x,y),z) == mtimes(x,mtimes(y,z))
+@test mtimes(e,x) == x && mtimes(x,e) == x
 
-# abstract type MonoidExpr{T} <: GATExpr{T} end
-# @syntax FreeMonoidTyped{MonoidExpr} ThMonoid
+abstract type MonoidExpr{T} <: GATExpr{T} end
+@symbolic_model FreeMonoidTyped{MonoidExpr} ThMonoid
 
-# x = Elem(FreeMonoidTyped.Elem, :x)
-# @test FreeMonoidTyped.Elem <: MonoidExpr
-# @test isa(x, FreeMonoidTyped.Elem) && isa(x, MonoidExpr)
+x = Elem(FreeMonoidTyped.Elem, :x)
+@test FreeMonoidTyped.Elem <: MonoidExpr
+@test isa(x, FreeMonoidTyped.Elem) && isa(x, MonoidExpr)
 
 # @signature ThMonoidNumeric{Elem} <: ThMonoid{Elem} begin
 #   elem_int(x::Int)::Elem
 # end
+
 # @syntax FreeMonoidNumeric ThMonoidNumeric
 
 # x = elem_int(FreeMonoidNumeric.Elem, 1)
 # @test isa(x, FreeMonoidNumeric.Elem)
 # @test first(x) == 1
 
-# """ A monoid with two distinguished elements.
-# """
-# @signature ThMonoidTwo{Elem} <: ThMonoid{Elem} begin
-#   one()::Elem
-#   two()::Elem
-# end
+""" A monoid with two distinguished elements.
+"""
 
-# """ The free monoid on two generators.
-# """
-# @syntax FreeMonoidTwo ThMonoidTwo begin
+@theory ThMonoidTwo <: ThMonoid begin
+  one()::Elem
+  two()::Elem
+end
+
+""" The free monoid on two generators.
+"""
+
+# @symbolic_model FreeMonoidTwo{GATExpr} ThMonoidTwo begin
 #   Elem(::Type{Elem}, value) = error("No extra generators allowed!")
 # end
 
@@ -117,50 +118,52 @@ end
 # @test all(isa(expr, FreeMonoidTwo.Elem) for expr in [x, y, mtimes(x,y)])
 # @test_throws ErrorException Elem(FreeMonoidTwo, :x)
 
-# # Category
-# ##########
+# Category
+##########
 
-# @signature ThCategory{Ob,Hom} begin
-#   Ob::TYPE
-#   Hom(dom::Ob, codom::Ob)::TYPE
+@theory ThCategory′ begin
+  Ob::TYPE
+  Hom(dom::Ob, codom::Ob)::TYPE
 
-#   id(X::Ob)::Hom(X,X)
-#   compose(f::Hom(X,Y), g::Hom(Y,Z))::Hom(X,Z) ⊣ (X::Ob, Y::Ob, Z::Ob)
-# end
+  id(X::Ob)::Hom(X,X)
+  compose(f::Hom(X,Y), g::Hom(Y,Z))::Hom(X,Z) ⊣ [X::Ob, Y::Ob, Z::Ob]
+end
 
-# @syntax FreeCategory ThCategory begin
-#   compose(f::Hom, g::Hom) = associate(new(f,g))
-# end
+@symbolic_model FreeCategory′{GATExpr, GATExpr} ThCategory′ begin
+  compose(f::Hom, g::Hom) = associate(new(f,g))
+end
 
-# @test isa(FreeCategory, Module)
-# @test sort(names(FreeCategory)) == sort([:FreeCategory, :Ob, :Hom])
+@test isa(FreeCategory′, Module)
+@test sort(names(FreeCategory′)) == sort([:FreeCategory′, :Ob, :Hom])
 
-# X, Y, Z, W = [ Ob(FreeCategory.Ob, sym) for sym in [:X, :Y, :Z, :W] ]
-# f, g, h = Hom(:f, X, Y), Hom(:g, Y, Z), Hom(:h, Z, W)
-# @test isa(X, FreeCategory.Ob) && isa(f, FreeCategory.Hom)
-# @test_throws MethodError FreeCategory.Hom(:f)
-# @test dom(f) == X
-# @test codom(f) == Y
+using .ThCategory′
 
-# @test isa(id(X), FreeCategory.Hom)
-# @test dom(id(X)) == X
-# @test codom(id(X)) == X
+X, Y, Z, W = [ Ob(FreeCategory′.Ob, sym) for sym in [:X, :Y, :Z, :W] ]
+f, g, h = Hom(:f, X, Y), Hom(:g, Y, Z), Hom(:h, Z, W)
+@test isa(X, FreeCategory′.Ob) && isa(f, FreeCategory′.Hom)
+@test_throws MethodError FreeCategory′.Hom(:f)
+@test dom(f) == X
+@test codom(f) == Y
 
-# @test isa(compose(f,g), FreeCategory.Hom)
-# @test dom(compose(f,g)) == X
-# @test codom(compose(f,g)) == Z
-# @test isa(compose(f,f), FreeCategory.Hom) # Doesn't check domains.
-# @test compose(compose(f,g),h) == compose(f,compose(g,h))
+@test isa(id(X), FreeCategory′.Hom)
+@test dom(id(X)) == X
+@test codom(id(X)) == X
 
-# @syntax FreeCategoryStrict ThCategory begin
-#   compose(f::Hom, g::Hom) = associate(new(f,g; strict=true))
-# end
+@test isa(compose(f,g), FreeCategory′.Hom)
+@test dom(compose(f,g)) == X
+@test codom(compose(f,g)) == Z
+@test isa(compose(f,f), FreeCategory′.Hom) # Doesn't check domains.
+@test compose(compose(f,g),h) == compose(f,compose(g,h))
 
-# X, Y = Ob(FreeCategoryStrict.Ob, :X), Ob(FreeCategoryStrict.Ob, :Y)
-# f, g = Hom(:f, X, Y), Hom(:g, Y, X)
+@symbolic_model FreeCategoryStrict{ObExpr, HomExpr} ThCategory′ begin
+  compose(f::Hom, g::Hom) = associate(new(f,g; strict=true))
+end
 
-# @test isa(compose(f,g), FreeCategoryStrict.Hom)
-# @test_throws SyntaxDomainError compose(f,f)
+X, Y = Ob(FreeCategoryStrict.Ob, :X), Ob(FreeCategoryStrict.Ob, :Y)
+f, g = Hom(:f, X, Y), Hom(:g, Y, X)
+
+@test isa(compose(f,g), FreeCategoryStrict.Hom)
+@test_throws SyntaxDomainError compose(f,f)
 
 # # Functor
 # #########

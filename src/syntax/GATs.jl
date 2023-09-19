@@ -409,11 +409,17 @@ end
 
 const InferExpr = Union{Ident, AccessorApplication}
 
-function build_infer_expr(theorymodule, e::InferExpr)
+function build_infer_expr(e::InferExpr; theorymodule=nothing)
   if e isa Ident
     nameof(e)
   else
-    Expr(:call, :($theorymodule.$(nameof(e.accessor))), build_infer_expr(theorymodule, e.to))
+    name = nameof(e.accessor)
+    accessor = if !isnothing(theorymodule)
+      :($theorymodule.$name)
+    else
+      esc(name)
+    end
+    Expr(:call, accessor, build_infer_expr(e.to; theorymodule))
   end
 end
 
@@ -480,18 +486,20 @@ equations(theory::GAT, x::Ident) = let x = getvalue(theory[x]);
   equations(x.args, x.localcontext, theory) 
 end
 
-function compile(theorymodule, expr_lookup::Dict{Reference}, term::AlgTerm)
+function compile(expr_lookup::Dict{Reference}, term::AlgTerm; theorymodule=nothing)
   if term.head isa Constant
     term.head.value
   else
     if haskey(expr_lookup, term.head)
       expr_lookup[term.head]
     else
-      Expr(
-        :call,
-        :($theorymodule.$(nameof(only(term.head)))),
-        [compile(theorymodule, expr_lookup, arg) for arg in term.args]...
-      )
+      name = nameof(only(term.head))
+      fun = if !isnothing(theorymodule)
+        :($theorymodule.$name)
+      else
+        esc(name)
+      end
+      Expr(:call, fun, [compile(expr_lookup, arg; theorymodule) for arg in term.args]...)
     end
   end
 end
