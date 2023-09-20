@@ -365,4 +365,34 @@ f, g, h, k = Hom(:f, A, B), Hom(:g, B, C), Hom(:h, B, A), Hom(:k, C, B)
 # Involution
 @test invert(invert(f)) == f
 
+# PointedSetCategory
+
+"""
+Theory of a pointed set-enriched category.
+We axiomatize a category equipped with zero morphisms.
+
+A functor from an ordinary category into a freely generated
+pointed-set enriched category,
+equivalently, a pointed-set enriched category in which no two nonzero maps
+compose to a zero map, is a good notion
+of a functor that's total on objects and partial on morphisms.
+"""
+@theory ThPointedSetCategory <: ThCategory begin
+  zeromap(A::Ob,B::Ob)::Hom(A,B)
+  (compose(zeromap(A,B),f::(B→C))==zeromap(A,C)) :: Hom(A, C) ⊣ [A::Ob,B::Ob,C::Ob]
+  (compose(g::(A→B),zeromap(A,B))==zeromap(A,C)) :: Hom(A, C) ⊣ [A::Ob,B::Ob,C::Ob]
+end
+
+@symbolic_model FreePointedSetCategory{ObExpr,HomExpr} ThPointedSetCategory begin
+  compose(f::Hom,g::Hom) = associate_unit(normalize_zero(new(f,g; strict=true)), id)
+end
+
+using .ThPointedSetCategory
+
+A,B,C,D = map(x->Ob(FreePointedSetCategory,x),[:A,:B,:C,:D])
+f,g,h = Hom(:f,A,B),Hom(:g,B,C),Hom(:h,C,D)
+zAB,zBC,zAC = zeromap(A,B),zeromap(B,C),zeromap(A,C)
+@test zAC == compose(f,zBC) == compose(zAB,g)
+@test compose(f,zBC,h) == zeromap(A,D)
+
 end

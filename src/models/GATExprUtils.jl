@@ -84,6 +84,7 @@ function involute(expr::GATExpr)
   arg = first(expr)
   head(expr) == head(arg) ? first(arg) : expr
 end
+
 """
 If given GATExpr contains a zero morphism,
 collapse the expression to a single zero morphism.
@@ -95,7 +96,9 @@ function normalize_zero(expr::E;zname=:zeromap) where E <: GATExpr
       ztype = typeof(subexpr)
       s,t = gat_type_args(expr)
       return ztype([s,t],[s,t])
-    end end
+    end
+  end
   expr
 end
+
 end

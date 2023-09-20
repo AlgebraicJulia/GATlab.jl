@@ -54,6 +54,7 @@ nameless = Ident(tag1, LID(1), nothing)
 
 @test gettag(retag(Dict(tag1 => tag2), x)) == tag2
 @test nameof(rename(tag1, Dict(:x => :y), x)) == :y
+@test rename(tag1, Dict{Symbol, Symbol}(), x) == x
 
 # Bindings
 ##########
@@ -117,6 +118,8 @@ xy_scope′ = Scope([bind_x]; tag=tag1)
 @test_throws BoundsError ident(xy_scope; name=:x, level=2)
 @test hasident(xy_scope, x)
 @test !hasident(xy_scope; tag=tag1)
+
+value_scope = Scope{Union{Int, String}}(:x => 1, :y => 1) isa Scope{Union{Int, String}}
 
 s = Scope{String, Int}()
 
