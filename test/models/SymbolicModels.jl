@@ -24,7 +24,6 @@ f = FreeCategory.Hom{:generator}([:f], [x, y])
 
 """ Theory of monoids.
 """
-
 @theory ThMonoid begin
   Elem::TYPE
   munit()::Elem
@@ -33,7 +32,6 @@ end
 
 """ Syntax for the theory of monoids.
 """
-
 @symbolic_model FreeMonoid{GATExpr} ThMonoid
 
 import .ThMonoid: Elem
@@ -48,8 +46,8 @@ Elem(mod::Module, args...) = Elem(mod.Elem, args...)
 x, y, z = Elem(FreeMonoid,:x), Elem(FreeMonoid,:y), Elem(FreeMonoid,:z)
 @test isa(mtimes(x,y), FreeMonoid.Elem)
 @test isa(munit(FreeMonoid.Elem), FreeMonoid.Elem)
-# @test gat_typeof(x) == :Elem
-# @test gat_typeof(mtimes(x,y)) == :Elem
+@test gat_typeof(x) == :Elem
+@test gat_typeof(mtimes(x,y)) == :Elem
 @test mtimes(mtimes(x,y),z) != mtimes(x,mtimes(y,z))
 
 # # Test equality
@@ -101,7 +99,6 @@ x = Elem(FreeMonoidTyped.Elem, :x)
 
 """ A monoid with two distinguished elements.
 """
-
 @theory ThMonoidTwo <: ThMonoid begin
   one()::Elem
   two()::Elem
@@ -109,7 +106,6 @@ end
 
 """ The free monoid on two generators.
 """
-
 # @symbolic_model FreeMonoidTwo{GATExpr} ThMonoidTwo begin
 #   Elem(::Type{Elem}, value) = error("No extra generators allowed!")
 # end

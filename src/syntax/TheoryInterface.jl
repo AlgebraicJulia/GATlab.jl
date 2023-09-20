@@ -97,11 +97,16 @@ macro theory(head, body)
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
   esc(
-    Expr(:toplevel, :(
-      module $name
-      $(modulelines...)
-      end
-    )))
+    Expr(
+      :toplevel,
+      :(
+        module $name
+        $(modulelines...)
+        end
+      ),
+      :(Core.@__doc__ $(name))
+    )
+  )
 end
 
 end
