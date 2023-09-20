@@ -13,7 +13,7 @@ using .ThCategory
   @test id(2) == [1,2]
   @test compose([5], [1,1,1,3,2]) == [2]
   @test dom([5]) == 1
-  @test codom([5]; context=(c=10,)) == 10
+  @test codom([5]; context=(codom=10,)) == 10
 end
 
 end
