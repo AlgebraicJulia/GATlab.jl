@@ -1,5 +1,5 @@
 module TheoryInterface
-export @theory, Model
+export @theory, Model, invoke_term
 
 using ..Scopes, ..GATs, ..ExprInterop
 
@@ -107,6 +107,23 @@ macro theory(head, body)
       :(Core.@__doc__ $(name))
     )
   )
+end
+
+function invoke_term(theory_module, types, name, args; model=nothing)
+  theory = theory_module.THEORY
+  method = getproperty(theory_module, name)
+  type_idx = findfirst(==(name), nameof.(typecons(theory)))
+  if !isnothing(type_idx) && length(args) <= 1
+    args = method(types[type_idx], args...)
+  elseif isnothing(model) && isempty(args)
+    termcon = getvalue(theory, ident(theory; name, sig=AlgSort[]))
+    idx = findfirst(==(termcon.type.head), typecons(theory))
+    method(types[idx])
+  elseif isnothing(model)
+    method(args...)
+  else
+    method(WithModel(model), args...)
+  end
 end
 
 end

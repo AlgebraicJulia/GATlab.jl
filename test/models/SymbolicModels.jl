@@ -117,7 +117,11 @@ end
 # Category
 ##########
 
-@theory ThCategory′ begin
+module CatTests
+
+using GATlab, Test
+
+@theory ThCategory begin
   Ob::TYPE
   Hom(dom::Ob, codom::Ob)::TYPE
 
@@ -125,33 +129,33 @@ end
   compose(f::Hom(X,Y), g::Hom(Y,Z))::Hom(X,Z) ⊣ [X::Ob, Y::Ob, Z::Ob]
 end
 
-@symbolic_model FreeCategory′{GATExpr, GATExpr} ThCategory′ begin
+@symbolic_model FreeCategory{GATExpr, GATExpr} ThCategory begin
   compose(f::Hom, g::Hom) = associate(new(f,g))
 end
 
-@test isa(FreeCategory′, Module)
-@test sort(names(FreeCategory′)) == sort([:FreeCategory′, :Ob, :Hom])
+@test isa(FreeCategory, Module)
+@test sort(names(FreeCategory)) == sort([:FreeCategory, :Ob, :Hom])
 
-using .ThCategory′
+using .ThCategory
 
-X, Y, Z, W = [ Ob(FreeCategory′.Ob, sym) for sym in [:X, :Y, :Z, :W] ]
+X, Y, Z, W = [ Ob(FreeCategory.Ob, sym) for sym in [:X, :Y, :Z, :W] ]
 f, g, h = Hom(:f, X, Y), Hom(:g, Y, Z), Hom(:h, Z, W)
-@test isa(X, FreeCategory′.Ob) && isa(f, FreeCategory′.Hom)
-@test_throws MethodError FreeCategory′.Hom(:f)
+@test isa(X, FreeCategory.Ob) && isa(f, FreeCategory.Hom)
+@test_throws MethodError FreeCategory.Hom(:f)
 @test dom(f) == X
 @test codom(f) == Y
 
-@test isa(id(X), FreeCategory′.Hom)
+@test isa(id(X), FreeCategory.Hom)
 @test dom(id(X)) == X
 @test codom(id(X)) == X
 
-@test isa(compose(f,g), FreeCategory′.Hom)
+@test isa(compose(f,g), FreeCategory.Hom)
 @test dom(compose(f,g)) == X
 @test codom(compose(f,g)) == Z
-@test isa(compose(f,f), FreeCategory′.Hom) # Doesn't check domains.
+@test isa(compose(f,f), FreeCategory.Hom) # Doesn't check domains.
 @test compose(compose(f,g),h) == compose(f,compose(g,h))
 
-@symbolic_model FreeCategoryStrict{ObExpr, HomExpr} ThCategory′ begin
+@symbolic_model FreeCategoryStrict{GATExpr, GATExpr} ThCategory begin
   compose(f::Hom, g::Hom) = associate(new(f,g; strict=true))
 end
 
@@ -161,54 +165,58 @@ f, g = Hom(:f, X, Y), Hom(:g, Y, X)
 @test isa(compose(f,g), FreeCategoryStrict.Hom)
 @test_throws SyntaxDomainError compose(f,f)
 
-# # Functor
-# #########
+end
 
-# @instance ThMonoid{String} begin
-#   munit(::Type{String}) = ""
-#   mtimes(x::String, y::String) = string(x,y)
-# end
+# Functor
+#########
 
-# F(expr; kw...) = functor((String,), expr; kw...)
+@instance ThMonoid{String} begin
+  munit(::Type{String}) = ""
+  mtimes(x::String, y::String) = string(x,y)
+end
 
-# x, y, z = Elem(FreeMonoid,:x), Elem(FreeMonoid,:y), Elem(FreeMonoid,:z)
-# gens = Dict(x => "x", y => "y", z => "z")
-# @test F(mtimes(x,mtimes(y,z)); generators=gens) == "xyz"
-# @test F(mtimes(x,munit(FreeMonoid.Elem)); generators=gens) == "x"
+F(expr; kw...) = functor((String,), expr; kw...)
 
-# terms = Dict(:Elem => (x) -> string(first(x)))
-# @test F(mtimes(x,mtimes(y,z)); terms=terms) == "xyz"
-# @test F(mtimes(x,munit(FreeMonoid.Elem)); terms=terms) == "x"
+x, y, z = Elem(FreeMonoid,:x), Elem(FreeMonoid,:y), Elem(FreeMonoid,:z)
+gens = Dict(x => "x", y => "y", z => "z")
+@test F(mtimes(x,mtimes(y,z)); generators=gens) == "xyz"
+@test F(mtimes(x,munit(FreeMonoid.Elem)); generators=gens) == "x"
 
-# # Serialization
-# ###############
+terms = Dict(:Elem => (x) -> string(first(x)))
+@test F(mtimes(x,mtimes(y,z)); terms=terms) == "xyz"
+@test F(mtimes(x,munit(FreeMonoid.Elem)); terms=terms) == "x"
 
-# # To JSON
-# X, Y, Z = [ Ob(FreeCategory.Ob, sym) for sym in [:X, :Y, :Z] ]
-# f = Hom(:f, X, Y)
-# g = Hom(:g, Y, Z)
-# @test to_json_sexpr(X) == ["Ob", "X"]
-# @test to_json_sexpr(f) == ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]]
-# @test to_json_sexpr(compose(f,g)) == [
-#   "compose",
-#   ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]],
-#   ["Hom", "g", ["Ob", "Y"], ["Ob", "Z"]],
-# ]
-# @test to_json_sexpr(f, by_reference=x->true) == "f"
-# @test to_json_sexpr(compose(f,g), by_reference=x->true) == ["compose","f","g"]
+# Serialization
+###############
 
-# # From JSON
-# @test parse_json_sexpr(FreeMonoid, [:Elem, "x"]) == Elem(FreeMonoid, :x)
-# @test parse_json_sexpr(FreeMonoid, [:munit]) == munit(FreeMonoid.Elem)
-# @test parse_json_sexpr(FreeCategory, ["Ob", "X"]) == X
-# @test parse_json_sexpr(FreeCategory, ["Ob", "X"]; symbols=false) ==
-#   Ob(FreeCategory.Ob, "X")
-# @test parse_json_sexpr(FreeCategory, ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]]) == f
-# @test parse_json_sexpr(FreeCategory, ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]]; symbols=false) ==
-#   Hom("f", Ob(FreeCategory.Ob, "X"), Ob(FreeCategory.Ob, "Y"))
+using .ThCategory
 
-# # Round trip
-# @test parse_json_sexpr(FreeCategory, to_json_sexpr(compose(f,g))) == compose(f,g)
-# @test parse_json_sexpr(FreeCategory, to_json_sexpr(id(X))) == id(X)
+# To JSON
+X, Y, Z = [ Ob(FreeCategory.Ob, sym) for sym in [:X, :Y, :Z] ]
+f = Hom(:f, X, Y)
+g = Hom(:g, Y, Z)
+@test to_json_sexpr(X) == ["Ob", "X"]
+@test to_json_sexpr(f) == ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]]
+@test to_json_sexpr(compose(f,g)) == [
+  "compose",
+  ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]],
+  ["Hom", "g", ["Ob", "Y"], ["Ob", "Z"]],
+]
+@test to_json_sexpr(f, by_reference=x->true) == "f"
+@test to_json_sexpr(compose(f,g), by_reference=x->true) == ["compose","f","g"]
+
+# From JSON
+@test parse_json_sexpr(FreeMonoid, [:Elem, "x"]) == Elem(FreeMonoid, :x)
+@test parse_json_sexpr(FreeMonoid, [:munit]) == munit(FreeMonoid.Elem)
+@test parse_json_sexpr(FreeCategory, ["Ob", "X"]) == X
+@test parse_json_sexpr(FreeCategory, ["Ob", "X"]; symbols=false) ==
+  Ob(FreeCategory.Ob, "X")
+@test parse_json_sexpr(FreeCategory, ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]]) == f
+@test parse_json_sexpr(FreeCategory, ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]]; symbols=false) ==
+  Hom("f", Ob(FreeCategory.Ob, "X"), Ob(FreeCategory.Ob, "Y"))
+
+# Round trip
+@test parse_json_sexpr(FreeCategory, to_json_sexpr(compose(f,g))) == compose(f,g)
+@test parse_json_sexpr(FreeCategory, to_json_sexpr(id(X))) == id(X)
 
 end
