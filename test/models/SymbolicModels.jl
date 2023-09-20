@@ -219,4 +219,81 @@ g = Hom(:g, Y, Z)
 @test parse_json_sexpr(FreeCategory, to_json_sexpr(compose(f,g))) == compose(f,g)
 @test parse_json_sexpr(FreeCategory, to_json_sexpr(id(X))) == id(X)
 
+# Pretty Printing
+#################
+
+sexpr(expr::GATExpr) = sprint(show_sexpr, expr)
+unicode(expr::GATExpr; all::Bool=false) =
+  all ? sprint(show, MIME("text/plain"), expr) : sprint(show_unicode, expr)
+latex(expr::GATExpr; all::Bool=false) =
+  all ? sprint(show, MIME("text/latex"), expr) : sprint(show_latex, expr)
+
+ThCategory.Ob(m::Module, x) = Ob(m.Ob, x)
+
+A, B = Ob(FreeCategory, :A), Ob(FreeCategory, :B)
+f, g = Hom(:f, A, B), Hom(:g, B, A)
+
+ThCategory.compose(f, g, h...) = compose(f, compose(g, h...))
+
+import .SymbolicModels: show_unicode, show_latex
+
+show_unicode(io::IO, expr::CategoryExpr{:compose}; kw...) =
+  show_unicode_infix(io, expr, "⋅"; kw...)
+
+show_latex(io::IO, expr::CategoryExpr{:id}; kw...) =
+  show_latex_script(io, expr, "\\mathrm{id}")
+show_latex(io::IO, expr::CategoryExpr{:compose}; paren::Bool=false, kw...) =
+  show_latex_infix(io, expr, "\\cdot"; paren=paren)
+
+function Base.show(io::IO, ::MIME"text/plain", expr::HomExpr)
+  show_unicode(io, expr)
+  print(io, ": ")
+  show_unicode(io, dom(expr))
+  print(io, " → ")
+  show_unicode(io, codom(expr))
+end
+
+function Base.show(io::IO, ::MIME"text/latex", expr::HomExpr)
+  print(io, "\$")
+  show_latex(io, expr)
+  print(io, " : ")
+  show_latex(io, dom(expr))
+  print(io, " \\to ")
+  show_latex(io, codom(expr))
+  print(io, "\$")
+end
+
+# String format
+@test string(A) == "A"
+@test string(f) == "f"
+@test string(compose(f,g)) == "compose(f,g)"
+@test string(compose(f,g,f)) == "compose(f,g,f)"
+@test string(Ob(FreeCategory, nothing)) != ""
+
+# S-expressions
+@test sexpr(A) == ":A"
+@test sexpr(f) == ":f"
+@test sexpr(compose(f,g)) == "(compose :f :g)"
+@test sexpr(compose(f,g,f)) == "(compose :f :g :f)"
+
+# Infix notation (Unicode)
+@test unicode(A) == "A"
+@test unicode(A, all=true) == "A"
+@test unicode(f) == "f"
+@test unicode(f, all=true) == "f: A → B"
+@test unicode(id(A)) == "id{A}"
+@test unicode(compose(f,g)) == "f⋅g"
+
+# Infix notation (LaTeX)
+@test latex(A) == "A"
+@test latex(A, all=true) == raw"$A$"
+@test latex(f) == "f"
+@test latex(f, all=true) == raw"$f : A \to B$"
+@test latex(id(A)) == "\\mathrm{id}_{A}"
+@test latex(compose(f,g)) == "f \\cdot g"
+
+@test latex(Ob(FreeCategory, "x")) == "x"
+@test latex(Ob(FreeCategory, "sin")) == "\\mathrm{sin}"
+@test latex(Ob(FreeCategory, "\\alpha")) == "\\alpha"
+
 end

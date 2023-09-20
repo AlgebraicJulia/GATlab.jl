@@ -1,6 +1,8 @@
 module SymbolicModels
 export GATExpr, @symbolic_model, SyntaxDomainError, head, args, gat_typeof, gat_type_args,
-  functor, to_json_sexpr, parse_json_sexpr
+  functor, to_json_sexpr, parse_json_sexpr,
+  show_sexpr, show_unicode, show_unicode_infix,
+  show_latex, show_latex_infix, show_latex_postfix, show_latex_script
 
 using ...Util
 using ...Syntax
