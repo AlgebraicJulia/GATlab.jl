@@ -17,15 +17,15 @@ end
 
 using .ThCategory
 
-@instance ThCategory{SliceOb{ObT, HomT}, HomT} (;model::SliceC{ObT, HomT, C}) where {ObT, HomT, C} begin
+@instance ThCategory{SliceOb{ObT, HomT}, HomT} [model::SliceC{ObT, HomT, C}] where {ObT, HomT, C} begin
   function Ob(x::SliceOb{ObT, HomT})
     try
-      Ob(x.ob; model=model.cat)
+      Ob[model.cat](x.ob)
     catch e
       @fail ("ob is not valid", e)
     end
     try
-      Hom(x.hom, x.ob, model.over; model=model.cat)
+      Hom[model.cat](x.hom, x.ob, model.over)
     catch e
       @fail ("hom is not valid", e)
     end
@@ -36,19 +36,19 @@ using .ThCategory
 
   function Hom(f::HomT, x::SliceOb{ObT, HomT}, y::SliceOb{ObT, HomT})
     try
-      Hom(f, x.ob, y.ob; model=model.cat)
+      Hom[model.cat](f, x.ob, y.ob)
     catch e
       @fail ("morphism is not valid in base category", e)
     end
-    compose(f, y.hom; model=model.cat, context=(a=x.ob, b=y.ob, c=model.over)) == x.hom ||
+    compose[model.cat](f, y.hom; context=(a=x.ob, b=y.ob, c=model.over)) == x.hom ||
       @fail "commutativity of triangle does not hold"
     f
   end
 
-  id(x::SliceOb{ObT, HomT}) = id(x.ob; model=model.cat)
+  id(x::SliceOb{ObT, HomT}) = id[model.cat](x.ob)
 
   compose(f::HomT, g::HomT; context=nothing) =
-    compose(f, g; model=model.cat, context=isnothing(context) ? nothing : map(x -> x.ob, context))
+    compose[model.cat](f, g; context=isnothing(context) ? nothing : map(x -> x.ob, context))
 end
 
 end

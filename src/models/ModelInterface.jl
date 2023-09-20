@@ -109,7 +109,7 @@ struct TypedFinSetC <: Model{Tuple{Vector{Int}, Vector{Int}}}
   ntypes::Int
 end
 
-@instance ThCategory{Vector{Int}, Vector{Int}} (;model::TypedFinSetC) begin
+@instance ThCategory{Vector{Int}, Vector{Int}} [model::TypedFinSetC] begin
   Ob(v::Vector{Int}) = all(1 <= j <= model.ntypes for j in v)
   Hom(f::Vector{Int}, v::Vector{Int}, w::Vector{Int}) =
      length(f) == length(v) && all(1 <= y <= length(w) for y in f)
@@ -125,7 +125,7 @@ struct SliceCat{Ob, Hom, C <: Model{Tuple{Ob, Hom}}} <: Model{Tuple{Tuple{Ob, Ho
   c::C
 end
 
-@instance ThCategory{Tuple{Ob, Hom}, Hom} (;model::SliceCat{Ob, Hom, C}) where {Ob, Hom, C<:Model{Tuple{Ob, Hom}}} begin
+@instance ThCategory{Tuple{Ob, Hom}, Hom} [model::SliceCat{Ob, Hom, C}] where {Ob, Hom, C<:Model{Tuple{Ob, Hom}}} begin
 end
 ```
 
@@ -191,7 +191,7 @@ function parse_model_param(e)
   end
 
   model_type = @match paramdecl begin
-    Expr(:tuple, Expr(:parameters, Expr(:(::), :model, model_type))) => model_type
+    Expr(:vect, Expr(:(::), :model, model_type)) => model_type
     nothing => nothing
     _ => error("invalid syntax for declaring model type: $model")
   end

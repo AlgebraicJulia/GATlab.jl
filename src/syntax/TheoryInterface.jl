@@ -72,13 +72,13 @@ macro theory(head, body)
     # TODO: also push an automatically generated docstring
     push!(
       modulelines,
-      :(function $name(args...; model=nothing, context=nothing)
-          if !isnothing(model)
-            $name($(WithModel)(model), args...; context)
-          else
-            throw(MethodError($name, args))
-          end
-        end)
+      quote
+        function $name end
+
+        function Base.getindex(::typeof($name), m::$(GlobalRef(TheoryInterface, :Model)))
+          (args...; context=nothing) -> $name($(GlobalRef(TheoryInterface, :WithModel))(m), args...; context)
+        end
+      end
     )
   end
 
