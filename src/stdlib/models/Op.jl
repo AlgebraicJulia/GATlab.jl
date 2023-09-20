@@ -21,14 +21,16 @@ rename(nt::NamedTuple, d::Dict{Symbol,Symbol}) =
   NamedTuple(get(d, k, k) => v for (k, v) in pairs(nt))
 
 
-@instance ThCategory{ObT, HomT} (;model::OpC{ObT, HomT, C}) where {ObT, HomT, C} begin
-  Ob(x::ObT) = Ob(x; model=model.cat)
-  Hom(x::HomT, d::ObT, cd::ObT) = Hom(x, cd, d; model=model.cat)
-  id(x::ObT) = id(x; model=model.cat)
-  dom(f::HomT; context) = codom(f; model=model.cat, context)
-  codom(f::HomT; context) = dom(f; model=model.cat, context)
+@instance ThCategory{ObT, HomT} [model::OpC{ObT, HomT, C}] where {ObT, HomT, C} begin
+  Ob(x::ObT) = Ob[model.cat](x)
+  Hom(x::HomT, d::ObT, cd::ObT) = Hom[model.cat](x, cd, d)
+  id(x::ObT) = id[model.cat](x)
+  dom(f::HomT; context) = 
+    codom[model.cat](f; context=rename(context, Dict(:dom=>:codom, :codom=>:dom)))
+  codom(f::HomT; context) = 
+    dom[model.cat](f; context=rename(context, Dict(:dom=>:codom, :codom=>:dom)))
   compose(f::HomT, g::HomT; context=nothing) =
-    compose(g, f; model=model.cat, 
+    compose[model.cat](g, f; 
             context=rename(context, Dict(:a=>:c, :c=>:a, :b=>:b)))
 end
 

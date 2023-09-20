@@ -27,7 +27,7 @@ end
   compose(f::Vector{Int}, g::Vector{Int}) = g[f]
 
   dom(f::Vector{Int}) = length(f)
-  codom(::Vector{Int}; context) = context[:c]
+  codom(::Vector{Int}; context) = context[:codom]
 end
 
 end
