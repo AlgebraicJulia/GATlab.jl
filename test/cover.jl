@@ -8,3 +8,5 @@ open("lcov.info", "w") do io
     LCOV.write(io, coverage)
 end;
 bashit("find . -name *.cov -delete")
+
+@show get_summary(coverage)
