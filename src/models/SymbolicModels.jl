@@ -485,24 +485,6 @@ end
 constructor_name(expr::GATExpr) = head(expr)
 constructor_name(expr::GATExpr{:generator}) = gat_typeof(expr)
 
-""" Create generator of the same type as the given expression.
-
-FIXME
-"""
-function generator_like(expr::GATExpr, value)::GATExpr
-  invoke_term(syntax_module(expr), gat_typeof(expr),
-              value, gat_type_args(expr)...)
-end
-
-"""
-As with [generator_like](@ref), but change the syntax instead of the name.
-FIXME
-"""
-function generator_switch_syntax(syntax::Module,expr::GATExpr)::GATExpr
-  invoke_term(syntax, gat_typeof(expr),
-              nameof(expr), map(x->generator_switch_syntax(syntax,x),gat_type_args(expr))...)
-end
-
 """
 Get syntax module of given expression.
 """
