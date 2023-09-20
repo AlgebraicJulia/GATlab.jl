@@ -7,7 +7,7 @@ using ...StdTheories
 struct FinSetC <: Model{Tuple{Int, Vector{Int}}}
 end
 
-@instance ThCategory{Int, Vector{Int}} (;model::FinSetC) begin
+@instance ThCategory{Int, Vector{Int}} [model::FinSetC] begin
   Ob(x::Int) = x >= 0 ? x : @fail "expected nonnegative integer"
 
   function Hom(f::Vector{Int}, n::Int, m::Int)

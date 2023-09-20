@@ -6,7 +6,7 @@ using ....Models, ...StdTheories
 struct NothingC <: Model{Tuple{Nothing, Nothing}}
 end
 
-@instance ThCategory{Nothing, Nothing} (;model::NothingC) begin
+@instance ThCategory{Nothing, Nothing} [model::NothingC] begin
   Ob(::Nothing) = nothing
   Hom(::Nothing, ::Nothing, ::Nothing) = nothing
 
