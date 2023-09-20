@@ -278,7 +278,8 @@ macro symbolic_model(decl, theoryname, body)
   Expr(
     :toplevel,
     module_decl,
-    esc.(generate_function.([theory_overloads; generator_overloads]))...
+    :(Core.@__doc__ $(esc(name))),
+    esc.(generate_function.([theory_overloads; generator_overloads]))...,
   )
 end
 
