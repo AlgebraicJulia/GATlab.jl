@@ -44,6 +44,7 @@ Elem(mod::Module, args...) = Elem(mod.Elem, args...)
 # @test sort(names(FreeMonoid)) == sort([:FreeMonoid, :Elem])
 
 x, y, z = Elem(FreeMonoid,:x), Elem(FreeMonoid,:y), Elem(FreeMonoid,:z)
+@test nameof(x) == :x
 @test isa(mtimes(x,y), FreeMonoid.Elem)
 @test isa(munit(FreeMonoid.Elem), FreeMonoid.Elem)
 @test gat_typeof(x) == :Elem
@@ -165,6 +166,12 @@ f, g = Hom(:f, X, Y), Hom(:g, Y, X)
 @test isa(compose(f,g), FreeCategoryStrict.Hom)
 @test_throws SyntaxDomainError compose(f,f)
 
+try
+  compose(f,f)
+catch e
+  @test sprint(showerror, e) isa String
+end
+
 end
 
 # Functor
@@ -190,6 +197,7 @@ terms = Dict(:Elem => (x) -> string(first(x)))
 ###############
 
 using .ThCategory
+ThCategory.Ob(m::Module, x) = Ob(m.Ob, x)
 
 # To JSON
 X, Y, Z = [ Ob(FreeCategory.Ob, sym) for sym in [:X, :Y, :Z] ]
@@ -204,6 +212,7 @@ g = Hom(:g, Y, Z)
 ]
 @test to_json_sexpr(f, by_reference=x->true) == "f"
 @test to_json_sexpr(compose(f,g), by_reference=x->true) == ["compose","f","g"]
+@test to_json_sexpr(true)
 
 # From JSON
 @test parse_json_sexpr(FreeMonoid, [:Elem, "x"]) == Elem(FreeMonoid, :x)
@@ -214,6 +223,8 @@ g = Hom(:g, Y, Z)
 @test parse_json_sexpr(FreeCategory, ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]]) == f
 @test parse_json_sexpr(FreeCategory, ["Hom", "f", ["Ob", "X"], ["Ob", "Y"]]; symbols=false) ==
   Hom("f", Ob(FreeCategory.Ob, "X"), Ob(FreeCategory.Ob, "Y"))
+@test parse_json_sexpr(FreeCategory, ["Ob", true]) == Ob(FreeCategory, true)
+@test_throws ErrorException parse_json_sexpr(FreeCategory, "X")
 
 # Round trip
 @test parse_json_sexpr(FreeCategory, to_json_sexpr(compose(f,g))) == compose(f,g)
@@ -228,7 +239,16 @@ unicode(expr::GATExpr; all::Bool=false) =
 latex(expr::GATExpr; all::Bool=false) =
   all ? sprint(show, MIME("text/latex"), expr) : sprint(show_latex, expr)
 
-ThCategory.Ob(m::Module, x) = Ob(m.Ob, x)
+# Monoids
+
+x, y, z = Elem.(Ref(FreeMonoid), [:x, :y, :z])
+
+@test sexpr(mtimes(x,y)) == "(mtimes :x :y)"
+@test unicode(mtimes(x,y)) == "mtimes{x,y}"
+@test latex(mtimes(x, y)) == raw"\mathop{\mathrm{mtimes}}\left[x,y\right]"
+
+# Categories
+
 
 A, B = Ob(FreeCategory, :A), Ob(FreeCategory, :B)
 f, g = Hom(:f, A, B), Hom(:g, B, A)
@@ -295,5 +315,54 @@ end
 @test latex(Ob(FreeCategory, "x")) == "x"
 @test latex(Ob(FreeCategory, "sin")) == "\\mathrm{sin}"
 @test latex(Ob(FreeCategory, "\\alpha")) == "\\alpha"
+
+@test sprint(show_latex_postfix, id(A), "i") == "{A}i"
+
+# Groupoid
+
+""" Theory of *groupoids*.
+"""
+@theory ThGroupoid <: ThCategory begin
+  invert(f::(A → B))::(B → A) ⊣ [A::Ob, B::Ob]
+
+  (f ⋅ invert(f) == id(A)) :: Hom(A, A) ⊣ [A::Ob, B::Ob, f::(A → B)]
+  (invert(f) ⋅ f == id(B)) :: Hom(B, B) ⊣ [A::Ob, B::Ob, f::(A → B)]
+end
+
+using .ThGroupoid
+
+@symbolic_model FreeGroupoid{ObExpr,HomExpr} ThGroupoid begin
+  compose(f::Hom, g::Hom) = associate_unit_inv(new(f,g; strict=true), id, invert)
+  invert(f::Hom) = distribute_unary(involute(new(f)), invert, compose,
+                                 unit=id, contravariant=true)
+end
+
+A, B, C = Ob(FreeGroupoid, :A), Ob(FreeGroupoid, :B), Ob(FreeGroupoid, :C)
+f, g, h, k = Hom(:f, A, B), Hom(:g, B, C), Hom(:h, B, A), Hom(:k, C, B)
+
+# Domains and codomains
+@test dom(invert(f)) == B
+@test codom(invert(f)) == A
+
+# Associativity and unitality
+@test compose(compose(f,g),k) == compose(f,compose(g,k))
+@test compose(id(A), f) == f
+@test compose(f, id(B)) == f
+
+# Inverse laws
+@test compose(f,invert(f)) == id(A)
+@test compose(invert(f),f) == id(B)
+@test compose(invert(f),compose(f,g)) == g
+@test compose(h,compose(invert(h),g)) == g
+@test compose(compose(f,g),invert(g)) == f
+@test compose(compose(k,invert(f)),f) == k
+@test compose(compose(f,invert(k)),compose(k,invert(f))) == id(A)
+
+# Inverses and composition
+@test invert(compose(f,g)) == compose(invert(g),invert(f))
+@test invert(id(A)) == id(A)
+
+# Involution
+@test invert(invert(f)) == f
 
 end

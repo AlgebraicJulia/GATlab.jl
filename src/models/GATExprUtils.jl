@@ -69,7 +69,7 @@ function distribute_unary(expr::GATExpr, unary::Function, binary::Function;
   @assert length(args(expr)) == 1
   arg = first(expr)
   if head(arg) == nameof(binary)
-    binary(map(unary, (contravariant ? reverse : identity)(args(arg))))
+    binary(map(unary, (contravariant ? reverse : identity)(args(arg)))...)
   elseif !isnothing(unit) && head(arg) == nameof(unit)
     arg
   else
