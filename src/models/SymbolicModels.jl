@@ -1,8 +1,10 @@
 module SymbolicModels
-export GATExpr, @symbolic_model, SyntaxDomainError, head, args, gat_typeof, gat_type_args
+export GATExpr, @symbolic_model, SyntaxDomainError, head, args, gat_typeof, gat_type_args,
+  functor, to_json_sexpr, parse_json_sexpr
 
 using ...Util
 using ...Syntax
+import ...Syntax: invoke_term
 
 using Base.Meta: ParseError
 using MLStyle
@@ -469,18 +471,11 @@ end
 # Reflection
 ############
 
-""" Invoke a term constructor by name in a syntax system.
-
-This method provides reflection for syntax systems. In everyday use the generic
-method for the constructor should be called directly, not through this function.
-
-FIXME
-"""
-function invoke_term(syntax_module::Module, constructor_name::Symbol, args...)
-  theory_type = syntax_module.theory()
-  theory = GAT.theory(theory_type)
-  syntax_types = Tuple(getfield(syntax_module, cons.name) for cons in theory.types)
-  invoke_term(theory_type, syntax_types, constructor_name, args...)
+function invoke_term(syntax_module::Module, constructor_name::Symbol, args)
+  theory_module = syntax_module.THEORY_MODULE
+  theory = theory_module.THEORY
+  syntax_types = Tuple(getfield(syntax_module, nameof(cons)) for cons in typecons(theory))
+  invoke_term(theory_module, syntax_types, constructor_name, args)
 end
 
 """ Name of constructor that created expression.
@@ -564,8 +559,8 @@ function functor(types::Tuple, expr::GATExpr;
   end
 
   # Invoke the constructor in the codomain category!
-  theory_type = syntax_module(expr).theory()
-  invoke_term(theory_type, types, name, term_args...)
+  theory_module = syntax_module(expr).THEORY_MODULE
+  invoke_term(theory_module, types, name, term_args)
 end
 
 # Serialization
@@ -597,9 +592,11 @@ function parse_json_sexpr(syntax_module::Module, sexpr;
     parse_value::Function = identity,
     symbols::Bool = true,
   )
-  theory_type = syntax_module.theory()
-  theory = GAT.theory(theory_type)
-  type_lens = Dict(cons.name => length(cons.params) for cons in theory.types)
+  theory_module = syntax_module.THEORY_MODULE
+  theory = theory_module.THEORY
+  type_lens = Dict(
+    nameof(binding) => length(getvalue(binding).args) for binding in [theory[tc] for tc in typecons(theory)]
+  )
 
   function parse_impl(sexpr::Vector, ::Type{Val{:expr}})
     name = Symbol(parse_head(symbols ? Symbol(sexpr[1]) : sexpr[1]))
@@ -609,7 +606,7 @@ function parse_json_sexpr(syntax_module::Module, sexpr;
                   arg isa Union{Bool,Number,Nothing}) ? :value : :expr
       parse_impl(arg, Val{arg_kind})
     end
-    invoke_term(syntax_module, name, args...)
+    invoke_term(syntax_module, name, args)
   end
   parse_impl(x, ::Type{Val{:value}}) = parse_value(x)
   parse_impl(x::String, ::Type{Val{:expr}}) =

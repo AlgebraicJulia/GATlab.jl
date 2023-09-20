@@ -150,10 +150,13 @@ macro instance(head, model, body)
   # Parse the body into functions defined here and functions defined elsewhere
   functions, ext_functions = parse_instance_body(body)
 
+  oldinstance = isnothing(model)
+
   # Checks that all the functions are defined with the correct types Add default
   # methods for type constructors and type argument accessors if these methods
   # are missing
-  typechecked_functions = typecheck_instance(theory, functions, ext_functions, jltype_by_sort)
+  typechecked_functions =
+    typecheck_instance(theory, functions, ext_functions, jltype_by_sort; oldinstance)
 
   # Adds keyword arguments to the functions, and qualifies them by
   # `theory_module`, i.e. changes `Ob(x) = blah` to `ThCategory.Ob(x; model::M,
@@ -249,11 +252,18 @@ function julia_signature(
   theory::GAT,
   x::Ident,
   termcon::AlgTermConstructor,
-  jltype_by_sort::Dict{AlgSort}
+  jltype_by_sort::Dict{AlgSort};
+  oldinstance=false
 )
+  sortsig = sortsignature(termcon)
+  args = if oldinstance && isempty(sortsig)
+    Expr0[Expr(:curly, :Type, jltype_by_sort[AlgSort(termcon.type)])]
+  else
+    Expr0[jltype_by_sort[sort] for sort in sortsignature(termcon)]
+  end
   JuliaFunctionSig(
     nameof(x),
-    Expr0[jltype_by_sort[sort] for sort in sortsignature(termcon)]
+    args
   )
 end
 
@@ -306,7 +316,8 @@ function typecheck_instance(
   theory::GAT,
   functions::Vector{JuliaFunction},
   ext_functions::Vector{Symbol},
-  jltype_by_sort::Dict{AlgSort}
+  jltype_by_sort::Dict{AlgSort};
+  oldinstance=false,
 )::Vector{JuliaFunction}
   typechecked = JuliaFunction[]
 
@@ -317,7 +328,7 @@ function typecheck_instance(
 
   for x in theory.termcons
     if nameof(x) ∉ ext_functions
-      sig = julia_signature(theory, x, getvalue(theory[x]), jltype_by_sort)
+      sig = julia_signature(theory, x, getvalue(theory[x]), jltype_by_sort; oldinstance)
       if haskey(undefined_signatures, sig)
         error(overload_errormsg)
       end
