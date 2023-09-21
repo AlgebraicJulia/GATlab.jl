@@ -119,7 +119,11 @@ xy_scope′ = Scope([bind_x]; tag=tag1)
 @test hasident(xy_scope, x)
 @test !hasident(xy_scope; tag=tag1)
 
-value_scope = Scope{Union{Int, String}}(:x => 1, :y => 1) isa Scope{Union{Int, String}}
+value_scope = Scope{Union{Int, String}}(:x => 1, :y => 1)
+
+@test value_scope isa Scope{Union{Int, String}}
+@test values(value_scope) == [1, 1]
+@test getvalue(value_scope, :x) == 1
 
 s = Scope{String, Int}()
 
