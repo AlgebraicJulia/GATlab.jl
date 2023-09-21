@@ -1,6 +1,7 @@
 module TestStdModels
 
 include("FinSets.jl")
+include("Arithmetic.jl")
 include("FinMatrices.jl")
 include("SliceCategories.jl")
 include("Op.jl")

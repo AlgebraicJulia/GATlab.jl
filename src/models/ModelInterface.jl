@@ -193,7 +193,7 @@ function parse_model_param(e)
   model_type = @match paramdecl begin
     Expr(:vect, Expr(:(::), :model, model_type)) => model_type
     nothing => nothing
-    _ => error("invalid syntax for declaring model type: $model")
+    _ => error("invalid syntax for declaring model type: $paramdecl")
   end
 
   (model_type, whereparams)

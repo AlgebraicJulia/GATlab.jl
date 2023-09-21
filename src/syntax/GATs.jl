@@ -757,7 +757,7 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{JudgmentBinding})
       (name, arglist) = @match head begin
         Expr(:call, name, args...) => (name, args)
         name::Symbol => (name, [])
-        _ => error("failed to parse head of term constructor $call")
+        _ => error("failed to parse head of term constructor $head")
       end
       args = parsetypescope(c′, arglist; bound=Set(nameof.(localcontext)))
       @match type_expr begin
@@ -795,25 +795,29 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{GATSegment})
   c′ = AppendScope(c, seg)
   linenumber = nothing
   for line in e.args
-    @match line begin
-      l::LineNumberNode => (linenumber = l)
-      Expr(:macrocall, var"@op", _, aliasexpr) => begin
+    @switch line begin
+      @case l::LineNumberNode
+        (linenumber = l)
+      @case Expr(:macrocall, var"@op", _, aliasexpr)
         lines = @match aliasexpr begin
           Expr(:block, lines...) => lines
           _ => [aliasexpr]
         end
         for line in lines
-          @match line begin
-            _::LineNumberNode => nothing
-            :($alias := $name) => Scopes.unsafe_addalias!(seg, name, alias)
-            _ => error("could not match @op line $line")
+          @switch line begin
+            @case (_::LineNumberNode) 
+              nothing
+            @case :($alias := $name) 
+              Scopes.unsafe_addalias!(seg, name, alias)
+            @case _
+              error("could not match @op line $line")
           end
         end
-      end
-      _ => begin
+      @case Expr(:import, Expr(:(:), Expr(:(.), mod), imports))
+        nothing
+      @case _ 
         binding = setline(fromexpr(c′, line, JudgmentBinding), linenumber)
         Scopes.unsafe_pushbinding!(seg, binding)
-      end
     end
   end
   seg

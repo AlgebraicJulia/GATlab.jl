@@ -12,6 +12,7 @@ using ....Syntax
 end
 
 @theory ThNatPlus <: ThNat begin
+  import Base: +
   ((x::ℕ) + (y::ℕ))::ℕ
   (n + S(m) == S(n+m) :: ℕ) ⊣ [n::ℕ,m::ℕ]
 end
