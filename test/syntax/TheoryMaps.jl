@@ -52,9 +52,15 @@ end
 
 # Applying theorymap as a function to Ident and TermInCtx
 #--------------------------------------------------------
+
+# Test PreorderCat
+
 (Ob, Hom), (Cmp, Id) = typecons(T), termcons(T)
-@test PreorderCat(Ob) == AlgSort(ident(T2; name=:default))
+@test PreorderCat(Ob) == InCtx(T2, ident(T2; name=:default))
 @test PreorderCat(Cmp) isa TermInCtx
+
+PreorderCat(argcontext(getvalue(T[Cmp])))
+
 @test PreorderCat(argcontext(getvalue(T[Cmp]))) isa TypeScope
 
 @test_throws KeyError PreorderCat(first(typecons(T2)))
@@ -67,6 +73,13 @@ xterm = fromexpr(ThMonoid.THEORY, :(e⋅(e⋅x) ⊣ [x]), TermInCtx)
 res = NatPlusMonoid(xterm)
 expected = fromexpr(ThNatPlus.THEORY, :(Z+(Z+x) ⊣ [x::ℕ]), TermInCtx)
 @test toexpr(ThNatPlus.THEORY, res) == toexpr(ThNatPlus.THEORY, expected)
+
+# Test OpCat
+
+xterm = fromexpr(T, :(id(x) ⋅ p ⋅ q ⋅ id(z) ⊣ [(x,y,z)::Ob, p::Hom(x,y), q::Hom(y,z)]), TermInCtx)
+expected = :(compose(id(z), compose(q,  compose(p, id(x)))) ⊣ [x::Ob,y::Ob,z::Ob, p::Hom(y,x), q::Hom(z,y)])
+@test toexpr(T, OpCat(xterm)) == expected
+
 
 # Inclusions 
 #############

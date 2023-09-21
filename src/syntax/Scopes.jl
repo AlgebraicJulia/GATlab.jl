@@ -214,8 +214,23 @@ disambiguated by a signature in `Sig` in the case of overloading.
   end
 end
 
-function Base.show(io::IO, b::Binding)
-  print(io, isnothing(nameof(b)) ? "_" : nameof(b))
+"""Type for printing out bindings with colored keys"""
+@struct_hash_equal struct ScopedBinding 
+  scope::ScopeTag 
+  binding::Binding
+end
+
+Base.show(io::IO, b::ScopedBinding) = 
+  Base.show(io, b.binding; crayon=tagcrayon(b.scope))
+
+function Base.show(io::IO, b::Binding; crayon=nothing)
+  bname = isnothing(nameof(b)) ? "_" : nameof(b)
+  if isnothing(crayon) || !(get(io, :color, true))
+    print(io, bname)
+  else 
+    print(io, crayon, bname)
+    print(io, inv(crayon))
+  end
   if length(getaliases(b)) > 1 
     print(io, "(aliases=")
     join(io, filter(x -> x != nameof(b), getaliases(b)), ", ")
@@ -407,7 +422,7 @@ end
 function Base.show(io::IO, x::Scope)
   print(io, "{")
   for (i, b) in enumerate(x.bindings)
-    print(io, b)
+    print(io, ScopedBinding(gettag(x), b))
     if i < length(x.bindings)
       print(io, ", ")
     end

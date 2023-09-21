@@ -4,7 +4,7 @@ export IdTheoryMap, TheoryIncl, AbsTheoryMap, TheoryMap, @theorymap,
 
 using ..GATs, ..Scopes, ..ExprInterop
 using ..Scopes: unsafe_pushbinding!
-using ..GATs: bindingexprs, bind_localctx, substitute_term
+using ..GATs: InCtx, TrmTyp, bindingexprs, bind_localctx, substitute_term
 
 import ..ExprInterop: toexpr, fromexpr
 
@@ -23,13 +23,19 @@ thought of in many ways.
 
 The main methods for an AbsTheoryMap to implement are: 
   - dom, codom, 
-  - typemap: A dictionary of Ident (of AlgTypeConstructor in domain) to AlgSort
-             (This must be a AlgSort of the same arity.) 
+  - typemap: A dictionary of Ident (of AlgTypeConstructor in domain) to
+             TypeInCtx (The TypeScope of the TypeInCtx must be structurally 
+             identical to the localcontext of the type constructor 
+             associated with the key).
   - termmap: A dictionary of Ident (of AlgTermConstructor in domain) to 
              TermInCtx. (The TypeScope of the TrmInCtx must be structurally 
              identical to the localcontext + args of the term constructor 
              associated with the key.)
-  
+
+The requirement that the values of `typemap` and `termmap` be structurally 
+identical to the contexts in the domain can eventually be relaxed (to allow 
+reordering, additional derived elements, dropping unused arguments), but for now 
+we require this for simplicity.
 """
 abstract type AbsTheoryMap end
 
@@ -40,7 +46,7 @@ dom(f::AbsTheoryMap)::GAT = f.dom # assume this exists by default
 codom(f::AbsTheoryMap)::GAT = f.codom # assume this exists by default
 
 function compose(f::AbsTheoryMap, g::AbsTheoryMap)
-  typmap = Dict(k => typemap(g)[v.ref] for (k,v) in pairs(typemap(f)))
+  typmap = Dict(k => g(v) for (k, v) in pairs(typemap(f)))
   trmmap = Dict(k => g(v) for (k, v) in pairs(termmap(f)))
   TheoryMap(dom(f), codom(g), typmap, trmmap)
 end
@@ -60,26 +66,24 @@ end
 
 """Map a context in the domain theory into a context of the codomain theory"""
 function (f::AbsTheoryMap)(ctx::TypeScope) 
-  scope = TypeScope()
-  cache = Dict{Symbol, AlgTerm}()
-  for b in ctx
-    argnames = nameof.(headof.(b.value.args))
-    val = AlgType(f(b.value.head).ref, AlgTerm[cache[a] for a in argnames])
+  fctx = TypeScope()
+  for i in 1:length(ctx)
+    b = ctx[LID(i)]
+    partial_scope = Scope(getbindings(ctx)[1:i-1]; tag=gettag(ctx))
+    val = f(partial_scope, getvalue(b), fctx)
     new_binding = Binding{AlgType, Nothing}(b.primary, b.aliases, val, b.sig)
-    cache[nameof(b)] = AlgTerm(Ident(gettag(scope), LID(length(scope)+1), 
-                               nameof(new_binding)))
-    unsafe_pushbinding!(scope, new_binding)
+    unsafe_pushbinding!(fctx, new_binding)
   end
-  scope
+  fctx
 end
 
-function (f::AbsTheoryMap)(t::TermInCtx)
+function (f::AbsTheoryMap)(t::InCtx{T}) where T
   fctx = f(t.ctx)
-  TermInCtx(fctx, f(t.ctx, t.trm, fctx))
+  InCtx{T}(fctx, f(t.ctx, t.trm, fctx))
 end
 
-""" Map a term `t` in context `c` along `f`. """
-function (f::AbsTheoryMap)(ctx::TypeScope, t::AlgTerm, fctx=nothing)::AlgTerm
+""" Map a term (or type) `t` in context `c` along `f`. """
+function (f::AbsTheoryMap)(ctx::TypeScope, t::T, fctx=nothing) where {T<:TrmTyp}
   fctx = isnothing(fctx) ? f(ctx) : fctx
   head = headof(t)
   if hasident(ctx, head)
@@ -93,19 +97,23 @@ function (f::AbsTheoryMap)(ctx::TypeScope, t::AlgTerm, fctx=nothing)::AlgTerm
                    for x in [termcon.args, termcon.localcontext])
 
     # new_term has same context as termcon, so recursively map over components
-    lc = bind_localctx(f.dom, TermInCtx(ctx,t))
-    flc = Dict(retag(rt_dict, k) => f(ctx, v, fctx) for (k, v) in pairs(lc))
-
+    lc = bind_localctx(f.dom, InCtx{T}(ctx, t))
+    flc = Dict{Ident, AlgTerm}(map(collect(pairs(lc))) do (k, v)
+      if hasident(termcon.args, k) # offset when squashing localcontext and args
+        k = Ident(gettag(k), LID(getlid(k).val+length(termcon.localcontext)), nameof(k))
+      end
+      retag(rt_dict, k) => f(ctx, v, fctx)
+    end)
     substitute_term(new_term.trm, flc)
   end
 end
 
 function toexpr(m::AbsTheoryMap)
   typs = map(collect(typemap(m))) do (k, v)
-    Expr(:call, :(=>), toexpr(dom(m), k), toexpr(codom(m), v)) 
-  end       
+    Expr(:call, :(=>), toexpr(dom(m), k), toexpr(codom(m), v))
+  end
   trms = map(collect(termmap(m))) do (k,v)
-    domterm = toexpr(dom(m), TermInCtx(dom(m), k))
+    domterm = toexpr(dom(m), InCtx(dom(m), k))
     Expr(:call, :(=>), domterm, toexpr(codom(m), v)) 
   end
   Expr(:block, typs...,trms...)
@@ -146,7 +154,7 @@ A theory inclusion has a subset of scopes
 end
 
 typemap(ι::Union{IdTheoryMap,TheoryIncl}) = 
-  Dict(k => AlgSort(k) for k in typecons(dom(ι)))
+  Dict(k => TypeInCtx(dom(ι), k) for k in typecons(dom(ι)))
 
 termmap(ι::Union{IdTheoryMap,TheoryIncl}) = 
   Dict(k=>TermInCtx(dom(ι), k) for k in termcons(dom(ι)))
@@ -170,28 +178,27 @@ TODO: check that it is well-formed, axioms are preserved.
 @struct_hash_equal struct TheoryMap <: AbsTheoryMap
   dom::GAT
   codom::GAT
-  typemap::Dict{Ident,AlgSort}
+  typemap::Dict{Ident,TypeInCtx}
   termmap::Dict{Ident,TermInCtx}
   function TheoryMap(dom, codom, typmap, trmmap)
     missing_types = setdiff(Set(keys(typmap)), Set(typecons(dom))) 
     missing_terms = setdiff(Set(keys(trmmap)), Set(termcons(dom))) 
     isempty(missing_types) || error("Missing types $missing_types")
     isempty(missing_terms) || error("Missing types $missing_terms")
-    f = new(dom, codom, typmap, trmmap)
 
-    # Check type constructors are coherent
-    for (k, v) in pairs(typmap)
-      f_args = f(argcontext(getvalue(dom[k])))
-      arg_fs = argcontext(getvalue(codom[v.ref]))
-      err = "Bad type map $k => $v ($f_args != $arg_fs)"
-      Scopes.equiv(f_args, arg_fs) || error(err)
+    tymap′, trmap′ = map([typmap, trmmap]) do tmap 
+      Dict(k => v isa Ident ? InCtx(codom, v) : v for (k,v) in pairs(tmap))
     end
-    # Check term constructors are coherent
-    for (k, v) in pairs(trmmap)
-      f_args = f(argcontext(getvalue(dom[k])))
-      arg_fs = v.ctx
-      err = "Bad term map $k => $v ($f_args != $arg_fs)"
-      Scopes.equiv(f_args, arg_fs) || error(err)
+
+    f = new(dom, codom, tymap′, trmap′)
+    # Check type/term constructors are coherent
+    for (typtrm, tmap) in ["type"=>tymap′, "term"=>trmap′]
+      for (k, v) in pairs(tmap)
+        f_args = f(argcontext(getvalue(dom[k])))
+        arg_fs = v.ctx
+        err = "Bad $typtrm map $k => $v ($f_args != $arg_fs)"
+        Scopes.equiv(f_args, arg_fs) || error(err)
+      end
     end
 
     f
@@ -209,15 +216,18 @@ TODO: we currently ignore LineNumberNodes. TheoryMap data structure could
 TODO: handle more ambiguity via type inference
 """
 function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
-  tyms, trms = Dict{Ident, AlgSort}(), Dict{Ident, TermInCtx}()
+  tyms = Dict{Ident, Union{Ident, TypeInCtx}}()
+  trms = Dict{Ident, Union{Ident, TermInCtx}}()
   exprs = @match e begin
     Expr(:block, e1::Expr, es...) => [e1,es...]
     Expr(:block, ::LineNumberNode, es...) => filter(x->!(x isa LineNumberNode), es)
   end
   for expr in exprs
     e1, e2 = @match expr begin Expr(:call, :(=>), e1, e2) => (e1,e2) end
+
     if e1 ∈ nameof.(typecons(dom))
-      tyms[fromexpr(dom, e1, Ident)] = fromexpr(codom, e2, AlgSort)
+      val = e2 isa Symbol ? fromexpr(codom, e2, Ident) : fromexpr(codom, e2, TypeInCtx)
+      tyms[fromexpr(dom, e1, Ident)] = val
     else
       val = fromexpr(codom, e2, TermInCtx)
       key = fromexpr(dom, e1, TermInCtx)
