@@ -176,41 +176,34 @@ rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x::Ident) =
 """
 `Binding{T, Sig}`
 
-A binding associates some `T`-typed value to a name and possibly some aliases,
+A binding associates some `T`-typed value to a name,
 disambiguated by a signature in `Sig` in the case of overloading.
 
-`primary` is an optional distinguished element of aliases
+`primary` is an optional distinguished name
 `value` is the element
 `sig` is a way of uniquely distinguishing this element from others with the same name 
 (for example, ⊗ : Ob x Ob -> Ob and Hom x Hom -> Hom)
 """
 @struct_hash_equal struct Binding{T, Sig}
   primary::Union{Symbol, Nothing}
-  aliases::Set{Symbol}
   value::T
   sig::Sig
   line::Union{LineNumberNode, Nothing}
   function Binding{T, Sig}(
     primary::Union{Symbol, Nothing},
-    aliases::Set{Symbol},
     value::T,
     sig::Sig=nothing,
     line::Union{LineNumberNode, Nothing}=nothing
   ) where {T, Sig}
-    isnothing(primary) || primary ∈ aliases ||
-      error("if the primary is not nothing then it must be contained in aliases")
-    !isnothing(primary) || isempty(aliases) ||
-      error("if aliases is nonempty, the primary must be set")
-    new{T, Sig}(primary, aliases, value, sig, line)
+    new{T, Sig}(primary, value, sig, line)
   end
   function Binding{T}(
     primary::Union{Symbol, Nothing},
-    aliases::Set{Symbol},
     value::T,
     sig::Sig=nothing,
     line::Union{LineNumberNode, Nothing}=nothing
   ) where {T, Sig}
-    Binding{T,Sig}(primary, aliases, value, sig, line)
+    Binding{T,Sig}(primary, value, sig, line)
   end
 end
 
@@ -231,11 +224,6 @@ function Base.show(io::IO, b::Binding; crayon=nothing)
     print(io, crayon, bname)
     print(io, inv(crayon))
   end
-  if length(getaliases(b)) > 1 
-    print(io, "(aliases=")
-    join(io, filter(x -> x != nameof(b), getaliases(b)), ", ")
-    print(io,")")
-  end
   print(io, isnothing(getsignature(b)) ? "" : "::$(getsignature(b))")
   print(io, " => $(repr(getvalue(b)))")
 end
@@ -244,14 +232,11 @@ Base.nameof(ne::Binding) = ne.primary
 
 getvalue(ne::Binding) = ne.value
 
-getaliases(ne::Binding) = ne.aliases
-
 getsignature(ne::Binding) = ne.sig
 
 retag(replacements::Dict{ScopeTag, ScopeTag}, binding::Binding{T, Sig}) where {T, Sig} =
   Binding{T,Sig}(
     nameof(binding),
-    getaliases(binding),
     retag(replacements, getvalue(binding)),
     retag(replacements, getsignature(binding))
   )
@@ -259,7 +244,7 @@ retag(replacements::Dict{ScopeTag, ScopeTag}, binding::Binding{T, Sig}) where {T
 getline(b::Binding) = b.line
 
 setline(b::Binding{T, Sig}, line::Union{LineNumberNode, Nothing}) where {T, Sig} =
-  Binding{T, Sig}(b.primary, b.aliases, b.value, b.sig, line)
+  Binding{T, Sig}(b.primary, b.value, b.sig, line)
 
 # Context
 #########
@@ -362,6 +347,7 @@ struct Scope{T, Sig} <: HasScope{T, Sig}
   # a cached mapping which takes a name and a disambiguator (i.e. signature)
   # and returns the index in `bindings`
   names::Dict{Symbol, Dict{Sig, LID}}
+  
 end
 
 Base.:(==)(s1::Scope, s2::Scope) = s1.tag == s2.tag
