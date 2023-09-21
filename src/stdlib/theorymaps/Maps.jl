@@ -22,10 +22,9 @@ end
 
 OpCat = @theorymap ThCategory => ThCategory begin
   Ob => Ob
-  Hom => Hom(codom,dom) ⊣ [dom::Ob, codom::Ob]
-  compose(f, g) ⊣ [a::Ob, b::Ob, c::Ob, f::(a → b), g::(b → c)] => 
-    compose(g, f) ⊣ [a::Ob, b::Ob, c::Ob, f::(b → a), g::(c → b)]  
-  id(a) ⊣ [a::Ob] => id(a) ⊣ [a::Ob]
+  Hom(dom::Ob, codom::Ob) => Hom(codom,dom)
+  id(a::Ob) => id(a)
+  compose(f::Hom(a,b), g::Hom(b,c)) ⊣ [(a,b,c)::Ob] => compose(g, f)
 end
 
 """Preorders are categories"""

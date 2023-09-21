@@ -252,7 +252,7 @@ sortsignature(tc::Union{AlgTypeConstructor, AlgTermConstructor}) =
 
 """Local context of an AlgTermConstructor, including the arguments themselves"""
 argcontext(t::Union{AlgTypeConstructor,AlgTermConstructor}) = 
-  t.localcontext + t.args
+  AppendScope(t.localcontext, t.args)
 
 """
 `AlgAxiom`
@@ -301,21 +301,16 @@ function allnames(seg::GATSegment; aliases=false)
   for binding in seg
     judgment = getvalue(binding)
     if judgment isa AlgTermConstructor
-      if aliases
-        append!(names, getaliases(binding))
-      else
-        push!(names, nameof(binding))
-      end
+      push!(names, nameof(binding))
     elseif judgment isa AlgTypeConstructor
-      if aliases
-        append!(names, getaliases(binding))
-      else
-        push!(names, nameof(binding))
-      end
+      push!(names, nameof(binding))
       for argbinding in judgment.args
         push!(names, nameof(argbinding))
       end
     end
+  end
+  if aliases
+    append!(names, keys(seg.primary))
   end
   names
 end
@@ -674,7 +669,7 @@ Return `nothing` if the binding we parse has already been bound.
 function ExprInterop.fromexpr(c::Context, e, ::Type{Binding{AlgType, Nothing}})
   @match e begin
     Expr(:(::), name::Symbol, type_expr) => 
-        Binding{AlgType, Nothing}(name, Set([name]), fromexpr(c, type_expr, AlgType))
+        Binding{AlgType, Nothing}(name, fromexpr(c, type_expr, AlgType))
     _ => error("could not parse binding of name to type from $e")
   end
 end
@@ -730,7 +725,7 @@ function parseaxiom(c::Context, localcontext, type_expr, e; name=nothing)
       equands = fromexpr.(Ref(c), [lhs_expr, rhs_expr], Ref(AlgTerm))
       type = fromexpr(c, type_expr, AlgType)
       axiom = AlgAxiom(localcontext, type, equands)
-      JudgmentBinding(name, isnothing(name) ? Set{Symbol}() : Set([name]), axiom)
+      JudgmentBinding(name, axiom)
     end
     _ => error("failed to parse equation from $e")
   end
@@ -786,14 +781,14 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{JudgmentBinding})
       @match type_expr begin
         :TYPE => begin
           typecon = AlgTypeConstructor(localcontext, args)
-          JudgmentBinding(name, Set([name]), typecon)
+          JudgmentBinding(name, typecon)
         end
         _ => begin
           c″ = AppendScope(c′, args)
           type = fromexpr(c″, type_expr, AlgType)
           termcon = AlgTermConstructor(localcontext, args, type)
           argsorts = AlgSort.(getvalue.(args))
-          JudgmentBinding(name, Set([name]), termcon, argsorts)
+          JudgmentBinding(name, termcon, argsorts)
         end
       end
     end

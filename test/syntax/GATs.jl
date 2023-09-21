@@ -57,7 +57,7 @@ seg = fromexpr(EmptyContext(), seg_expr, GATSegment)
 O, H, i, cmp = idents(seg; lid=LID.(1:4))
 
 # Extend seg with a context of (A: Ob)
-sortscope = Scope([Binding{AlgType}(:A, Set([:A]), AlgType(O))])
+sortscope = Scope([Binding{AlgType}(:A, AlgType(O))])
 A = ident(sortscope; name=:A)
 ATerm = AlgTerm(A)
 
@@ -82,7 +82,7 @@ haia = AlgType(H,[AlgTerm(A),ida])
 
 # Renaming 
 BTerm = rename(gettag(sortscope), Dict(:A=>:B), ATerm)
-Bsortscope = Scope([Binding{AlgType}(:B, Set([:B]), AlgType(O))]; tag=gettag(sortscope))
+Bsortscope = Scope([Binding{AlgType}(:B, AlgType(O))]; tag=gettag(sortscope))
 BTerm_expected = AlgTerm(ident(Bsortscope;name=:B))
 @test BTerm == BTerm_expected
 
@@ -96,7 +96,7 @@ TG = ThGraph.THEORY
 # InCtx
 #----------
 tic = fromexpr(T, :(compose(f,compose(id(b),id(b))) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TermInCtx);
-tic2 = fromexpr(T,toexpr(T, tic),TermInCtx) # same modulo scope tags
+tic2 = fromexpr(T,toexpr(T, tic), TermInCtx) # same modulo scope tags
 
 
 typic = fromexpr(T, :(Hom(a,b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TypeInCtx)

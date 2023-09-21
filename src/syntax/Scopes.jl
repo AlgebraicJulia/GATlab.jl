@@ -4,7 +4,7 @@ export
   ScopeTagError,
   LID,
   Ident, gettag, getlid, isnamed,
-  Binding, getaliases, getvalue, getsignature, getline, setline,
+  Binding, getvalue, getsignature, getline, setline,
   Context, getscope, nscopes, getlevel, hasname, hastag,
   HasContext, getcontext,
   hasident, ident, idents, canonicalize,
@@ -30,10 +30,6 @@ The tag that makes reference to a specific scope possible.
 @struct_hash_equal struct ScopeTag
   val::UUID
 end
-
-"""Deterministically combine two scope tags into a third"""
-Base.:(+)(x::ScopeTag, y::ScopeTag) =
-  ScopeTag(Base.UUID(hash(x.val.value, hash(y.val.value))))
 
 newscopetag() = ScopeTag(uuid4())
 
@@ -228,11 +224,14 @@ function Base.show(io::IO, b::Binding; crayon=nothing)
   print(io, " => $(repr(getvalue(b)))")
 end
 
-Base.nameof(ne::Binding) = ne.primary
+Base.nameof(b::Binding) = b.primary
 
-getvalue(ne::Binding) = ne.value
+MetaUtils.setname(b::Binding{T, Sig}, name::Symbol) where {T, Sig} =
+  Binding{T, Sig}(name, b.value, b.sig, b.line)
 
-getsignature(ne::Binding) = ne.sig
+getvalue(b::Binding) = b.value
+
+getsignature(b::Binding) = b.sig
 
 retag(replacements::Dict{ScopeTag, ScopeTag}, binding::Binding{T, Sig}) where {T, Sig} =
   Binding{T,Sig}(
@@ -299,7 +298,7 @@ getscope(hs::HasScope, x::Int) =
 
 hastag(hs::HasScope, tag::ScopeTag) = getscope(hs).tag == tag
 
-hasname(hs::HasScope, name::Symbol) = haskey(getscope(hs).names, name)
+hasname(hs::HasScope, name::Symbol) = haskey(getscope(hs).primary, name) || haskey(getscope(hs).names, name)
 
 getlevel(hs::HasScope, tag::ScopeTag) =
   if hastag(hs, tag)
@@ -324,8 +323,9 @@ nscopes(hs::HasScope) = 1
 `Scope{T, Sig}`
 
 In GATlab, we handle overloading and shadowing with a notion of *scope*.
+Names are allowed to overload within a scope, and shadow between scopes.
 Anything which binds variables introduces a scope, for instance a `@theory`
-declaration or a context. For example, a scope with 3 elements:
+declaration or a context. For example, here is a scope with 3 elements:
 
 ```
 x::Int = 3
@@ -344,11 +344,54 @@ struct Scope{T, Sig} <: HasScope{T, Sig}
   tag::ScopeTag
   # ordered sequence of name assignments
   bindings::Vector{Binding{T, Sig}}
-  # a cached mapping which takes a name and a disambiguator (i.e. signature)
+  # a cached mapping which takes a primary name and a disambiguator (i.e. signature)
   # and returns the index in `bindings`
   names::Dict{Symbol, Dict{Sig, LID}}
-  
+  # Maps a primary name to its aliases
+  aliases::Dict{Symbol, Set{Symbol}}
+  # Maps an alias to its primary name
+  primary::Dict{Symbol, Symbol}
+  function Scope{T, Sig}(tag, bindings, names, 
+                         aliases=Dict{Symbol, Set{Symbol}}(), 
+                         primary=nothing) where {T,Sig}
+    primary = isnothing(primary) ? make_primary_map(aliases) : primary
+    check_names(bindings, names, aliases, primary)
+    new{T,Sig}(tag, bindings, names, aliases, primary)
+  end
 end
+
+check_names(s::Scope) = check_names(s.bindings, s.names, s.aliases, s.primary)
+ 
+function check_names(bindings, names, aliases, primary)
+  # Check bindings don't shadow each other
+  namevals = Set([(nameof(b), getvalue(b)) for b in bindings])
+  shadow = "Scopes do not permit shadowing: $namevals"
+  length(namevals) == length(bindings) || error(shadow)
+
+  # Check names are valid 
+  allnames = Set(filter(!isnothing, nameof.(bindings)))
+  extra_names = setdiff(keys(names), allnames)
+  missing_names = setdiff(allnames, keys(names))
+  isempty(extra_names) || error("Extra names: $extra_names")
+  isempty(missing_names) || error("Missing names: $missing_names")
+  
+  # Check alias names are valid 
+  bad_a_names = setdiff(keys(aliases), allnames)
+  isempty(bad_a_names) || error("Bad alias keys: $bad_a_names")
+  
+  # Check alias values are valid
+  aliasvalues = union(Symbol[], values(aliases)...)
+  bad_a_values = intersect(aliasvalues, allnames)
+  isempty(bad_a_values) || error("Alias / name collision: $bad_a_values")
+
+  # Check that primary names are all valid
+  bad_pvals = setdiff(values(primary), keys(names))
+  isempty(bad_pvals) || error("Bad primary name values: $bad_pvals")
+  
+  # Check that primary aliases are all valid 
+  bad_pkeys = setdiff(keys(primary), aliasvalues)
+  isempty(bad_pkeys) || error("Bad primary name values: $bad_pkeys")
+end 
 
 Base.:(==)(s1::Scope, s2::Scope) = s1.tag == s2.tag
 
@@ -363,53 +406,70 @@ Scope{T, Sig}() where {T, Sig} =
 function make_name_dict(bindings::AbstractVector{Binding{T, Sig}}) where {T, Sig}
   d = Dict{Symbol, Dict{Sig, LID}}()
   for (i, binding) in enumerate(bindings)
-    for name in getaliases(binding)
-      if !(name ∈ keys(d))
-        d[name] = Dict{Sig, LID}()
-      end
-      sig = getsignature(binding)
-      if sig ∈ keys(d[name])
-        error("already defined $name with signature $sig")
-      end
-      d[name][sig] = LID(i)
+    name = nameof(binding)
+    if !(name ∈ keys(d))
+      d[name] = Dict{Sig, LID}()
     end
+    sig = getsignature(binding)
+    if sig ∈ keys(d[name])
+      error("already defined $name with signature $sig")
+    end
+    d[name][sig] = LID(i)
   end
   d
 end
 
-function Scope(bindings::Vector{Binding{T, Sig}}; tag=newscopetag()) where {T, Sig}
-  Scope{T, Sig}(tag, bindings, make_name_dict(bindings))
+function make_primary_map(aliases::Dict{Symbol, Set{Symbol}})
+  primary = Dict{Symbol, Symbol}()
+  for (k, vs) in pairs(aliases)
+    for v in vs 
+      primary[v] = k 
+    end 
+  end 
+  primary
 end
 
-function Scope(pairs::Pair{Symbol, T}...; tag=newscopetag()) where {T}
-  Scope(Binding{T, Nothing}[Binding{T, Nothing}(x, Set([x]), v) for (x, v) in pairs]; tag)
+function Scope(bindings::Vector{Binding{T, Sig}}; 
+               aliases=Dict{Symbol, Set{Symbol}}(), 
+               tag=newscopetag()) where {T, Sig}
+  Scope{T, Sig}(tag, bindings, make_name_dict(bindings), aliases, 
+                make_primary_map(aliases))
 end
 
-function Scope{T}(pairs::Pair{Symbol, <:T}...; tag=newscopetag()) where {T}
-  Scope(Binding{T, Nothing}[Binding{T, Nothing}(x, Set([x]), v) for (x, v) in pairs]; tag)
+function Scope(pairs::Pair{Symbol, T}...; 
+               aliases=Dict{Symbol, Set{Symbol}}(), 
+               tag=newscopetag()) where {T}
+  Scope(
+      Binding{T, Nothing}[Binding{T, Nothing}(x, v) for (x, v) in pairs]; aliases, tag)
 end
 
-function Scope(symbols::Symbol...; tag=newscopetag())
-  Scope(Pair{Symbol, Nothing}[x => nothing for x in symbols]...; tag)
+function Scope{T}(pairs::Pair{Symbol, <:T}...; 
+                  aliases=Dict{Symbol, Set{Symbol}}(), 
+                  tag=newscopetag()) where {T}
+  Scope(Binding{T, Nothing}[Binding{T, Nothing}(x, v) for (x, v) in pairs]; aliases, tag)
+end
+
+function Scope(symbols::Symbol...; aliases=Dict{Symbol, Set{Symbol}}(), tag=newscopetag())
+  Scope(Pair{Symbol, Nothing}[x => nothing for x in symbols]...; aliases, tag)
 end
 
 retag(replacements::Dict{ScopeTag,ScopeTag}, s::Scope{T,Sig}) where {T,Sig} =
   Scope{T,Sig}(get(replacements, gettag(s), gettag(s)), 
                retag.(Ref(replacements), s.bindings), 
-               s.names)
+               s.names, s.aliases, s.primary)
 
-function Base.:(+)(x::Scope{T,Sig}, y::Scope{T,Sig}) where {T,Sig}
-  newtag = x.tag+y.tag
-  rep = Dict(gettag(x) => newtag, gettag(y)=>newtag)
-  Scope(Binding{T,Sig}[retag(rep,x).bindings..., retag(rep,y).bindings...]; 
-        tag=newtag)
-end
-              
-function Base.show(io::IO, x::Scope)
+function Base.show(io::IO, s::Scope)
+  n = length(s.bindings) + length(s.primary)
   print(io, "{")
-  for (i, b) in enumerate(x.bindings)
-    print(io, ScopedBinding(gettag(x), b))
-    if i < length(x.bindings)
+  for (i, b) in enumerate(s.bindings)
+    print(io, ScopedBinding(gettag(s), b))
+    if i < n
+      print(io, ", ")
+    end
+  end
+  for (i, (alias, name)) in enumerate(sort(collect(pairs(s.primary))))
+    print(io, "$alias = $name")
+    if i + length(s.bindings) < n
       print(io, ", ")
     end
   end
@@ -424,30 +484,46 @@ getscope(s::Scope) = s
 # Thus, these functions are not exported, and must be explicitly imported to be
 # used.
 
+"""
+Add a new binding to the end of Scope `s`.
+"""
 function unsafe_pushbinding!(s::Scope{T, Sig}, b::Binding{T,Sig}) where {T, Sig}
-  sig = getsignature(b)
-  for name in getaliases(b)
-    if name ∈ keys(s.names) && sig ∈ keys(s.names[name])
-      error("$name already bound with signature $sig in $s")
-    end
-    if name ∉ keys(s.names)
+  if haskey(s.primary, nameof(b))
+    b = setname(b, s.primary[nameof(b)])
+  end
+  name = nameof(b)
+  if !isnothing(name)
+    if !haskey(s.names, name)
       s.names[name] = Dict{Sig, LID}()
+    end
+    if !haskey(s.aliases, name)
+      s.aliases[name] = Set{Symbol}()
+    end
+    sig = getsignature(b)
+    if haskey(s.names[name], sig)
+      error("name $name already defined with signature $sig in scope $s")
     end
     s.names[name][sig] = LID(length(s.bindings) + 1)
   end
   push!(s.bindings, b)
+  b
 end
 
 """
-`unsafe_addalias!` should only be used when `unsafe_pushbinding!` won't be called
-again, because new bindings won't get the old aliases.
+Adds a new alias to the name `x`. This works even if no binding with the name `x`
+has been added yet; when a binding is added with name `x`, it will have this alias.
 """
 function unsafe_addalias!(s::Scope, name::Symbol, alias::Symbol)
-  name ∈ keys(s.names) || error("tried to add alias $alias to nonexisting name $name in scope $s")
-  for i in values(s.names[name])
-    push!(s.bindings[i.val].aliases, alias)
+  !haskey(s.names, alias) ||
+    error("cannot add $alias as an alias for $name: $alias is already a primary name in $s")
+  if haskey(s.primary, name)
+    name = s.primary[name]
   end
-  s.names[alias] = s.names[name]
+  if !haskey(s.aliases, name)
+    s.aliases[name] = Set{Symbol}()
+  end
+  s.primary[alias] = name
+  push!(s.aliases[name], alias)
 end
 
 # HasScope utilities
@@ -457,10 +533,21 @@ gettag(hs::HasScope) = getscope(hs).tag
 
 haslid(hs::HasScope, lid::LID) = lid.val ∈ eachindex(getbindings(hs))
 
+function normalize_name(hs::HasScope, name::Symbol)
+  s = getscope(hs)
+  haskey(s.names, name) ? name : (haskey(s.primary, name) ? s.primary[name] : nothing)
+end
+
+function hasname(hs::HasScope, name::Symbol, lid::LID)
+  s = getscope(hs)
+  name = normalize_name(s, name)
+  !(isnothing(name)) && lid ∈ values(s.names[name])
+end
+
 hasident(hs::HasScope, x::Ident) =
   gettag(hs) == gettag(x) &&
   haslid(hs, getlid(x)) &&
-  (isnothing(nameof(x)) || nameof(x) ∈ getaliases(getbinding(hs, getlid(x))))
+  (isnothing(nameof(x)) || hasname(hs, nameof(x), getlid(x)))
 
 """
 Determine the level of a binding given the name and possibly the signature
@@ -471,13 +558,15 @@ function getlid(
   isunique::Bool=false
 ) where {T,Sig}
   s = getscope(hs)
-  if name ∈ keys(s.names) && sig ∈ keys(s.names[name])
-    s.names[name][sig]
-  elseif isunique && length(s.names[name]) == 1
-    only(values(s.names[name]))
-  else
-    throw(KeyError((name, sig)))
+  name = normalize_name(s, name)
+  if !isnothing(name) 
+    if sig ∈ keys(s.names[name])
+      return s.names[name][sig]
+    elseif isunique && length(s.names[name]) == 1
+      return only(values(s.names[name]))
+    end
   end
+  throw(KeyError((name, sig)))
 end
 
 function getlid(
@@ -535,7 +624,6 @@ function ident(
   lid = getlid(hs; tag, name, lid, level, sig, isunique)
   binding = getbinding(hs, lid)
   if !isnothing(name)
-    name ∈ binding.aliases || throw(KeyError(name))
     return Ident(gettag(hs), lid, name)
   else
     return Ident(gettag(hs), lid, nameof(binding))
@@ -715,13 +803,15 @@ struct ScopeList{T, Sig} <: HasScopeList{T, Sig}
     allunique(gettag.(scopes)) || error("tags of scopes in ScopeList must all be unique")
     taglookup = Dict{ScopeTag, Int}()
     namelookup = Dict{Symbol, Int}()
-    for (i, s) in enumerate(scopes)
+    for (i, hs) in enumerate(scopes)
+      s = getscope(hs)
       taglookup[gettag(s)] = i
-      for binding in s
-        for alias in getaliases(binding)
-          namelookup[alias] = i # overwrite most recent
-        end
-      end 
+      for name in keys(s.names)
+        namelookup[name] = i # overwrite most recent
+      end
+      for alias in keys(s.primary)
+        namelookup[alias] = i
+      end
     end
     new{T, Sig}(scopes, taglookup, namelookup)
   end

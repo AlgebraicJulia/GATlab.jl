@@ -59,22 +59,17 @@ nameless = Ident(tag1, LID(1), nothing)
 # Bindings
 ##########
 
-@test_throws ErrorException Binding{String}(nothing, Set([:x]), "ex")
-@test_throws ErrorException Binding{String}(:y, Set([:x]), "ex")
-@test_throws ErrorException Binding{String}(:x, Set(Symbol[]), "ex")
-
-bind_x = Binding{String}(:x, Set([:x, :X]), "ex")
-bind_y = Binding{String}(:y, Set([:y, :Y]), "why")
+bind_x = Binding{String}(:x, "ex")
+bind_y = Binding{String}(:y, "why")
 
 @test retag(Dict(tag1 => tag2), bind_x) == bind_x
 
 @test nameof(bind_x) == :x
 @test getvalue(bind_x) == "ex"
-@test getaliases(bind_x) == Set([:x,:X])
 @test isnothing(getsignature(bind_x))
-@test basicprinted(bind_x) == "x(aliases=X) => \"ex\""
+@test basicprinted(bind_x) == "x => \"ex\""
 
-bind_z = Binding{String, Int}(:x, Set([:x]), "ex", 1)
+bind_z = Binding{String, Int}(:x, "ex", 1)
 
 @test getsignature(bind_z) == 1
 @test getline(setline(bind_z, LineNumberNode(1))) == LineNumberNode(1)
@@ -92,12 +87,12 @@ bind_z = Binding{String, Int}(:x, Set([:x]), "ex", 1)
 # Scopes
 ########
 
-xy_scope = Scope([bind_x, bind_y]; tag=tag1)
+xy_scope = Scope([bind_x, bind_y]; tag=tag1, aliases=Dict(:x => Set([:X]), :y => Set([:Y])))
 xy_scope′ = Scope([bind_x]; tag=tag1)
 
 @test xy_scope == xy_scope′
 @test hash(xy_scope) == hash(xy_scope′)
-@test basicprinted(xy_scope) == "{$(basicprinted(bind_x)), $(basicprinted(bind_y))}"
+@test basicprinted(xy_scope) == "{$(basicprinted(bind_x)), $(basicprinted(bind_y)), X = x, Y = y}"
 @test getscope(xy_scope) == xy_scope
 @test gettag(xy_scope) == tag1
 @test haslid(xy_scope, LID(1))
@@ -127,7 +122,7 @@ value_scope = Scope{Union{Int, String}}(:x => 1, :y => 1)
 
 s = Scope{String, Int}()
 
-bind_x_typed = Binding{String, Int}(:x, Set([:x]), "ex", 2)
+bind_x_typed = Binding{String, Int}(:x, "ex", 2)
 
 Scopes.unsafe_pushbinding!(s, bind_x_typed)
 @test_throws ErrorException Scopes.unsafe_pushbinding!(s, bind_x_typed)
@@ -175,7 +170,7 @@ Scopes.unsafe_addalias!(s, :x, :X)
 
 @test_throws Exception ScopeList([xy_scope, xy_scope])
 
-bind_z = Binding{String}(:z, Set([:z]), "zee")
+bind_z = Binding{String}(:z, "zee")
 
 xz_scope = Scope([bind_x, bind_z])
 

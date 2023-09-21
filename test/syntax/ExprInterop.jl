@@ -2,8 +2,8 @@ module TestExprInterop
 
 using GATlab, Test
 
-bind_x = Binding{String}(:x, Set([:x, :X]), "ex")
-bind_y = Binding{String}(:y, Set([:y, :Y]), "why")
+bind_x = Binding{String}(:x,  "ex")
+bind_y = Binding{String}(:y, "why")
 
 scope = Scope([bind_x, bind_y])
 x, y = idents(scope; name=[:x, :y])
