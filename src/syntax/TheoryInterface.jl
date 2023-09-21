@@ -92,16 +92,8 @@ macro theory(head, body)
     )
   end
 
-  for binding in newsegment
-    bname = nameof(binding)
-    judgment = getvalue(binding)
-    if judgment isa Union{AlgTermConstructor, AlgTypeConstructor}
-      for alias in getaliases(binding)
-        if alias != bname
-          push!(modulelines, :(const $alias = $bname))
-        end
-      end
-    end
+  for (alias, name) in pairs(newsegment.primary)
+    push!(modulelines, :(const $alias = $name))
   end
 
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))

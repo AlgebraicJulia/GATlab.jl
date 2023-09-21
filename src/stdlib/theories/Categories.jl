@@ -15,13 +15,13 @@ A Class is just a Set that doesn't worry about foundations.
 """ ThClass
 
 @theory ThGraph <: ThClass begin
-  Hom(dom::Ob, codom::Ob)::TYPE
   @op (→) := Hom
+  Hom(dom::Ob, codom::Ob)::TYPE
 end
 
 @theory ThLawlessCat <: ThGraph begin
-  compose(f::(a → b), g::(b → c))::(a → c) ⊣ [(a,b,c)::Ob]
   @op (⋅) := compose
+  compose(f::(a → b), g::(b → c))::(a → c) ⊣ [(a,b,c)::Ob]
 end
 
 @doc """    ThLawlessCat
