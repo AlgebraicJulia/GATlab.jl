@@ -4,7 +4,7 @@ export Constant, AlgTerm, AlgType,
   AlgTermConstructor, AlgTypeConstructor, AlgAxiom, sortsignature,
   JudgmentBinding, GATSegment, GAT, sortcheck, allnames, sorts, sortname,
   termcons, typecons, accessors, equations, build_infer_expr, compile, 
-  TermInCtx, headof, argsof, argcontext
+  InCtx, TermInCtx, TypeInCtx, headof, argsof, argcontext
 
 using ..Scopes
 using ..ExprInterop
@@ -173,17 +173,19 @@ permitted.
 const SortScope = Scope{AlgSort, Nothing}
 
 """
-A term with an accompanying type scope, e.g.
+A type or term with an accompanying type scope, e.g.
 
- (a,b)::R
------------
-  a*(a+b)
+ (a,b)::R        (a,b)::Ob
+-----------  or  ----------
+  a*(a+b)         Hom(a,b)
 """
-@struct_hash_equal struct TermInCtx
+@struct_hash_equal struct InCtx{T<:TrmTyp}
   ctx::TypeScope 
-  trm::AlgTerm
+  trm::T
 end
 
+const TermInCtx = InCtx{AlgTerm}
+const TypeInCtx = InCtx{AlgType}
 
 """
 `sortcheck(ctx::Context, t::AlgTerm)`
@@ -499,13 +501,28 @@ function compile(expr_lookup::Dict{Ident}, term::AlgTerm; theorymodule=nothing)
   end
 end
 
-"""Get the canonical term associated with a term constructor"""
-function TermInCtx(g::GAT, k::Ident)
+InCtx(g::GAT, k::Ident) = 
+  (getvalue(g[k]) isa AlgTermConstructor ? TermInCtx : TypeInCtx)(g, k)
+
+"""
+Get the canonical term + ctx associated with a term constructor.
+"""
+function InCtx{AlgTerm}(g::GAT, k::Ident)
   tcon = getvalue(g[k])
   lc = argcontext(tcon)
   ids = reverse(reverse(idents(lc))[1:(length(tcon.args))])
   TermInCtx(lc, AlgTerm(k, AlgTerm.(ids)))
 end
+
+"""
+Get the canonical type + ctx associated with a type constructor.
+"""
+function InCtx{AlgType}(g::GAT, k::Ident)
+  tcon = getvalue(g[k])
+  lc = argcontext(tcon)
+  TypeInCtx(lc, AlgType(k, AlgTerm.(idents(lc))))
+end
+
 
 """
 Infer the type of the term of a term. If it is not in context, recurse on its 
@@ -533,6 +550,7 @@ function infer_type(theory::GAT, t::TermInCtx)
   if hasident(t.ctx, head) 
     getvalue(t.ctx[head]) # base case
   else
+    #println("Inferring type of $t w/ head $head")
     tc = getvalue(theory[head])
     eqs = equations(theory, head)
     typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
@@ -560,14 +578,16 @@ Take a term constructor and determine terms of its local context.
 
 This function is mutually recursive with `infer_type`. 
 """ 
-function bind_localctx(theory::GAT, t::TermInCtx)
+function bind_localctx(theory::GAT, t::InCtx{T}) where T
   head = headof(t.trm)
 
   tc = getvalue(theory[head])
   eqs = equations(theory, head)
 
   typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
+  #println("BINDING LOCAL CONTEXT $t")
   for (i,a) in zip(tc.args, t.trm.args)
+    #println("tc.arg $i => t.trm arg $a")
     tt = (a => infer_type(theory, TermInCtx(t.ctx, a)))
     typed_terms[ident(tc.args, name=nameof(i))] = tt 
   end
@@ -585,13 +605,13 @@ function bind_localctx(theory::GAT, t::TermInCtx)
 end
 
 """ Replace idents with AlgTerms. """
-function substitute_term(t::TrmTyp, dic::Dict{Ident,AlgTerm})
+function substitute_term(t::T, dic::Dict{Ident,AlgTerm}) where T<:TrmTyp
   iden = headof(t)
   if haskey(dic, iden)
     isempty(t.args) || error("Cannot substitute a term with arguments")
     dic[iden]
   else 
-    AlgTerm(headof(t), substitute_term.(argsof(t), Ref(dic)))
+    T(headof(t), substitute_term.(argsof(t), Ref(dic)))
   end
 end
 
@@ -716,23 +736,26 @@ function parseaxiom(c::Context, localcontext, type_expr, e; name=nothing)
   end
 end
 
-function ExprInterop.fromexpr(c::Context, e, ::Type{TermInCtx})
+function ExprInterop.fromexpr(c::Context, e, ::Type{InCtx{T}}) where T
   (binding, localcontext) = @match normalize_decl(e) begin
     Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
     e => (e, TypeScope())
   end
   c′ = AppendScope(c, localcontext)
   bound = Dict([nameof(b) => getvalue(b) for b in getbindings(localcontext)])
-  t = ExprInterop.fromexpr(c′, binding, AlgTerm; bound=bound)
-  TermInCtx(localcontext, t)
+  t = ExprInterop.fromexpr(c′, binding, T; bound=bound)
+  InCtx{T}(localcontext, t)
 end
 
-ExprInterop.toexpr(c::Context, tic::TermInCtx) = let c′=AppendScope(c,tic.ctx);
-  Expr(:call, :(⊣), ExprInterop.toexpr(c′, tic.trm), ExprInterop.toexpr(c′, tic.ctx))
+function ExprInterop.toexpr(c::Context, tic::InCtx; kw...)  
+  c′=AppendScope(c,tic.ctx)
+  etrm = ExprInterop.toexpr(c′, tic.trm; kw...)
+  ectx = ExprInterop.toexpr(c′, tic.ctx; kw...)
+  Expr(:call, :(⊣), etrm, ectx)
 end
 
-ExprInterop.toexpr(c::Context, ts::TypeScope) =
-  Expr(:vect,[Expr(:(::), nameof(b), toexpr(c, getvalue(b))) for b in ts]...)
+ExprInterop.toexpr(c::Context, ts::TypeScope; kw...) =
+  Expr(:vect,[Expr(:(::), nameof(b), toexpr(c, getvalue(b); kw...)) for b in ts]...)
 
 ExprInterop.toexpr(c::Context, at::Binding{AlgType, Nothing}) =
   Expr(:(::), nameof(at), ExprInterop.toexpr(c, getvalue(at)))

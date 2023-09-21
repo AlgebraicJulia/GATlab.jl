@@ -93,10 +93,14 @@ TG = ThGraph.THEORY
 @test TG ⊆ T
 @test T ⊈ TG
 
-# TermInCtx
+# InCtx
 #----------
 tic = fromexpr(T, :(compose(f,compose(id(b),id(b))) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TermInCtx);
 tic2 = fromexpr(T,toexpr(T, tic),TermInCtx) # same modulo scope tags
+
+
+typic = fromexpr(T, :(Hom(a,b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TypeInCtx)
+typic2 = fromexpr(T,toexpr(T, typic), TypeInCtx) # same modulo scope tags
 
 # Type inference 
 #---------------
