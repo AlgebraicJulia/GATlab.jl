@@ -53,13 +53,23 @@ macro theory(head, body)
   end
 
   newsegment = fromexpr(parent, body, GATSegment)
+  importlines = Expr[]
+  for line in body.args
+    @switch line begin 
+      @case Expr(:import, Expr(:(:), Expr(:., mod), imports)) 
+        push!(importlines, line)
+      @case _ 
+        nothing 
+    end 
+  end
+
 
   theory = GAT(name, parent, newsegment)
 
   modulelines = Any[]
 
   push!(modulelines, :(export $(allnames(theory; aliases=true)...)))
-
+  append!(modulelines, importlines)
   if !isnothing(parentname)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
   end
