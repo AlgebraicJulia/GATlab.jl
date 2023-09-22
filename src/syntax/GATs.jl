@@ -164,7 +164,6 @@ function fromexpr!(c::Context, e, bound::TypeScope, ::Type{AlgTerm}; constants=t
     end
     e::Expr => error("could not parse AlgTerm from $e")
     constant::Constant => AlgTerm(constant)
-    i::Ident => AlgTerm(i)
   end
 end
 
