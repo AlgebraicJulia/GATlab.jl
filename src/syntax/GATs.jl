@@ -42,8 +42,8 @@ end
 
 const EMPTY_ARGS = AlgTerm[]
 
-fromexpr(c::Context, e, T::Type{<:TrmTyp}) = fromexpr!(c, e, TypeScope(), T)
-
+fromexpr(c::Context, e, T::Type{<:TrmTyp}; kw...) = 
+  fromexpr!(c, e, TypeScope(), T; kw...)
 
 
 """
@@ -130,8 +130,13 @@ const TypeCtx = Context{AlgType, Nothing}
 """
 Some expr may have already been bound (e.g. by an explicit context) and thus 
 oughtn't be interpreted as `default` type.
+
+In some contexts, we want to interpret ϕ(x::T) as a constant x of type T and 
+in others (where constants are not permitted, such as the LHS of a @theorymap 
+or in an @theory term constructor) where it can be convenient to annotate 
+argument types directly rather than place them in an explicit context.
 """
-function fromexpr!(c::Context, e, bound::TypeScope, ::Type{AlgTerm})
+function fromexpr!(c::Context, e, bound::TypeScope, ::Type{AlgTerm}; constants=true)
   @match e begin
     s::Symbol => begin
       c′ = AppendScope(c, bound)
@@ -144,13 +149,13 @@ function fromexpr!(c::Context, e, bound::TypeScope, ::Type{AlgTerm})
       AlgTerm(ref)
     end
     Expr(:call, head, argexprs...) => begin
-      args = Vector{AlgTerm}(fromexpr!.(Ref(c), argexprs, Ref(bound), Ref(AlgTerm)))
+      args = Vector{AlgTerm}(fromexpr!.(Ref(c), argexprs, Ref(bound), Ref(AlgTerm); constants))
       argsorts = AlgSorts(AlgSort.(Ref(AppendScope(c,bound)), args))
       AlgTerm(fromexpr(AppendScope(c,bound), head, Ident; sig=argsorts), args)
     end
     Expr(:(::), val, type) => begin 
       algtype = fromexpr!(c, type, bound, AlgType)
-      if !(val isa Symbol)
+      if constants
         AlgTerm(Constant(val, algtype))
       else 
         Scopes.unsafe_pushbinding!(bound, Binding{AlgType, Nothing}(val, algtype))
@@ -167,13 +172,13 @@ end
 Some expr may have already been bound (e.g. by an explicit context) and thus 
 oughtn't be interpreted as `default` type.
 """
-function fromexpr!(c::Context, e, bound::TypeScope, ::Type{AlgType})::AlgType
+function fromexpr!(c::Context, e, bound::TypeScope, ::Type{AlgType}; kw...)::AlgType
   bound = isnothing(bound) ? Dict{Symbol, AlgType}() : bound
   @match e begin
     s::Symbol => AlgType(fromexpr(c, s, Ident))
     Expr(:call, head, args...) =>
       AlgType(fromexpr(c, head, Ident), 
-              fromexpr!.(Ref(c), args, Ref(bound), Ref(AlgTerm)))
+              fromexpr!.(Ref(c), args, Ref(bound), Ref(AlgTerm); kw...))
     _ => error("could not parse AlgType from $e")
   end
 end
@@ -736,19 +741,23 @@ function parseaxiom(c::Context, localcontext, type_expr, e; name=nothing)
 end
 
 """Parse something that could either be a type or a term in context"""
-function fromexpr(c::Context, e, ::Type{InCtx})
+function fromexpr(c::Context, e, ::Type{InCtx}; kw...)
   binding = @match normalize_decl(e) begin
     Expr(:call, :(⊣), binding, _) => binding
     otherwise => otherwise
   end
+  
+  # Determine if type or term 
   head = @match binding begin
     Expr(:call, f, args...) => f
     e::Symbol => e 
   end
-  if hasident(c; name=head) && getvalue(c[ident(c; name=head)]) isa AlgTypeConstructor 
-    fromexpr(c, e, TypeInCtx)
+  istype = hasident(c; name=head) && getvalue(c[ident(c; name=head)]) isa AlgTypeConstructor
+
+  if istype 
+    fromexpr(c, e, TypeInCtx; kw...)
   else 
-    fromexpr(c, e, TermInCtx)
+    fromexpr(c, e, TermInCtx; kw...)
   end
 end
 
@@ -759,14 +768,15 @@ parse a term of the following forms:
   Hom(dom::Ob, codom::Ob)
 
 Some AlgType information may be in an explicit context, otherwise it comes from
-explicitly annotated symbols
+explicitly annotated symbols. For explicit annotations to be registered as such 
+rather than parsed as Constants, set kwarg `constants=false`.
 """
-function fromexpr(c::Context, e, ::Type{InCtx{T}}) where T
+function fromexpr(c::Context, e, ::Type{InCtx{T}}; kw...) where T
   (binding, localcontext) = @match normalize_decl(e) begin
     Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
     e => (e, TypeScope())
   end
-  t = fromexpr!(c, binding, localcontext, T)
+  t = fromexpr!(c, binding, localcontext, T; kw...)
   InCtx{T}(localcontext, t)
 end
 

@@ -79,6 +79,17 @@ expected = :(compose(id(z), compose(q,  compose(p, id(x)))) ⊣ [x::Ob,y::Ob,z::
 @test toexpr(T, OpCat(xterm)) == expected
 
 
+# Check that maps are not sensitive to order of bindings
+
+OpCat2 = @theorymap ThCategory => ThCategory begin
+  Ob => Ob
+  Hom(foo::Ob, bar::Ob) => Hom(bar, foo)
+  id(a::Ob) => id(a)
+  compose(p,q) ⊣ [(z,y,x)::Ob, q::Hom(y,z), p::Hom(x,y)] => compose(q, p)
+end
+toexpr(T, OpCat2(xterm)) == expected
+
+
 # Inclusions 
 #############
 TLC = ThLawlessCat.THEORY
