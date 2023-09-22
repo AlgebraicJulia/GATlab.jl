@@ -190,6 +190,8 @@ xz_scope = Scope([bind_x, bind_z])
 @test valtype(xz_scope) == String
 
 c = ScopeList([xy_scope, xz_scope])
+@test sprint(show, c)[1:2 == "[{"
+
 @test_throws ErrorException Scopes.flatten(c)
 
 @test getscope(c, 1) == xy_scope
