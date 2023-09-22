@@ -7,7 +7,7 @@ export
   Binding, getvalue, getsignature, getline, setline,
   Context, getscope, nscopes, getlevel, hasname, hastag,
   HasContext, getcontext,
-  hasident, ident, idents, canonicalize,
+  hasident, ident, getidents, idents, canonicalize,
   HasScope, haslid, getscope, getbindings, getbinding,
   sigtype, identvalues, namevalues,
   Scope, ScopeList, HasScopeList, AppendScope,
@@ -263,9 +263,9 @@ this list.
 - `getlevel(c::Context, tag::ScopeTag) -> Int`
 - `getlevel(c::Context, name::Symbol) -> Int`
 """
-abstract type Context end
+abstract type Context{T, Sig} end
 
-abstract type HasContext <: Context end
+abstract type HasContext{T, Sig} <: Context{T, Sig} end
 
 function getcontext end
 
@@ -291,7 +291,7 @@ Must overload
 
 `getscope(hs::HasScope) -> Scope`
 """
-abstract type HasScope{T, Sig} <: Context end
+abstract type HasScope{T, Sig} <: Context{T, Sig} end
 
 getscope(hs::HasScope, x::Int) =
   x == 1 ? getscope(hs) : throw(BoundsError(hs, x))
@@ -636,7 +636,8 @@ function identvalues(hs::HasScope)
   end
 end
 
-function idents(hs::HasScope)
+"""This collects all the idents in a scope"""
+function getidents(hs::HasScope)
   map(enumerate(getbindings(hs))) do (i, binding)
     Ident(gettag(hs), LID(i), nameof(binding))
   end
@@ -761,6 +762,7 @@ function hasident(c::Context; kwargs...)
   end
 end
 
+"""This is a broadcasted version of `ident`"""
 function idents(
   c::Context;
   tag=Ref(nothing),
@@ -793,7 +795,7 @@ Must implement:
 
 `getscopelist(hsl::HasScopeList) -> ScopeList`
 """
-abstract type HasScopeList{T, Sig} <: Context end
+abstract type HasScopeList{T, Sig} <: Context{T, Sig} end
 
 struct ScopeList{T, Sig} <: HasScopeList{T, Sig}
   scopes::Vector{HasScope{T,Sig}}
@@ -819,6 +821,22 @@ end
 
 getscopelist(c::ScopeList) = c
 
+Base.collect(c::ScopeList) = c.scopes
+
+function Base.show(io::IO, s::ScopeList)
+  print(io, "[")
+  bkspace = false
+  for s in s.scopes
+    if !isempty(s)
+      print(io, s)
+      print(io, ", ")
+      bkspace = true
+    end
+  end
+  print(io, (bkspace ? "\b\b" : "") * "]")
+end
+
+
 getscope(hsl::HasScopeList, level::Int) =
   getscopelist(hsl).scopes[level]
 
@@ -837,18 +855,51 @@ hastag(hsl::HasScopeList, t::ScopeTag) =
 hasname(hsl::HasScopeList, name::Symbol) =
   haskey(getscopelist(hsl).namelookup, name)
 
-# AppendScope
-#############
+getidents(hsl::HasScopeList; kw...) = Iterators.flatten(getidents.(getscopelist(hsl)))
 
-struct AppendScope <: Context
-  context::Context
-  last::Scope
-  function AppendScope(context::Context, last::Scope)
-    !hastag(context, gettag(last)) || error("All scopes in context must have unique tags")
-    new(context, last)
+"""
+Flatten a scopelist if possible. This will fail if any of the bindings shadow 
+bindings in earlier scopes.
+"""
+function flatten(hsl::HasScopeList{T, Sig}) where {T, Sig}
+  if nscopes(hsl) == 0
+    Scope{T, Sig}() 
+  else 
+    res = Scope(getbindings(deepcopy(getscope(hsl, 1))))
+    newtag = gettag(res)
+    retagdict = Dict{ScopeTag, ScopeTag}(gettag(getscope(hsl, 1))=>newtag)
+    for i in 2:nscopes(hsl)
+      nextscope = getscope(hsl, i)
+      retagdict[gettag(nextscope)] = newtag
+      nextscope = retag(retagdict, nextscope)
+      for b in getbindings(nextscope)
+        unsafe_pushbinding!(res, b)
+      end
+    end
+    res
   end
 end
 
+flatten(s::Scope) = s
+
+# AppendScope
+#############
+
+struct AppendScope{T₁, Sig₁, T₂, Sig₂} <: Context{Union{T₁,T₂}, Union{Sig₁,Sig₂}}
+  context::Context{T₁, Sig₁}
+  last::Scope{T₂, Sig₂}
+  function AppendScope(context::Context{T₁, Sig₁}, last::Scope{T₂, Sig₂}) where {T₁, Sig₁, T₂, Sig₂}
+    !hastag(context, gettag(last)) || error("All scopes in context must have unique tags: collision with level $(getlevel(context, gettag(last)))")
+    new{T₁, Sig₁, T₂, Sig₂}(context, last)
+  end
+end
+function AppendScope(context::Context{T₁, Sig₁}, last::ScopeList{T₂, Sig₂}) where {T₁, Sig₁, T₂, Sig₂}
+  res = context
+  for scope in getscope.(Ref(last), 1:nscopes(last))
+    res = AppendScope(res, scope)
+  end
+  res
+end
 getscope(c::AppendScope, level::Int) =
   if level == nscopes(c)
     c.last
@@ -874,11 +925,14 @@ hasname(c::AppendScope, name::Symbol) =
 hastag(c::AppendScope, tag::ScopeTag) =
   hastag(c.last, tag) || hastag(c.context, tag)
 
+getidents(scope::AppendScope; kw...) = 
+  vcat(getidents(scope.context; kw...), getidents(scope.last; kw...))
+
 
 # EmptyContext
 ##############
 
-struct EmptyContext <: Context
+struct EmptyContext{T, Sig} <: Context{T, Sig}
 end
 
 getscope(c::EmptyContext, level::Int) = throw(BoundsError(c, level))

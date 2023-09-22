@@ -222,7 +222,7 @@ c = AppendScope(ScopeList([xy_scope]), xz_scope)
 @test nameof(ident(c; level=1, lid=LID(2))) == :y
 
 # EmptyContext 
-e = EmptyContext()
+e = EmptyContext{Nothing, Nothing}()
 @test_throws BoundsError getscope(e, 1)
 @test_throws KeyError getlevel(e, :x) 
 @test_throws KeyError getlevel(e, gettag(x))

@@ -11,7 +11,7 @@ T2 = ThPreorder.THEORY
 
 # TheoryMaps 
 ############
-x = toexpr(PreorderCat);
+x = toexpr(PreorderCat)
 tm2 = fromexpr(T, T2, x, TheoryMap)
 x2 = toexpr(tm2)
 @test x == x2
@@ -56,10 +56,8 @@ end
 # Test PreorderCat
 
 (Ob, Hom), (Cmp, Id) = typecons(T), termcons(T)
-@test PreorderCat(Ob) == InCtx(T2, ident(T2; name=:default))
+@test PreorderCat(Ob).trm == AlgType(ident(T2; name=:default))
 @test PreorderCat(Cmp) isa TermInCtx
-
-PreorderCat(argcontext(getvalue(T[Cmp])))
 
 @test PreorderCat(argcontext(getvalue(T[Cmp]))) isa TypeScope
 

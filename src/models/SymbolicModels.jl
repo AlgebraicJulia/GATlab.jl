@@ -357,7 +357,7 @@ function internal_constructors(theory::GAT)::Vector{JuliaFunction}
     )
 
     check_or_error = Expr(:(||), :(!strict), check_expr, throw_expr)
-    exprs = [idents(termcon.args)..., idents(termcon.localcontext)...]
+    exprs = [getidents(termcon.args)..., getidents(termcon.localcontext)...]
     expr_lookup = Dict{Ident, Any}(map(exprs) do x 
       x => build_infer_expr(first(eqs[x]))
     end)

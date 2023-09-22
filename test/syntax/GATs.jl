@@ -21,8 +21,8 @@ three = AlgTerm(plus, [one, two])
 
 @test toexpr(scope, three) == :((1::number) + (2::number))
 
-@test fromexpr(EmptyContext(), two.head, AlgTerm) == two
-@test_throws Exception fromexpr(EmptyContext(), :(x = 3), AlgTerm)
+@test fromexpr(TypeScope(), two.head, AlgTerm) == two
+@test_throws Exception fromexpr(TypeScope(), :(x = 3), AlgTerm)
 
 @test basicprinted(two) == "AlgTerm(2::number)"
 
@@ -34,10 +34,9 @@ three = AlgTerm(plus, [one, two])
 
 @test_throws Exception AlgSort(scope, three)
 
-
 # This throws a type error because it tries to look up `+` with a signature,
 # of AlgSorts, but `scope` only has nothing-typed signatures.
-@test_throws TypeError fromexpr(scope, toexpr(scope, three), AlgTerm) == three
+@test_throws TypeError fromexpr(scope, toexpr(scope, three), AlgTerm)
 
 seg_expr = quote
   Ob :: TYPE
@@ -50,11 +49,11 @@ seg_expr = quote
   ]
 end
 
-seg = fromexpr(EmptyContext(), seg_expr, GATSegment)
+seg = fromexpr(TypeScope(), seg_expr, GATSegment)
 
-@test toexpr(EmptyContext(), seg) == seg_expr
+@test toexpr(TypeScope(), seg) == seg_expr
 
-O, H, i, cmp = idents(seg; lid=LID.(1:4))
+O, H, i, cmp = getidents(seg)
 
 # Extend seg with a context of (A: Ob)
 sortscope = Scope([Binding{AlgType}(:A, AlgType(O))])
