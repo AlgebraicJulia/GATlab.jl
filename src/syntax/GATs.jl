@@ -1,13 +1,13 @@
 module GATs
 export Constant, AlgTerm, AlgType,
-  TypeScope, AlgSort, AlgSorts,
+  TypeScope, TypeCtx, AlgSort, AlgSorts,
   AlgTermConstructor, AlgTypeConstructor, AlgAxiom, sortsignature,
   JudgmentBinding, GATSegment, GAT, sortcheck, allnames, sorts, sortname,
   termcons, typecons, accessors, equations, build_infer_expr, compile, 
   InCtx, TermInCtx, TypeInCtx, headof, argsof, argcontext
 
 using ..Scopes
-using ..ExprInterop
+import ..ExprInterop: fromexpr, toexpr
 
 import ..Scopes: retag, rename
 
@@ -42,34 +42,8 @@ end
 
 const EMPTY_ARGS = AlgTerm[]
 
-"""
-Some expr may have already been bound (e.g. by an explicit context) and thus 
-oughtn't be interpreted as `default` type.
-"""
-function ExprInterop.fromexpr(c::Context, e, ::Type{AlgTerm}; bound=nothing)
-  bound = isnothing(bound) ? Dict{Symbol,AlgType}() : bound
-  @match e begin
-    s::Symbol => begin
-      scope = getscope(c, getlevel(c, s))
-      ref = if sigtype(scope) == Union{Nothing, AlgSorts}
-        fromexpr(c, s, Ident; sig=AlgSort[])
-      else
-        fromexpr(c, s, Ident)
-      end
-      AlgTerm(ref)
-    end
-    Expr(:call, head, argexprs...) => begin
-      args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
-      argsorts = AlgSorts(AlgSort.(Ref(c), args))
-      AlgTerm(fromexpr(c, head, Ident; sig=argsorts), args)
-    end
-    Expr(:(::), val, type) => 
-      AlgTerm(Constant(val, get(bound, val, fromexpr(c, type, AlgType; bound=bound))))
-    e::Expr => error("could not parse AlgTerm from $e")
-    constant::Constant => AlgTerm(constant)
-    i::Ident => AlgTerm(i)
-  end
-end
+fromexpr(c::Context, e, T::Type{<:TrmTyp}) = fromexpr!(c, e, TypeScope(), T)
+
 
 
 """
@@ -86,20 +60,6 @@ One syntax tree to rule all the types.
   end
 end
 
-"""
-Some expr may have already been bound (e.g. by an explicit context) and thus 
-oughtn't be interpreted as `default` type.
-"""
-function ExprInterop.fromexpr(c::Context, e, ::Type{AlgType}; bound=nothing)::AlgType
-  bound = isnothing(bound) ? Dict{Symbol, AlgType}() : bound
-  @match e begin
-    s::Symbol => AlgType(fromexpr(c, s, Ident))
-    Expr(:call, head, args...) =>
-      AlgType(fromexpr(c, head, Ident), fromexpr.(Ref(c), args, Ref(AlgTerm); bound=bound))
-    _ => error("could not parse AlgType from $e")
-  end
-end
-
 # Common code to Terms and Types
 #-------------------------------
 headof(t::TrmTyp) = t.head 
@@ -110,7 +70,7 @@ rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::T) where T<:TrmTyp =
 
 function Base.show(io::IO, type::T) where T<:TrmTyp
   print(io, "$(nameof(T))(")
-  print(io, toexpr(EmptyContext(), type; showing=true))
+  print(io, toexpr(TypeScope(), type; showing=true))
   print(io, ")")
 end
 
@@ -163,6 +123,60 @@ A scope where variables are assigned to `AlgType`s, and no overloading is
 permitted.
 """
 const TypeScope = Scope{AlgType, Nothing}
+const TypeCtx = Context{AlgType, Nothing}
+
+
+# These methods belong above but have `TypeScope` as an argtype
+"""
+Some expr may have already been bound (e.g. by an explicit context) and thus 
+oughtn't be interpreted as `default` type.
+"""
+function fromexpr!(c::Context, e, bound::TypeScope, ::Type{AlgTerm})
+  @match e begin
+    s::Symbol => begin
+      c′ = AppendScope(c, bound)
+      scope = getscope(c′, getlevel(c′, s))
+      ref = if sigtype(scope) == Union{Nothing, AlgSorts}
+        fromexpr(c′, s, Ident; sig=AlgSort[])
+      else
+        fromexpr(c′, s, Ident)
+      end
+      AlgTerm(ref)
+    end
+    Expr(:call, head, argexprs...) => begin
+      args = Vector{AlgTerm}(fromexpr!.(Ref(c), argexprs, Ref(bound), Ref(AlgTerm)))
+      argsorts = AlgSorts(AlgSort.(Ref(AppendScope(c,bound)), args))
+      AlgTerm(fromexpr(AppendScope(c,bound), head, Ident; sig=argsorts), args)
+    end
+    Expr(:(::), val, type) => begin 
+      algtype = fromexpr!(c, type, bound, AlgType)
+      if !(val isa Symbol)
+        AlgTerm(Constant(val, algtype))
+      else 
+        Scopes.unsafe_pushbinding!(bound, Binding{AlgType, Nothing}(val, algtype))
+        AlgTerm(Ident(gettag(bound), LID(length(bound)), val))
+      end
+    end
+    e::Expr => error("could not parse AlgTerm from $e")
+    constant::Constant => AlgTerm(constant)
+    i::Ident => AlgTerm(i)
+  end
+end
+
+"""
+Some expr may have already been bound (e.g. by an explicit context) and thus 
+oughtn't be interpreted as `default` type.
+"""
+function fromexpr!(c::Context, e, bound::TypeScope, ::Type{AlgType})::AlgType
+  bound = isnothing(bound) ? Dict{Symbol, AlgType}() : bound
+  @match e begin
+    s::Symbol => AlgType(fromexpr(c, s, Ident))
+    Expr(:call, head, args...) =>
+      AlgType(fromexpr(c, head, Ident), 
+              fromexpr!.(Ref(c), args, Ref(bound), Ref(AlgTerm)))
+    _ => error("could not parse AlgType from $e")
+  end
+end
 
 """
 `SortScope`
@@ -180,7 +194,7 @@ A type or term with an accompanying type scope, e.g.
   a*(a+b)         Hom(a,b)
 """
 @struct_hash_equal struct InCtx{T<:TrmTyp}
-  ctx::TypeScope 
+  ctx::TypeCtx 
   trm::T
 end
 
@@ -250,9 +264,9 @@ end
 sortsignature(tc::Union{AlgTypeConstructor, AlgTermConstructor}) =
   AlgSort.([a.head for a in getvalue.(tc.args)])
 
-"""Local context of an AlgTermConstructor, including the arguments themselves"""
+# """Local context of an AlgTermConstructor, including the arguments themselves"""
 argcontext(t::Union{AlgTypeConstructor,AlgTermConstructor}) = 
-  AppendScope(t.localcontext, t.args)
+  ScopeList([t.localcontext, t.args])
 
 """
 `AlgAxiom`
@@ -442,7 +456,7 @@ of the context
 """
 function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
   ways_of_computing = Dict{Ident, Set{InferExpr}}()
-  to_expand = Pair{Ident, InferExpr}[x => x for x in idents(args)]
+  to_expand = Pair{Ident, InferExpr}[x => x for x in getidents(args)]
 
   context = ScopeList([args, localcontext])
    
@@ -505,7 +519,7 @@ Get the canonical term + ctx associated with a term constructor.
 function InCtx{AlgTerm}(g::GAT, k::Ident)
   tcon = getvalue(g[k])
   lc = argcontext(tcon)
-  ids = reverse(reverse(idents(lc))[1:(length(tcon.args))])
+  ids = getidents(getscope(lc, nscopes(lc)))
   TermInCtx(lc, AlgTerm(k, AlgTerm.(ids)))
 end
 
@@ -515,7 +529,7 @@ Get the canonical type + ctx associated with a type constructor.
 function InCtx{AlgType}(g::GAT, k::Ident)
   tcon = getvalue(g[k])
   lc = argcontext(tcon)
-  TypeInCtx(lc, AlgType(k, AlgTerm.(idents(lc))))
+  TypeInCtx(lc, AlgType(k, AlgTerm.(getidents(lc))))
 end
 
 
@@ -545,7 +559,6 @@ function infer_type(theory::GAT, t::TermInCtx)
   if hasident(t.ctx, head) 
     getvalue(t.ctx[head]) # base case
   else
-    #println("Inferring type of $t w/ head $head")
     tc = getvalue(theory[head])
     eqs = equations(theory, head)
     typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
@@ -553,7 +566,7 @@ function infer_type(theory::GAT, t::TermInCtx)
       tt = (a => infer_type(theory, TermInCtx(t.ctx, a)))
       typed_terms[ident(tc.args, name=nameof(i))] = tt 
     end
-    for lc_arg in reverse(idents(tc.localcontext))
+    for lc_arg in reverse(getidents(tc.localcontext))
       # one way of determining lc_arg's value
       filt(e) = e isa AccessorApplication && e.to isa Ident
       app = first(filter(filt, eqs[lc_arg])) 
@@ -580,14 +593,12 @@ function bind_localctx(theory::GAT, t::InCtx{T}) where T
   eqs = equations(theory, head)
 
   typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
-  #println("BINDING LOCAL CONTEXT $t")
   for (i,a) in zip(tc.args, t.trm.args)
-    #println("tc.arg $i => t.trm arg $a")
     tt = (a => infer_type(theory, TermInCtx(t.ctx, a)))
     typed_terms[ident(tc.args, name=nameof(i))] = tt 
   end
 
-  for lc_arg in reverse(idents(tc.localcontext))
+  for lc_arg in reverse(getidents(tc.localcontext))
     # one way of determining lc_arg's value
     filt(e) = e isa AccessorApplication && e.to isa Ident
     app = first(filter(filt, eqs[lc_arg])) 
@@ -613,7 +624,7 @@ end
 # ExprInterop
 #############
 
-function ExprInterop.toexpr(c::Context, term::T; kw...) where {T<:TrmTyp}
+function toexpr(c::Context, term::T; kw...) where {T<:TrmTyp}
   if term.head isa Constant
     toexpr(c, term.head; kw...)
   else
@@ -625,23 +636,20 @@ function ExprInterop.toexpr(c::Context, term::T; kw...) where {T<:TrmTyp}
   end
 end
 
-ExprInterop.toexpr(c::Context, constant::Constant; kw...) =
+toexpr(c::Context, constant::Constant; kw...) =
   Expr(:(::), constant.value, toexpr(c, constant.type; kw...))
 
 
-ExprInterop.toexpr(c::Context, term::AlgSort; kw...) = 
-  ExprInterop.toexpr(c, term.ref; kw...)
+toexpr(c::Context, term::AlgSort; kw...) = toexpr(c, term.ref; kw...)
 
-ExprInterop.fromexpr(c::Context, e, ::Type{AlgSort}) = 
-  AlgSort(ExprInterop.fromexpr(c, e, Ident))
-
+fromexpr(c::Context, e, ::Type{AlgSort}) = AlgSort(fromexpr(c, e, Ident))
 
 function bindingexprs(c::Context, s::Scope)
   c′ = AppendScope(c, s)
   [Expr(:(::), nameof(b), toexpr(c′, getvalue(b))) for b in s]
 end
 
-function ExprInterop.toexpr(c::Context, binding::JudgmentBinding)
+function toexpr(c::Context, binding::JudgmentBinding)
   judgment = getvalue(binding)
   name = nameof(binding)
   c′ = AppendScope(c, judgment.localcontext)
@@ -666,7 +674,7 @@ end
 """
 Return `nothing` if the binding we parse has already been bound.
 """
-function ExprInterop.fromexpr(c::Context, e, ::Type{Binding{AlgType, Nothing}})
+function fromexpr(c::Context, e, ::Type{Binding{AlgType, Nothing}})
   @match e begin
     Expr(:(::), name::Symbol, type_expr) => 
         Binding{AlgType, Nothing}(name, fromexpr(c, type_expr, AlgType))
@@ -731,31 +739,56 @@ function parseaxiom(c::Context, localcontext, type_expr, e; name=nothing)
   end
 end
 
-function ExprInterop.fromexpr(c::Context, e, ::Type{InCtx{T}}) where T
+"""Parse something that could either be a type or a term in context"""
+function fromexpr(c::Context, e, ::Type{InCtx})
+  binding = @match normalize_decl(e) begin
+    Expr(:call, :(⊣), binding, _) => binding
+    otherwise => otherwise
+  end
+  head = @match binding begin
+    Expr(:call, f, args...) => f
+    e::Symbol => e 
+  end
+  if hasident(c; name=head) && getvalue(c[ident(c; name=head)]) isa AlgTypeConstructor 
+    fromexpr(c, e, TypeInCtx)
+  else 
+    fromexpr(c, e, TermInCtx)
+  end
+end
+
+
+"""
+parse a term of the following forms:
+  compose(f::Hom(a,b), g::Hom(b,c)) ⊣ [(a,b,c)::Ob]
+  Hom(dom::Ob, codom::Ob)
+
+Some AlgType information may be in an explicit context, otherwise it comes from
+explicitly annotated symbols
+"""
+function fromexpr(c::Context, e, ::Type{InCtx{T}}) where T
   (binding, localcontext) = @match normalize_decl(e) begin
     Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
     e => (e, TypeScope())
   end
-  c′ = AppendScope(c, localcontext)
-  bound = Dict([nameof(b) => getvalue(b) for b in getbindings(localcontext)])
-  t = ExprInterop.fromexpr(c′, binding, T; bound=bound)
+  t = fromexpr!(c, binding, localcontext, T)
   InCtx{T}(localcontext, t)
 end
 
-function ExprInterop.toexpr(c::Context, tic::InCtx; kw...)  
-  c′=AppendScope(c,tic.ctx)
-  etrm = ExprInterop.toexpr(c′, tic.trm; kw...)
-  ectx = ExprInterop.toexpr(c′, tic.ctx; kw...)
+function toexpr(c::Context, tic::InCtx; kw...)  
+  c′ = AppendScope(c, tic.ctx)
+  etrm = toexpr(c′, tic.trm; kw...)
+  flat = Scopes.flatten(tic.ctx)
+  ectx = toexpr(AppendScope(c,flat), flat; kw...)
   Expr(:call, :(⊣), etrm, ectx)
 end
 
-ExprInterop.toexpr(c::Context, ts::TypeScope; kw...) =
+toexpr(c::Context, ts::TypeScope; kw...) =
   Expr(:vect,[Expr(:(::), nameof(b), toexpr(c, getvalue(b); kw...)) for b in ts]...)
 
-ExprInterop.toexpr(c::Context, at::Binding{AlgType, Nothing}) =
-  Expr(:(::), nameof(at), ExprInterop.toexpr(c, getvalue(at)))
+toexpr(c::Context, at::Binding{AlgType, Nothing}) =
+  Expr(:(::), nameof(at), toexpr(c, getvalue(at)))
 
-function ExprInterop.fromexpr(c::Context, e, ::Type{JudgmentBinding})
+function fromexpr(c::Context, e, ::Type{JudgmentBinding})
   (binding, localcontext) = @match normalize_decl(e; axiom=true) begin
     Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
     e => (e, TypeScope())
@@ -795,7 +828,7 @@ function ExprInterop.fromexpr(c::Context, e, ::Type{JudgmentBinding})
   end
 end
 
-function ExprInterop.toexpr(c::Context, seg::GATSegment)
+function toexpr(c::Context, seg::GATSegment)
   c′ = AppendScope(c, seg)
   e = Expr(:block)
   for binding in seg
@@ -807,7 +840,7 @@ function ExprInterop.toexpr(c::Context, seg::GATSegment)
   e
 end
 
-function ExprInterop.fromexpr(c::Context, e, ::Type{GATSegment})
+function fromexpr(c::Context, e, ::Type{GATSegment})
   seg = GATSegment()
   e.head == :block || error("expected a block to pars into a GATSegment, got: $e")
   c′ = AppendScope(c, seg)

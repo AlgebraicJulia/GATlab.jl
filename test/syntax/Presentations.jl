@@ -9,7 +9,7 @@ tscope = parsetypescope(
   T, 
   :([(a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c), (h,h′)::Hom(a,c)]).args
 )
-_, _, _, f, g, h, h′ = idents(tscope)
+_, _, _, f, g, h, h′ = getidents(tscope)
 h, h′ = AlgTerm.([h,h′])
 fg = fromexpr(AppendScope(T, tscope), :(compose(f,g)), AlgTerm)
 p1 = Presentation(T, tscope, [[fg, h]])
