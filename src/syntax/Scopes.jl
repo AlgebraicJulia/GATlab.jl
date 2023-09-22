@@ -397,9 +397,6 @@ Base.:(==)(s1::Scope, s2::Scope) = s1.tag == s2.tag
 
 Base.hash(s::Scope, h::UInt64) = hash(s.tag, h)
 
-"""Compare two scopes, ignoring the difference in the top-level scope tag."""
-equiv(s1::Scope, s2::Scope) = s1.bindings == retag(Dict(s2.tag => s1.tag), s2).bindings
-
 Scope{T, Sig}() where {T, Sig} = 
   Scope{T, Sig}(newscopetag(), Binding{T, Sig}[], Dict{Symbol, Dict{Sig, LID}}())
 
@@ -855,7 +852,7 @@ hastag(hsl::HasScopeList, t::ScopeTag) =
 hasname(hsl::HasScopeList, name::Symbol) =
   haskey(getscopelist(hsl).namelookup, name)
 
-getidents(hsl::HasScopeList; kw...) = Iterators.flatten(getidents.(getscopelist(hsl)))
+getidents(hsl::HasScopeList; kw...) = vcat(getidents.(getscopelist(hsl))...)
 
 """
 Flatten a scopelist if possible. This will fail if any of the bindings shadow 

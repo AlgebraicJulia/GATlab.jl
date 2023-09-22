@@ -62,6 +62,7 @@ nameless = Ident(tag1, LID(1), nothing)
 bind_x = Binding{String}(:x, "ex")
 bind_y = Binding{String}(:y, "why")
 
+@test nameof(setname(bind_x, :z)) == :z
 @test retag(Dict(tag1 => tag2), bind_x) == bind_x
 
 @test nameof(bind_x) == :x
@@ -156,7 +157,7 @@ Scopes.unsafe_addalias!(s, :x, :X)
 @test_throws KeyError getlevel(s, tag1)
 @test getlevel(s, :x) == 1
 @test_throws KeyError getlevel(s, :elephant)
-
+@test Scopes.check_names(s)
 # Context Utilities
 ###################
 
@@ -167,6 +168,11 @@ Scopes.unsafe_addalias!(s, :x, :X)
 
 # ScopeList
 ###########
+e = ScopeList(Scope{Nothing,Nothing}[])
+@test nscopes(e) == 0 
+flat = Scopes.flatten(e)
+@test flat == Scope(Binding{Nothing,Nothing}[],tag=gettag(flat))
+@test sprint(show, e) == "[]"
 
 @test_throws Exception ScopeList([xy_scope, xy_scope])
 
@@ -184,6 +190,7 @@ xz_scope = Scope([bind_x, bind_z])
 @test valtype(xz_scope) == String
 
 c = ScopeList([xy_scope, xz_scope])
+@test_throws ErrorException Scopes.flatten(c)
 
 @test getscope(c, 1) == xy_scope
 @test getscope(c, 2) == xz_scope
@@ -206,7 +213,7 @@ c = ScopeList([xy_scope, xz_scope])
 @test_throws Exception AppendScope(ScopeList([xy_scope]), xy_scope)
 
 c = AppendScope(ScopeList([xy_scope]), xz_scope)
-
+@test length(getidents(c)) == 4
 @test getscope(c, 1) == xy_scope
 @test getscope(c, 2) == xz_scope
 @test nscopes(c) == 2
@@ -223,6 +230,8 @@ c = AppendScope(ScopeList([xy_scope]), xz_scope)
 
 # EmptyContext 
 e = EmptyContext{Nothing, Nothing}()
+@test nscopes(e) == 0
+@test !hastag(e, newscopetag())
 @test_throws BoundsError getscope(e, 1)
 @test_throws KeyError getlevel(e, :x) 
 @test_throws KeyError getlevel(e, gettag(x))

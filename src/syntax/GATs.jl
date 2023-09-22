@@ -640,10 +640,6 @@ toexpr(c::Context, constant::Constant; kw...) =
   Expr(:(::), constant.value, toexpr(c, constant.type; kw...))
 
 
-toexpr(c::Context, term::AlgSort; kw...) = toexpr(c, term.ref; kw...)
-
-fromexpr(c::Context, e, ::Type{AlgSort}) = AlgSort(fromexpr(c, e, Ident))
-
 function bindingexprs(c::Context, s::Scope)
   c′ = AppendScope(c, s)
   [Expr(:(::), nameof(b), toexpr(c′, getvalue(b))) for b in s]
@@ -784,9 +780,6 @@ end
 
 toexpr(c::Context, ts::TypeScope; kw...) =
   Expr(:vect,[Expr(:(::), nameof(b), toexpr(c, getvalue(b); kw...)) for b in ts]...)
-
-toexpr(c::Context, at::Binding{AlgType, Nothing}) =
-  Expr(:(::), nameof(at), toexpr(c, getvalue(at)))
 
 function fromexpr(c::Context, e, ::Type{JudgmentBinding})
   (binding, localcontext) = @match normalize_decl(e; axiom=true) begin
