@@ -4,7 +4,7 @@ export
   ScopeTagError,
   LID,
   Ident, gettag, getlid, isnamed,
-  Binding, getvalue, getsignature, getline, setline,
+  Binding, getvalue, setvalue, getsignature, getline, setline,
   Context, getscope, nscopes, getlevel, hasname, hastag,
   HasContext, getcontext,
   hasident, ident, getidents, idents, canonicalize,
@@ -103,6 +103,8 @@ end
 function Base.show(io::IO, lid::LID)
   print(io, lid.val)
 end
+
+getvalue(lid::LID) = lid.val
 
 # Idents
 ########
@@ -244,6 +246,8 @@ getline(b::Binding) = b.line
 
 setline(b::Binding{T, Sig}, line::Union{LineNumberNode, Nothing}) where {T, Sig} =
   Binding{T, Sig}(b.primary, b.value, b.sig, line)
+setvalue(b::Binding{T, Sig}, t::T) where {T,Sig} = 
+  Binding{T, Sig}(b.primary, t, b.sig, b.line)
 
 # Context
 #########
