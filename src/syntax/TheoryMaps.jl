@@ -9,6 +9,7 @@ using ..GATs: InCtx, TrmTyp, bindingexprs, bind_localctx, substitute_term
 import ..ExprInterop: toexpr, fromexpr
 
 using StructEquality, MLStyle
+using DataStructures: OrderedDict
 
 # Theory Maps
 #############
@@ -46,8 +47,8 @@ dom(f::AbsTheoryMap)::GAT = f.dom # assume this exists by default
 codom(f::AbsTheoryMap)::GAT = f.codom # assume this exists by default
 
 function compose(f::AbsTheoryMap, g::AbsTheoryMap)
-  typmap = Dict(k => g(v) for (k, v) in pairs(typemap(f)))
-  trmmap = Dict(k => g(v) for (k, v) in pairs(termmap(f)))
+  typmap = OrderedDict(k => g(v) for (k, v) in pairs(typemap(f)))
+  trmmap = OrderedDict(k => g(v) for (k, v) in pairs(termmap(f)))
   TheoryMap(dom(f), codom(g), typmap, trmmap)
 end
 
@@ -70,10 +71,12 @@ end
 Map a (flatten-able) context in the domain theory into a context of the 
 codomain theory
 """
-function pushforward(dom::GAT, 
-                     tymap::Dict{Ident, TypeInCtx}, 
-                     trmap::Dict{Ident,TermInCtx}, 
-                     ctx::TypeCtx) 
+function pushforward(
+  dom::GAT, 
+  tymap::OrderedDict{Ident, TypeInCtx}, 
+  trmap::OrderedDict{Ident,TermInCtx}, 
+  ctx::TypeCtx
+) 
   fctx = TypeScope()
   scope = Scopes.flatten(ctx)
   for i in 1:length(scope)
@@ -87,13 +90,14 @@ function pushforward(dom::GAT,
 end
 
 """ Map a term (or type) `t` in context `c` along `f`. """
-function pushforward(dom::GAT, 
-                     tymap::Dict{Ident, TypeInCtx}, 
-                     trmap::Dict{Ident,TermInCtx},
-                     ctx::TypeCtx, 
-                     t::T; 
-                     fctx=nothing
-                     ) where {T<:TrmTyp}
+function pushforward(
+  dom::GAT, 
+  tymap::OrderedDict{Ident, TypeInCtx}, 
+  trmap::OrderedDict{Ident,TermInCtx},
+  ctx::TypeCtx, 
+  t::T; 
+  fctx=nothing
+) where {T<:TrmTyp}
   fctx = isnothing(fctx) ? f(ctx) : fctx
   head = headof(t)
   if hasident(ctx, head)
@@ -163,10 +167,10 @@ A theory inclusion has a subset of scopes
 end
 
 typemap(ι::Union{IdTheoryMap,TheoryIncl}) = 
-  Dict(k => TypeInCtx(dom(ι), k) for k in typecons(dom(ι)))
+  OrderedDict(k => TypeInCtx(dom(ι), k) for k in typecons(dom(ι)))
 
 termmap(ι::Union{IdTheoryMap,TheoryIncl}) = 
-  Dict(k=>TermInCtx(dom(ι), k) for k in termcons(dom(ι)))
+  OrderedDict(k=>TermInCtx(dom(ι), k) for k in termcons(dom(ι)))
 
 compose(f::TheoryIncl, g::TheoryIncl) = TheoryIncl(dom(f), codom(g))
 
@@ -187,8 +191,8 @@ TODO: check that it is well-formed, axioms are preserved.
 @struct_hash_equal struct TheoryMap <: AbsTheoryMap
   dom::GAT
   codom::GAT
-  typemap::Dict{Ident,TypeInCtx}
-  termmap::Dict{Ident,TermInCtx}
+  typemap::OrderedDict{Ident,TypeInCtx}
+  termmap::OrderedDict{Ident,TermInCtx}
   function TheoryMap(dom, codom, typmap, trmmap)
     missing_types = setdiff(Set(keys(typmap)), Set(typecons(dom))) 
     missing_terms = setdiff(Set(keys(trmmap)), Set(termcons(dom))) 
@@ -196,7 +200,7 @@ TODO: check that it is well-formed, axioms are preserved.
     isempty(missing_terms) || error("Missing types $missing_terms")
 
     tymap′, trmap′ = map([typmap, trmmap]) do tmap 
-      Dict(k => v isa Ident ? InCtx(codom, v) : v for (k,v) in pairs(tmap))
+      OrderedDict(k => v isa Ident ? InCtx(codom, v) : v for (k,v) in pairs(tmap))
     end
 
     new(dom, codom, tymap′, trmap′)
@@ -230,8 +234,8 @@ TODO: we currently ignore LineNumberNodes. TheoryMap data structure could
 TODO: handle more ambiguity via type inference
 """
 function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
-  tyms = Dict{Ident, TypeInCtx}()
-  trms = Dict{Ident, TermInCtx}()
+  tyms = OrderedDict{Ident, TypeInCtx}()
+  trms = OrderedDict{Ident, TermInCtx}()
   exprs = @match e begin
     Expr(:block, e1::Expr, es...) => [e1,es...]
     Expr(:block, ::LineNumberNode, es...) => filter(x->!(x isa LineNumberNode), es)
