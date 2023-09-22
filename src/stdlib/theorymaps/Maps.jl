@@ -8,7 +8,7 @@ using ....Syntax
 
 SwapMonoid = @theorymap ThMonoid => ThMonoid begin
   default => default
-  x⋅y ⊣ [x, y] => y⋅x ⊣ [x,y]
+  x⋅y ⊣ [x, y] => y⋅x
   e => e
 end
 
@@ -16,7 +16,7 @@ end
 NatPlusMonoid = @theorymap ThMonoid => ThNatPlus  begin
   default => ℕ 
   e => Z
-  (x ⋅ y) ⊣ [x, y] => x+y ⊣ [(x, y)::ℕ]
+  (x ⋅ y) ⊣ [x, y] => x+y
 end
 
 
@@ -30,10 +30,9 @@ end
 """Preorders are categories"""
 PreorderCat = @theorymap ThCategory => ThPreorder begin
   Ob => default
-  Hom => Leq
-  compose(f, g) ⊣ [a::Ob, b::Ob, c::Ob, f::(a → b), g::(b → c)] => 
-    trans(f, g) ⊣ [a, b, c, f::Leq(a, b), g::Leq(b, c)]  
-  id(a) ⊣ [a::Ob] => refl(a) ⊣ [a]
+  Hom(dom::Ob, codom::Ob) => Leq(dom, codom)
+  compose(f::(a → b), g::(b → c)) ⊣ [a::Ob, b::Ob, c::Ob] => trans(f, g)
+  id(a) ⊣ [a::Ob] => refl(a)
 end
 
 """Thin categories are isomorphic to preorders"""

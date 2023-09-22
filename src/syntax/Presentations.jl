@@ -11,7 +11,7 @@ A presentation has a set of generators, given by a `TypeScope`, and a set of
 equations among terms which can refer to those generators. Each element of 
 `eqs` is a list of terms which are asserted to be equal.
 """
-@struct_hash_equal struct Presentation <: HasContext
+@struct_hash_equal struct Presentation <: HasContext{AlgType, Nothing}
   theory::GAT
   scope::TypeScope
   eqs::Vector{Vector{AlgTerm}}
