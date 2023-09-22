@@ -22,7 +22,7 @@ end
 
 OpCat = @theorymap ThCategory => ThCategory begin
   Ob => Ob
-  Hom(dom::Ob, codom::Ob) => Hom(codom,dom)
+  Hom(dom::Ob, codom::Ob) => Hom(codom, dom)
   id(a::Ob) => id(a)
   compose(f::Hom(a,b), g::Hom(b,c)) ⊣ [(a,b,c)::Ob] => compose(g, f)
 end

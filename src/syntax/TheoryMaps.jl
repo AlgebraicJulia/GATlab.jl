@@ -102,18 +102,18 @@ function pushforward(
   head = headof(t)
   if hasident(ctx, head)
     retag(Dict(gettag(ctx)=>gettag(fctx)), t) # term is already in the context
-  else 
-    termcon = getvalue(dom[head]) # Toplevel TermConstructor of t in domain
-    new_term = pushforward(tymap, trmap, head) # Codom TermInCtx associated with the toplevel termcon
+  else
+    tcon = getvalue(dom[head]) # Toplevel Term (or Type) Constructor of t in domain
+    new_term = pushforward(tymap, trmap, head) # Codom TermInCtx associated with the toplevel tcon
     # idents in bind_localctx refer to term constructors args and l.c.
     rt_dict = Dict(gettag(x)=>gettag(new_term.ctx) 
-                   for x in [termcon.args, termcon.localcontext])
+                   for x in [tcon.args, tcon.localcontext])
 
-    # new_term has same context as termcon, so recursively map over components
+    # new_term has same context as tcon, so recursively map over components
     lc = bind_localctx(dom, InCtx{T}(ctx, t))
     flc = Dict{Ident, AlgTerm}(map(collect(pairs(lc))) do (k, v)
-      if hasident(termcon.args, k) # offset when squashing localcontext and args
-        k = Ident(gettag(k), LID(getlid(k).val+length(termcon.localcontext)), nameof(k))
+      if hasident(tcon.args, k) # offset when squashing localcontext and args
+        k = Ident(gettag(k), LID(getlid(k).val+length(tcon.localcontext)), nameof(k))
       end
       retag(rt_dict, k) => pushforward(dom, tymap, trmap, ctx, v; fctx)
     end)
@@ -227,12 +227,9 @@ function toexpr(m::AbsTheoryMap)
   Expr(:block, typs...,trms...)
 end
 
-"""
-TODO: we currently ignore LineNumberNodes. TheoryMap data structure could 
-      instead use scopes (rather than Dicts) which store this info in Bindings.
-
-TODO: handle more ambiguity via type inference
-"""
+#TODO: we currently ignore LineNumberNodes. TheoryMap data structure could 
+#      instead use scopes (rather than OrderedDicts) which store this info in 
+#      Bindings.
 function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
   tyms = OrderedDict{Ident, TypeInCtx}()
   trms = OrderedDict{Ident, TermInCtx}()
@@ -242,15 +239,66 @@ function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
   end
   for expr in exprs
     e1, e2 = @match expr begin Expr(:call, :(=>), e1, e2) => (e1,e2) end
-    key = fromexpr(dom, e1, InCtx)
+    key = fromexpr(dom, e1, InCtx; constants=false)
     T = only(typeof(key).parameters)
-    fctx = pushforward(dom, tyms, trms, key.ctx)
+    keyhead = key.trm.head
+    
+    # reorder the context to match that of the canonical localctx + args
+    tc = getvalue(dom[keyhead])
+    reorder_init = Dict(zip(length(tc.localcontext).+ collect(1:length(tc.args)), 
+                        getvalue.(getlid.(headof.(key.trm.args)))))
+    reordered_ctx = reorder(key.ctx, Scopes.flatten(argcontext(tc)), reorder_init)
+
+    fctx = pushforward(dom, tyms, trms, reordered_ctx)
     val = fromexpr(AppendScope(codom, fctx), e2, T)
     dic = T == AlgType ? tyms : trms
     dic[key.trm.head] = InCtx{T}(fctx, val)
   end
   TheoryMap(dom, codom, tyms, trms)
 end
+
+"""
+The result of:
+
+reorder([(B,C,A)::Ob, G::B→C, F::A→B], [(a,b,c)::Ob, f::a→b, g::b→c], {4->5, 5->4})
+
+Is the reordered first context: [(A,B,C)::Ob, F::A→B, G::B→C]
+"""
+function reorder(domctx::Scope{T,Sig}, codomctx::Scope{T, Sig}, perm::Dict{Int,Int}) where {T,Sig}
+  N = length(domctx)
+  N == length(codomctx) || error("Mismatched lengths $N != $(length(codomctx))")
+  for dom_i in reverse(1:N)
+    codom_i = perm[dom_i] 
+    dom_lids, codom_lids = map([domctx=>dom_i, codomctx=>codom_i]) do (ctx, i) 
+      getvalue.(getlid.(headof.(argsof(getvalue(ctx[LID(i)])))))
+    end
+    for (dom_j, codom_j) in zip(dom_lids, codom_lids)
+      if !haskey(perm, dom_j)
+        perm[dom_j] = codom_j
+      elseif perm[dom_j] != codom_j
+        error("inconsistent")
+      end
+    end
+  end
+  isperm(collect(values(perm))) || error("We need to permute the LIDs")
+  Scope([reorder(domctx[LID(perm[i])], gettag(domctx), perm) for i in 1:N], 
+        aliases=domctx.aliases, tag=gettag(domctx))
+end
+
+"""Change LIDs recursively"""
+function reorder(t::T, tag::ScopeTag, perm::Dict{Int,Int}) where T <: TrmTyp
+  args = AlgTerm[reorder.(argsof(t), Ref(tag), Ref(perm))...]
+  head = headof(t) 
+  if head isa Ident && gettag(head) == tag
+    T(Ident(gettag(head), LID(perm[getvalue(getlid(head))]), nameof(head)), args)
+  else 
+    T(head, args)
+  end
+end
+
+reorder(b::Binding{T, Sig}, tag::ScopeTag, perm::Dict{Int,Int}) where {T,Sig} = 
+  setvalue(b, reorder(getvalue(b), tag, perm))
+
 
 macro theorymap(head, body)
   (domname, codomname) = @match head begin
