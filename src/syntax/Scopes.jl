@@ -408,7 +408,10 @@ function make_name_dict(bindings::AbstractVector{Binding{T, Sig}}) where {T, Sig
   d = Dict{Symbol, Dict{Sig, LID}}()
   for (i, binding) in enumerate(bindings)
     name = nameof(binding)
-    if !(name ∈ keys(d))
+    if isnothing(name) 
+      continue 
+    end
+    if !(name ∈ keys(d) )
       d[name] = Dict{Sig, LID}()
     end
     sig = getsignature(binding)

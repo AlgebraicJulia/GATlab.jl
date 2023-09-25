@@ -1,3 +1,7 @@
+"""
+Explicit Op model. Alternatively, see DerivedModels.jl (`OpFinSetC`) for 
+theory-morphism-derived Op models.
+"""
 module Op 
 
 export OpC, op
@@ -6,7 +10,6 @@ export OpC, op
 using ....Models
 using ...StdTheories
 using StructEquality
-
 
 @struct_hash_equal struct OpC{ObT, HomT, C<:Model{Tuple{ObT, HomT}}} <: Model{Tuple{ObT, HomT}}
   cat::C

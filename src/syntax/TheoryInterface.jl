@@ -77,6 +77,7 @@ macro theory(head, body)
   push!(modulelines, :(const THEORY = $theory))
 
   push!(modulelines, :(macro theory() $theory end))
+  push!(modulelines, :(macro theory_module() @__MODULE__ end))
 
   for name in Set(allnames(newsegment))
     # TODO: also push an automatically generated docstring

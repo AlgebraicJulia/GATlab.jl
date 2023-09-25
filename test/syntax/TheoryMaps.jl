@@ -7,18 +7,23 @@ using Test
 ########
 
 T = ThCategory.THEORY
-T2 = ThPreorder.THEORY
+TP = ThPreorder.THEORY
+TLC = ThLawlessCat.THEORY
+TM = ThMonoid.THEORY
+TNP = ThNatPlus.THEORY
 
+PC = PreorderCat.MAP
+NP = NatPlusMonoid.MAP
 # TheoryMaps 
 ############
-x = toexpr(PreorderCat)
-tm2 = fromexpr(T, T2, x, TheoryMap)
+x = toexpr(PC)
+tm2 = fromexpr(T, TP, x, TheoryMap)
 x2 = toexpr(tm2)
 @test x == x2
 
 # Validation of putative theory maps 
 #-----------------------------------
-@test_throws LoadError @eval @theorymap ThCategory => ThPreorder begin
+@test_throws LoadError @eval @theorymap F(ThCategory, ThPreorder) begin
   Ob => default
   Hom => Leq
   compose(f, g) ⊣ [(a,b,c,d)::Ob, f::(a → b), g::(c → d)] => 
@@ -26,7 +31,7 @@ x2 = toexpr(tm2)
   id(a) ⊣ [a::Ob] => refl(a) ⊣ [a]
 end
 
-@test_throws LoadError @eval @theorymap ThCategory => ThPreorder begin
+@test_throws LoadError @eval @theorymap F(ThCategory, ThPreorder) begin
   Ob => default
   Hom => Leq
   compose(f, g) ⊣ [(a,b,c)::Ob, f::(a → b), g::(b → c)] => 
@@ -42,7 +47,7 @@ end
   id(a) ⊣ [a::Ob] => refl(a) ⊣ [a]
 end
 
-@test_throws LoadError @eval @theorymap ThCategory => ThPreorder begin
+@test_throws LoadError @eval @theorymap F(ThCategory, ThPreorder) begin
   Ob => default
   Hom => Leq
   compose(f, g) ⊣ [a::Ob, b::Ob, c::Ob, f::(a → b), g::(b → c)] => 
@@ -56,43 +61,42 @@ end
 # Test PreorderCat
 
 (Ob, Hom), (Cmp, Id) = typecons(T), termcons(T)
-@test PreorderCat(Ob).trm == AlgType(ident(T2; name=:default))
-@test PreorderCat(Cmp) isa TermInCtx
+@test PC(Ob).trm == AlgType(ident(TP; name=:default))
+@test PC(Cmp) isa TermInCtx
 
-@test PreorderCat(argcontext(getvalue(T[Cmp]))) isa TypeScope
+@test PC(argcontext(getvalue(T[Cmp]))) isa TypeScope
 
-@test_throws KeyError PreorderCat(first(typecons(T2)))
+@test_throws KeyError PC(first(typecons(TP)))
 
-xterm = fromexpr(ThMonoid.THEORY, :(x ⊣ [x]), TermInCtx)
-res = NatPlusMonoid(xterm)
+xterm = fromexpr(TM, :(x ⊣ [x]), TermInCtx)
+res = NP(xterm)
 toexpr(ThNat.THEORY, res)
 
-xterm = fromexpr(ThMonoid.THEORY, :(e⋅(e⋅x) ⊣ [x]), TermInCtx)
-res = NatPlusMonoid(xterm)
-expected = fromexpr(ThNatPlus.THEORY, :(Z+(Z+x) ⊣ [x::ℕ]), TermInCtx)
-@test toexpr(ThNatPlus.THEORY, res) == toexpr(ThNatPlus.THEORY, expected)
+xterm = fromexpr(TM, :(e⋅(e⋅x) ⊣ [x]), TermInCtx)
+res = NP(xterm)
+expected = fromexpr(TNP, :(Z+(Z+x) ⊣ [x::ℕ]), TermInCtx)
+@test toexpr(TNP, res) == toexpr(TNP, expected)
 
 # Test OpCat
 
 xterm = fromexpr(T, :(id(x) ⋅ p ⋅ q ⋅ id(z) ⊣ [(x,y,z)::Ob, p::Hom(x,y), q::Hom(y,z)]), TermInCtx)
 expected = :(compose(id(z), compose(q,  compose(p, id(x)))) ⊣ [x::Ob,y::Ob,z::Ob, p::Hom(y,x), q::Hom(z,y)])
-@test toexpr(T, OpCat(xterm)) == expected
+@test toexpr(T, OpCat.MAP(xterm)) == expected
 
 
 # Check that maps are not sensitive to order of bindings
 
-OpCat2 = @theorymap ThCategory => ThCategory begin
+@theorymap OpCat2(ThCategory, ThCategory) begin
   Ob => Ob
   Hom(foo::Ob, bar::Ob) => Hom(bar, foo)
   id(a::Ob) => id(a)
   compose(p,q) ⊣ [(z,y,x)::Ob, q::Hom(y,z), p::Hom(x,y)] => compose(q, p)
 end
-toexpr(T, OpCat2(xterm)) == expected
+@test toexpr(T, OpCat2.MAP(xterm)) == expected
 
 
 # Inclusions 
 #############
-TLC = ThLawlessCat.THEORY
 incl = TheoryIncl(TLC, T)
 @test TheoryMaps.dom(incl) == TLC
 @test TheoryMaps.codom(incl) == T

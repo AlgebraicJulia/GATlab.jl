@@ -458,11 +458,12 @@ Start from the arguments. We know how to compute each of the arguments; they are
 given. Each argument tells us how to compute other arguments, and also elements
 of the context
 """
-function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
+function equations(context::TypeCtx, args::AbstractVector{Ident}, theory::GAT; init=nothing)
   ways_of_computing = Dict{Ident, Set{InferExpr}}()
-  to_expand = Pair{Ident, InferExpr}[x => x for x in getidents(args)]
-
-  context = ScopeList([args, localcontext])
+  to_expand = Pair{Ident, InferExpr}[x => x for x in args]
+  if !isnothing(init)
+    append!(to_expand, pairs(init))
+  end
    
   while !isempty(to_expand)
     x, expr = pop!(to_expand)
@@ -489,6 +490,20 @@ function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
     end
   end
   ways_of_computing
+end
+
+equations(args::TypeScope, localcontext::TypeScope, theory::GAT) =
+  equations(ScopeList([localcontext, args]), getidents(args), theory)
+
+function equations(theory::GAT, t::TypeInCtx)
+  tc = getvalue(theory[headof(t.trm)])
+  extended = ScopeList([t.ctx, Scope([Binding{AlgType, Nothing}(nothing, t.trm)])])
+  lastx = last(getidents(extended))
+  init = Dict{Ident, InferExpr}(map(zip(getidents(tc.args), t.trm.args)) do (accessor, arg)
+    hasident(t.ctx, headof(arg)) || error("Case not yet handled")
+    headof(arg) => AccessorApplication(accessor, lastx)
+  end)
+  equations(extended, Ident[], theory; init=init)
 end
 
 """Get equations for a term or type constructor"""
