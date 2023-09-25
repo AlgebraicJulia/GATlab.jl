@@ -21,7 +21,7 @@ struct IntPreorder <: Model{Tuple{Int, Tuple{Int,Int}}} end
   trans(ab::Tuple{Int,Int}, bc::Tuple{Int,Int}) = if ab[2] == bc[1] 
     (ab[1], bc[2])
   else 
-    @fail "Cannot compose $ab and $bc"
+    error("Cannot compose $ab and $bc")
   end
 end
 

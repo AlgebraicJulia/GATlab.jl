@@ -3,6 +3,7 @@ module TestArithmetic
 using GATlab
 using Test
 
+@migrate OpFinSetC = OpCat(FinSetC)
 
 
 # Integers as model of naturals
@@ -41,6 +42,7 @@ M = IntPreorderCat(IntPreorder())
 @withmodel M (Hom, id, compose) begin
   @test compose((1,3), (3,5)) == (1,5)
   @test_throws TypeCheckFail Hom((5,3), 5, 3)
+  @test_throws ErrorException compose((1,2), (3,5))
   @test id(2) == (2,2)
 end
 
