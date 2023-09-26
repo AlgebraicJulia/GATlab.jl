@@ -59,7 +59,7 @@ end
 @test PreorderCat(Ob).trm == AlgType(ident(T2; name=:default))
 @test PreorderCat(Cmp) isa TermInCtx
 
-@test PreorderCat(argcontext(getvalue(T[Cmp]))) isa TypeScope
+@test PreorderCat(getvalue(T[Cmp]).localcontext) isa TypeScope
 
 @test_throws KeyError PreorderCat(first(typecons(T2)))
 
@@ -83,8 +83,8 @@ expected = :(compose(id(z), compose(q,  compose(p, id(x)))) ⊣ [x::Ob,y::Ob,z::
 
 OpCat2 = @theorymap ThCategory => ThCategory begin
   Ob => Ob
-  Hom(foo::Ob, bar::Ob) => Hom(bar, foo)
-  id(a::Ob) => id(a)
+  Hom(foo, bar) ⊣ [foo::Ob, bar::Ob] => Hom(bar, foo)
+  id(a) ⊣ [a::Ob] => id(a)
   compose(p,q) ⊣ [(z,y,x)::Ob, q::Hom(y,z), p::Hom(x,y)] => compose(q, p)
 end
 toexpr(T, OpCat2(xterm)) == expected

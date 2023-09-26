@@ -40,16 +40,19 @@ three = AlgTerm(plus, [one, two])
 
 seg_expr = quote
   Ob :: TYPE
-  Hom(dom::Ob, codom::Ob) :: TYPE
-  id(a::Ob) :: Hom(a,a)
-  compose(f::Hom(a, b), g::Hom(b, c)) :: Hom(a, c) ⊣ [a::Ob, b::Ob, c::Ob]
+  Hom(dom, codom) :: TYPE ⊣ [dom::Ob, codom::Ob]
+  id(a) :: Hom(a,a) ⊣ [a::Ob]
+  compose(f, g) :: Hom(a, c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a, b), g::Hom(b, c)]
   ((compose(f, compose(g, h)) == compose(compose(f, g), h)) :: Hom(a,d)) ⊣ [
     a::Ob, b::Ob, c::Ob, d::Ob,
     f::Hom(a, b), g::Hom(b, c), h::Hom(c, d)
   ]
 end
 
+
 seg = fromexpr(TypeScope(), seg_expr, GATSegment)
+
+seg[ident(seg;name=:compose, isunique=true)].value.args
 
 @test toexpr(TypeScope(), seg) == seg_expr
 

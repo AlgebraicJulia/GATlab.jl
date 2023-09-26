@@ -106,15 +106,11 @@ function pushforward(
     tcon = getvalue(dom[head]) # Toplevel Term (or Type) Constructor of t in domain
     new_term = pushforward(tymap, trmap, head) # Codom TermInCtx associated with the toplevel tcon
     # idents in bind_localctx refer to term constructors args and l.c.
-    rt_dict = Dict(gettag(x)=>gettag(new_term.ctx) 
-                   for x in [tcon.args, tcon.localcontext])
+    rt_dict = Dict(gettag(tcon.localcontext)=>gettag(new_term.ctx))
 
     # new_term has same context as tcon, so recursively map over components
     lc = bind_localctx(dom, InCtx{T}(ctx, t))
     flc = Dict{Ident, AlgTerm}(map(collect(pairs(lc))) do (k, v)
-      if hasident(tcon.args, k) # offset when squashing localcontext and args
-        k = Ident(gettag(k), LID(getlid(k).val+length(tcon.localcontext)), nameof(k))
-      end
       retag(rt_dict, k) => pushforward(dom, tymap, trmap, ctx, v; fctx)
     end)
     substitute_term(new_term.trm, flc)
@@ -218,7 +214,7 @@ termmap(t::TheoryMap) = t.termmap
 # Serialization
 #--------------
 function toexpr(m::AbsTheoryMap)
-  typs, trms = map([typemap(m),termmap(m)]) do tm 
+  typs, trms = map([typemap(m), termmap(m)]) do tm 
     map(collect(tm)) do (k,v)
       domterm = toexpr(dom(m), InCtx(dom(m), k))
       Expr(:call, :(=>), domterm, toexpr(AppendScope(codom(m), v.ctx), v.trm)) 
@@ -231,7 +227,7 @@ end
 #      instead use scopes (rather than OrderedDicts) which store this info in 
 #      Bindings.
 function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
-  tyms = OrderedDict{Ident, TypeInCtx}()
+  typs = OrderedDict{Ident, TypeInCtx}()
   trms = OrderedDict{Ident, TermInCtx}()
   exprs = @match e begin
     Expr(:block, e1::Expr, es...) => [e1,es...]
@@ -239,22 +235,34 @@ function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
   end
   for expr in exprs
     e1, e2 = @match expr begin Expr(:call, :(=>), e1, e2) => (e1,e2) end
-    key = fromexpr(dom, e1, InCtx; constants=false)
-    T = only(typeof(key).parameters)
-    keyhead = key.trm.head
-    
-    # reorder the context to match that of the canonical localctx + args
-    tc = getvalue(dom[keyhead])
-    reorder_init = Dict(zip(length(tc.localcontext).+ collect(1:length(tc.args)), 
-                        getvalue.(getlid.(headof.(key.trm.args)))))
-    reordered_ctx = reorder(key.ctx, Scopes.flatten(argcontext(tc)), reorder_init)
+    flat_term, ctx = @match e1 begin 
+      Expr(:call, :⊣, flat_term, Expr(:vect, typescope...)) => begin 
+        flat_term, GATs.parsetypescope(dom, typescope)
+      end
+      _ => (e1, TypeScope())
+    end
+    xname, argnames = @match flat_term begin 
+      s::Symbol => (s, []) 
+      Expr(:call, f::Symbol, args...) => (f, args)
+    end
 
-    fctx = pushforward(dom, tyms, trms, reordered_ctx)
+    is_term = xname ∈ nameof.(termcons(dom))
+    T = is_term ? AlgTerm : AlgType
+
+    args = idents(ctx; name=argnames)
+    sig = is_term ? [AlgSort(getvalue(ctx[i])) for i in args] : nothing
+    x = ident(dom; name=xname, sig)
+
+    # reorder the context to match that of the canonical localctx + args
+    tc = getvalue(dom[x])
+    reorder_init = Dict(zip(getvalue.(getlid.(args)), getvalue.(tc.args)))
+    reordered_ctx = reorder(ctx, tc.localcontext, reorder_init)
+    fctx = pushforward(dom, typs, trms, reordered_ctx)
     val = fromexpr(AppendScope(codom, fctx), e2, T)
-    dic = T == AlgType ? tyms : trms
-    dic[key.trm.head] = InCtx{T}(fctx, val)
+    dic = T == AlgType ? typs : trms
+    dic[x] = InCtx{T}(fctx, val)
   end
-  TheoryMap(dom, codom, tyms, trms)
+  TheoryMap(dom, codom, typs, trms)
 end
 
 """
