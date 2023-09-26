@@ -313,7 +313,7 @@ end
 
 function internal_accessors(theory::GAT)
   map(typecons(theory)) do X
-    map(enumerate(getvalue(theory[X]).args)) do (i, binding)
+    map(enumerate(argsof(getvalue(theory[X])))) do (i, binding)
       JuliaFunction(
         name=esc(nameof(binding)),
         args=[:(x::$(esc(nameof(X))))],
@@ -328,11 +328,11 @@ function internal_constructors(theory::GAT)::Vector{JuliaFunction}
   map(termcons(theory)) do f
     name = nameof(f)
     termcon = getvalue(theory, f)
-    args = map(termcon.args) do binding 
+    args = map(argsof(termcon)) do binding 
       Expr(:(::), nameof(binding), typename(theory, getvalue(binding)))
     end  
 
-    eqs = equations(termcon.args, termcon.localcontext, theory)
+    eqs = equations(theory, f)
 
     throw_expr = Expr(
       :call,
@@ -341,7 +341,7 @@ function internal_constructors(theory::GAT)::Vector{JuliaFunction}
         :call,
         SyntaxDomainError,
         Expr(:quote, name),
-        Expr(:vect, nameof.(termcon.args)...)
+        Expr(:vect, nameof.(argsof(termcon))...)
       )
     )
 
@@ -357,7 +357,7 @@ function internal_constructors(theory::GAT)::Vector{JuliaFunction}
     )
 
     check_or_error = Expr(:(||), :(!strict), check_expr, throw_expr)
-    exprs = [getidents(termcon.args)..., getidents(termcon.localcontext)...]
+    exprs = getidents(termcon.localcontext)
     expr_lookup = Dict{Ident, Any}(map(exprs) do x 
       x => build_infer_expr(first(eqs[x]))
     end)
@@ -365,7 +365,7 @@ function internal_constructors(theory::GAT)::Vector{JuliaFunction}
     build = Expr(
       :call,
       Expr(:curly, typename(theory, termcon.type), Expr(:quote, name)),
-      Expr(:vect, nameof.(termcon.args)...),
+      Expr(:vect, nameof.(argsof(termcon))...),
       Expr(:ref, GATExpr, compile.(Ref(expr_lookup), termcon.type.args)...)
     )
 
@@ -394,7 +394,7 @@ function symbolic_instance_methods(
     type_con = getvalue(theory[type_con_id])
     symgen = symbolic_generator(theorymodule, syntaxname, type_con_id, type_con, theory)
     push!(type_con_funs, symgen)
-    for binding in type_con.args
+    for binding in argsof(type_con)
       push!(accessors_funs, symbolic_accessor(theorymodule, theory, syntaxname, type_con_id, binding))
     end
   end
@@ -423,7 +423,7 @@ function symbolic_generator(theorymodule, syntaxname, X::Ident, typecon::AlgType
   args = [
     Expr(:(::), value_param, Any);
     [Expr(:(::), nameof(binding), typename(theory, getvalue(binding); parentmod=syntaxname))
-     for binding in typecon.args]
+     for binding in argsof(typecon)]
   ]
 
   if isempty(typecon.args)
@@ -431,8 +431,8 @@ function symbolic_generator(theorymodule, syntaxname, X::Ident, typecon::AlgType
   end
   impl = quote 
     $(Expr(:(.), syntaxname, QuoteNode(name))){:generator}(
-    $(Expr(:vect, value_param, nameof.(typecon.args)...)),
-    $(Expr(:ref, GATExpr, nameof.(typecon.args)...))
+    $(Expr(:vect, value_param, nameof.(argsof(typecon))...)),
+    $(Expr(:ref, GATExpr, nameof.(argsof(typecon))...))
   )
   end
   JuliaFunction(name=Expr(:(.), theorymodule, QuoteNode(name)), args=args,impl=impl )
@@ -454,7 +454,7 @@ function symbolic_termcon(theorymodule, theory, syntaxname, termcon_id::Ident )
   termcon = getvalue(theory[termcon_id])
   return_type = typename(theory, termcon.type; parentmod=syntaxname)
   args = if !isempty(termcon.args)
-    map(termcon.args) do argbinding
+    map(argsof(termcon)) do argbinding
       type = typename(theory, getvalue(argbinding); parentmod=syntaxname)
       Expr(:(::), nameof(argbinding), type)
     end
@@ -465,7 +465,7 @@ function symbolic_termcon(theorymodule, theory, syntaxname, termcon_id::Ident )
     name=Expr(:(.), theorymodule, termcon_name),
     args=args,
     return_type=return_type,
-    impl=Expr(:call, Expr(:(.), syntaxname, termcon_name), nameof.(termcon.args)...)
+    impl=Expr(:call, Expr(:(.), syntaxname, termcon_name), nameof.(argsof(termcon))...)
   )
 end
 

@@ -611,7 +611,8 @@ getbinding(hs::HasScope, x::Ident) =
     throw(ScopeTagError(hs, x))
   end
 
-getbinding(hs::HasScope, name::Symbol) = getbinding(hs, getlid(hs, name; isunique=true))
+  getbinding(hs::HasScope, name::Symbol) = getbinding(hs, getlid(hs, name; isunique=true))
+  getbinding(hs::HasScope, xs::AbstractVector) = getbinding.(Ref(hs), xs)
 
 function ident(
   hs::HasScope;

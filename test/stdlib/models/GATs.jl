@@ -11,7 +11,7 @@ using .ThCategory
 
   expected = @theorymap ThMonoid => ThNatPlus begin
     default => ℕ
-    x ⋅ y ⊣ [x, y] => y + x ⊣ [x::ℕ, y::ℕ]
+    x ⋅ y ⊣ [x, y] => y + x
     e => Z
   end
 

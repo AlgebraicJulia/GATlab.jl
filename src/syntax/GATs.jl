@@ -240,18 +240,23 @@ function sortcheck(ctx::Context, t::AlgType)
   ref = ctx[t.head] |> getvalue
   ref isa AlgTypeConstructor || error("AlgType head must refer to AlgTypeConstructor: $ref")
   argsorts = sortcheck.(Ref(ctx), t.args)
-  expected = AlgSort.([a.head for a in getvalue.(ref.args)])
+  expected = AlgSort.([a.head for a in getvalue.(argsof(ref))])
   argsorts == expected || error("Sorts don't match: $argsorts != $expected")
 end
+
+
+abstract type TrmTypConstructor <: HasScope{AlgType, Nothing} end
+argsof(t::TrmTypConstructor) = t[t.args]
+Scopes.getscope(t::TrmTypConstructor) = t.localcontext
 
 """
 `AlgTypeConstructor`
 
 A declaration of a type constructor
 """
-@struct_hash_equal struct AlgTypeConstructor
+@struct_hash_equal struct AlgTypeConstructor <: TrmTypConstructor
   localcontext::TypeScope
-  args::TypeScope
+  args::Vector{LID}
 end
 
 """
@@ -259,29 +264,27 @@ end
 
 A declaration of a term constructor
 """
-@struct_hash_equal struct AlgTermConstructor
+@struct_hash_equal struct AlgTermConstructor <: TrmTypConstructor
   localcontext::TypeScope
-  args::TypeScope
+  args::Vector{LID}
   type::AlgType
 end
 
-sortsignature(tc::Union{AlgTypeConstructor, AlgTermConstructor}) =
-  AlgSort.([a.head for a in getvalue.(tc.args)])
 
-# """Local context of an AlgTermConstructor, including the arguments themselves"""
-argcontext(t::Union{AlgTypeConstructor,AlgTermConstructor}) = 
-  ScopeList([t.localcontext, t.args])
+sortsignature(tc::Union{AlgTypeConstructor, AlgTermConstructor}) =
+  AlgSort.(headof.(getvalue.(argsof(tc))))
 
 """
 `AlgAxiom`
 
 A declaration of an axiom
 """
-@struct_hash_equal struct AlgAxiom
+@struct_hash_equal struct AlgAxiom <: HasScope{AlgType, Nothing}
   localcontext::TypeScope
   type::AlgType
   equands::Vector{AlgTerm}
 end
+Scopes.getscope(t::AlgAxiom) = t.localcontext
 
 """
 `Judgment`
@@ -322,7 +325,7 @@ function allnames(seg::GATSegment; aliases=false)
       push!(names, nameof(binding))
     elseif judgment isa AlgTypeConstructor
       push!(names, nameof(binding))
-      for argbinding in judgment.args
+      for argbinding in argsof(judgment)
         push!(names, nameof(argbinding))
       end
     end
@@ -368,7 +371,7 @@ struct GAT <: HasScopeList{Judgment, Union{AlgSorts, Nothing}}
           push!(termcons, x)
         elseif judgment isa AlgTypeConstructor
           push!(typecons, x)
-          for arg in judgment.args
+          for arg in argsof(judgment)
             if nameof(arg) ∉ keys(accessors)
               accessors[nameof(arg)] = Set{Ident}()
             end
@@ -458,11 +461,12 @@ Start from the arguments. We know how to compute each of the arguments; they are
 given. Each argument tells us how to compute other arguments, and also elements
 of the context
 """
-function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
+function equations(context::TypeCtx, args::AbstractVector{Ident}, theory::GAT; init=nothing)
   ways_of_computing = Dict{Ident, Set{InferExpr}}()
-  to_expand = Pair{Ident, InferExpr}[x => x for x in getidents(args)]
-
-  context = ScopeList([args, localcontext])
+  to_expand = Pair{Ident, InferExpr}[x => x for x in args]
+  if !isnothing(init)
+    append!(to_expand, pairs(init))
+  end
    
   while !isempty(to_expand)
     x, expr = pop!(to_expand)
@@ -481,7 +485,7 @@ function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
         continue
       else
         @assert arg.head ∈ context
-        a = ident(xtypecon.args; lid=LID(i))
+        a = ident(xtypecon; lid=LID(i))
         y = arg.head
         expr′ = AccessorApplication(a, expr)
         push!(to_expand, y => expr′)
@@ -491,10 +495,24 @@ function equations(args::TypeScope, localcontext::TypeScope, theory::GAT)
   ways_of_computing
 end
 
+function equations(theory::GAT, t::TypeInCtx)
+  error("FIXME")
+  tc = getvalue(theory[headof(t.trm)])
+  extended = ScopeList([t.ctx, Scope([Binding{AlgType, Nothing}(nothing, t.trm)])])
+  lastx = last(getidents(extended))
+  init = Dict{Ident, InferExpr}(map(zip(getidents(tc.args), t.trm.args)) do (accessor, arg)
+    hasident(t.ctx, headof(arg)) || error("Case not yet handled")
+    headof(arg) => AccessorApplication(accessor, lastx)
+  end)
+  equations(extended, Ident[], theory; init=init)
+end
+
 """Get equations for a term or type constructor"""
 equations(theory::GAT, x::Ident) = let x = getvalue(theory[x]);
-  equations(x.args, x.localcontext, theory) 
+  equations(x, idents(x; lid=x.args),theory) 
 end
+
+
 
 function compile(expr_lookup::Dict{Ident}, term::AlgTerm; theorymodule=nothing)
   if term.head isa Constant
@@ -522,9 +540,7 @@ Get the canonical term + ctx associated with a term constructor.
 """
 function InCtx{AlgTerm}(g::GAT, k::Ident)
   tcon = getvalue(g[k])
-  lc = argcontext(tcon)
-  ids = getidents(getscope(lc, nscopes(lc)))
-  TermInCtx(lc, AlgTerm(k, AlgTerm.(ids)))
+  TermInCtx(tcon.localcontext, AlgTerm(k, AlgTerm.(idents(tcon; lid=tcon.args))))
 end
 
 """
@@ -532,8 +548,7 @@ Get the canonical type + ctx associated with a type constructor.
 """
 function InCtx{AlgType}(g::GAT, k::Ident)
   tcon = getvalue(g[k])
-  lc = argcontext(tcon)
-  TypeInCtx(lc, AlgType(k, AlgTerm.(getidents(lc))))
+  TypeInCtx(tcon.localcontext, AlgType(k, AlgTerm.(idents(tcon; lid=tcon.args))))
 end
 
 
@@ -568,9 +583,12 @@ function infer_type(theory::GAT, t::TermInCtx)
     typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
     for (i,a) in zip(tc.args, t.trm.args)
       tt = (a => infer_type(theory, TermInCtx(t.ctx, a)))
-      typed_terms[ident(tc.args, name=nameof(i))] = tt 
+      typed_terms[ident(tc.localcontext, lid=i)] = tt 
     end
-    for lc_arg in reverse(getidents(tc.localcontext))
+    for lc_arg in reverse(getidents(tc))
+      if getlid(lc_arg) ∈ tc.args 
+        continue 
+      end 
       # one way of determining lc_arg's value
       filt(e) = e isa AccessorApplication && e.to isa Ident
       app = first(filter(filt, eqs[lc_arg])) 
@@ -599,10 +617,13 @@ function bind_localctx(theory::GAT, t::InCtx{T}) where T
   typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
   for (i,a) in zip(tc.args, t.trm.args)
     tt = (a => infer_type(theory, TermInCtx(t.ctx, a)))
-    typed_terms[ident(tc.args, name=nameof(i))] = tt 
+    typed_terms[ident(tc, lid=i)] = tt 
   end
 
-  for lc_arg in reverse(getidents(tc.localcontext))
+  for lc_arg in reverse(getidents(tc))
+    if getlid(lc_arg) ∈ tc.args 
+      continue 
+    end 
     # one way of determining lc_arg's value
     filt(e) = e isa AccessorApplication && e.to isa Ident
     app = first(filter(filt, eqs[lc_arg])) 
@@ -616,10 +637,10 @@ end
 
 """ Replace idents with AlgTerms. """
 function substitute_term(t::T, dic::Dict{Ident,AlgTerm}) where T<:TrmTyp
-  iden = headof(t)
-  if haskey(dic, iden)
+  x = headof(t)
+  if haskey(dic, x)
     isempty(t.args) || error("Cannot substitute a term with arguments")
-    dic[iden]
+    dic[x]
   else 
     T(headof(t), substitute_term.(argsof(t), Ref(dic)))
   end
@@ -655,15 +676,14 @@ function toexpr(c::Context, binding::JudgmentBinding)
   c′ = AppendScope(c, judgment.localcontext)
   head = if judgment isa Union{AlgTypeConstructor, AlgTermConstructor}
     if !isempty(judgment.args)
-      Expr(:call, name, bindingexprs(c′, judgment.args)...)
+      Expr(:call, name, nameof.(argsof(judgment))...)
     else
       name
     end
   else
     Expr(:call, :(==), toexpr(c′, judgment.equands[1]), toexpr(c′, judgment.equands[2]))
   end
-  c″ = judgment isa AlgTermConstructor ? AppendScope(c′, judgment.args) : c′
-  headtyped = Expr(:(::), head, judgment isa AlgTypeConstructor ? :TYPE : toexpr(c″, judgment.type))
+  headtyped = Expr(:(::), head, judgment isa AlgTypeConstructor ? :TYPE : toexpr(c′, judgment.type))
   if !isempty(judgment.localcontext)
     Expr(:call, :(⊣), headtyped, Expr(:vect, bindingexprs(c, judgment.localcontext)...))
   else
@@ -687,15 +707,14 @@ Keep track of variables already bound (e.g. in local context) so that they need
 not be redefined, e.g. `compose(f,g::Hom(b,c)) ⊣ [(a,b,c)::Ob, f::Hom(a,b)]`
 (If `f` were not defined in the local context, it would be parsed as `default`.)
 """
-function parsetypescope(c::Context, exprs::AbstractVector; bound=nothing)
-  bound = isnothing(bound) ? Set{Symbol}() : bound
+function parsetypescope(c::Context, exprs::AbstractVector)
   scope = TypeScope()
   c′ = AppendScope(c, scope)
   line = nothing
   for expr in exprs
     binding_exprs = @match expr begin
-      a::Symbol => a ∈ bound ? [] : [:($a :: default)]
-      Expr(:tuple, names...) => [:($name :: default) for name in names if name ∉ bound]
+      a::Symbol => [Expr(:(::), a, :default)]
+      Expr(:tuple, names...) => [:($name :: default) for name in names]
       Expr(:(::), Expr(:tuple, names...), T) => [:($name :: $T) for name in names]
       :($a :: $T) => [expr]
       l::LineNumberNode => begin
@@ -711,6 +730,27 @@ function parsetypescope(c::Context, exprs::AbstractVector; bound=nothing)
   end
   scope
 end
+
+function parseargs!(c::Context, exprs::AbstractVector, scope::TypeScope)
+  c′ = AppendScope(c, scope)
+  map(exprs) do expr
+    binding_expr = @match expr begin
+      a::Symbol =>
+        if hasident(scope; name=a)
+          return getlid(ident(scope; name=a))
+        else 
+          Expr(:(::), a, :default)
+        end
+      :($a :: $T) => expr
+      _ => error("invalid argument expression $expr")
+    end
+    binding = fromexpr(c′, binding_expr, Binding{AlgType, Nothing})
+    Scopes.unsafe_pushbinding!(scope, binding)
+    return LID(length(scope))
+  end
+end
+
+
 
 """
 `axiom=true` adds a `::default` to exprs like `f(a,b) ⊣ [a::A, b::B]`
@@ -812,18 +852,17 @@ function fromexpr(c::Context, e, ::Type{JudgmentBinding})
         name::Symbol => (name, [])
         _ => error("failed to parse head of term constructor $head")
       end
-      args = parsetypescope(c′, arglist; bound=Set(nameof.(localcontext)))
+      args = parseargs!(c, arglist, localcontext)
       @match type_expr begin
         :TYPE => begin
           typecon = AlgTypeConstructor(localcontext, args)
           JudgmentBinding(name, typecon)
         end
         _ => begin
-          c″ = AppendScope(c′, args)
-          type = fromexpr(c″, type_expr, AlgType)
+          type = fromexpr(c′, type_expr, AlgType)
           termcon = AlgTermConstructor(localcontext, args, type)
-          argsorts = AlgSort.(getvalue.(args))
-          JudgmentBinding(name, termcon, argsorts)
+          sig = sortsignature(termcon)
+          JudgmentBinding(name, termcon, sig)
         end
       end
     end
