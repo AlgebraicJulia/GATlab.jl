@@ -461,7 +461,7 @@ Start from the arguments. We know how to compute each of the arguments; they are
 given. Each argument tells us how to compute other arguments, and also elements
 of the context
 """
-function equations(context::TypeCtx, args::AbstractVector{Ident}, theory::GAT; init=nothing)
+function equations(context::TypeCtx, args::AbstractVector{Ident}, theory::Context; init=nothing)
   ways_of_computing = Dict{Ident, Set{InferExpr}}()
   to_expand = Pair{Ident, InferExpr}[x => x for x in args]
   if !isnothing(init)
@@ -508,7 +508,7 @@ function equations(theory::GAT, t::TypeInCtx)
 end
 
 """Get equations for a term or type constructor"""
-equations(theory::GAT, x::Ident) = let x = getvalue(theory[x]);
+equations(theory::Context, x::Ident) = let x = getvalue(theory[x]);
   equations(x, idents(x; lid=x.args),theory) 
 end
 
@@ -573,50 +573,33 @@ knowing `{f => id(x)::Hom(x,x), g=> p⋅q :: Hom(x,z)}`. For `a` `b` and `c`,
 we use `equations` which tell us, e.g., that `a = dom(f)`. So we can grab the 
 first argument of the *type* of `f` (i.e. grab `x` from `Hom(x,x)`). 
 """
-function infer_type(theory::GAT, t::TermInCtx)
-  head = headof(t.trm)
-  if hasident(t.ctx, head) 
-    getvalue(t.ctx[head]) # base case
+function infer_type(ctx::Context, t::AlgTerm)
+  head = headof(t)
+  tc = getvalue(ctx[head])
+  if tc isa AlgType
+    tc # base case
   else
-    tc = getvalue(theory[head])
-    eqs = equations(theory, head)
-    typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
-    for (i,a) in zip(tc.args, t.trm.args)
-      tt = (a => infer_type(theory, TermInCtx(t.ctx, a)))
-      typed_terms[ident(tc.localcontext, lid=i)] = tt 
-    end
-    for lc_arg in reverse(getidents(tc))
-      if getlid(lc_arg) ∈ tc.args 
-        continue 
-      end 
-      # one way of determining lc_arg's value
-      filt(e) = e isa AccessorApplication && e.to isa Ident
-      app = first(filter(filt, eqs[lc_arg])) 
-
-      inferred_term = typed_terms[app.to][2].args[app.accessor.lid.val]
-      inferred_type = infer_type(theory, TermInCtx(t.ctx,inferred_term))
-      typed_terms[lc_arg] = inferred_term => inferred_type
-    end
-    AlgType(headof(tc.type), map(argsof(tc.type)) do arg
-      substitute_term(arg, Dict([k=>v[1] for (k,v) in pairs(typed_terms)]))
-    end)
+    typed_terms = bind_localctx(ctx, t)
+    AlgType(headof(tc.type), substitute_term.(argsof(tc.type), Ref(typed_terms)))
   end
 end
+
+infer_type(ctx::Context, t::TermInCtx) = infer_type(AppendScope(ctx, t.ctx), t.trm)
 
 """
 Take a term constructor and determine terms of its local context.
 
 This function is mutually recursive with `infer_type`. 
 """ 
-function bind_localctx(theory::GAT, t::InCtx{T}) where T
-  head = headof(t.trm)
+function bind_localctx(ctx::Context, t::TrmTyp)
+  head = headof(t)
 
-  tc = getvalue(theory[head])
-  eqs = equations(theory, head)
+  tc = getvalue(ctx[head])
+  eqs = equations(ctx, head)
 
   typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
-  for (i,a) in zip(tc.args, t.trm.args)
-    tt = (a => infer_type(theory, TermInCtx(t.ctx, a)))
+  for (i,a) in zip(tc.args, t.args)
+    tt = (a => infer_type(ctx, a))
     typed_terms[ident(tc, lid=i)] = tt 
   end
 
@@ -628,12 +611,14 @@ function bind_localctx(theory::GAT, t::InCtx{T}) where T
     filt(e) = e isa AccessorApplication && e.to isa Ident
     app = first(filter(filt, eqs[lc_arg])) 
     inferred_term = typed_terms[app.to][2].args[app.accessor.lid.val]
-    inferred_type = infer_type(theory, TermInCtx(t.ctx,inferred_term))
+    inferred_type = infer_type(ctx, inferred_term)
     typed_terms[lc_arg] = inferred_term => inferred_type
   end
 
   Dict([k=>v[1] for (k,v) in pairs(typed_terms)])
 end
+
+bind_localctx(ctx::Context, t::InCtx) = bind_localctx(AppendScope(ctx, t.ctx), t.trm)
 
 """ Replace idents with AlgTerms. """
 function substitute_term(t::T, dic::Dict{Ident,AlgTerm}) where T<:TrmTyp
@@ -755,23 +740,32 @@ end
 """
 `axiom=true` adds a `::default` to exprs like `f(a,b) ⊣ [a::A, b::B]`
 """
-function normalize_decl(e; axiom=false)
+function normalize_decl(e)
   @match e begin
     :($name := $lhs == $rhs :: $typ ⊣ $ctx) => :((($name := ($lhs == $rhs)) :: $typ) ⊣ $ctx)
     :($lhs == $rhs :: $typ ⊣ $ctx) => :((($lhs == $rhs) :: $typ) ⊣ $ctx)
     :(($lhs == $rhs :: $typ) ⊣ $ctx) => :((($lhs == $rhs) :: $typ) ⊣ $ctx)
-    :($lhs == $rhs ⊣ $ctx) => :((($lhs == $rhs) :: default) ⊣ $ctx)
     :($trmcon :: $typ ⊣ $ctx) => :(($trmcon :: $typ) ⊣ $ctx)
-    :($trmcon ⊣ $ctx) => axiom ? :(($trmcon :: default) ⊣ $ctx) : e
-    e => e
+    :($name := $lhs == $rhs ⊣ $ctx) => :((($name := ($lhs == $rhs))) ⊣ $ctx)
+    :($lhs == $rhs ⊣ $ctx) => :(($lhs == $rhs) ⊣ $ctx)
+    :($(trmcon::Symbol) ⊣ $ctx) => :(($trmcon :: default) ⊣ $ctx)
+    :($f($(args...)) ⊣ $ctx) && if f ∉ [:(==), :(⊣)] end => :(($f($(args...)) :: default) ⊣ $ctx)
+    trmcon::Symbol => :($trmcon :: default)
+    :($f($(args...))) && if f ∉ [:(==), :(⊣)] end => :($e :: default)
+    _ => e
   end
 end
 
 function parseaxiom(c::Context, localcontext, type_expr, e; name=nothing)
   @match e begin
     Expr(:call, :(==), lhs_expr, rhs_expr) => begin
-      equands = fromexpr.(Ref(c), [lhs_expr, rhs_expr], Ref(AlgTerm))
-      type = fromexpr(c, type_expr, AlgType)
+      c′ = AppendScope(c, localcontext)
+      equands = fromexpr.(Ref(c′), [lhs_expr, rhs_expr], Ref(AlgTerm))
+      type = if isnothing(type_expr) 
+        infer_type(c′, first(equands))
+      else
+        fromexpr(c′, type_expr, AlgType)
+      end
       axiom = AlgAxiom(localcontext, type, equands)
       JudgmentBinding(name, axiom)
     end
@@ -789,7 +783,7 @@ explicitly annotated symbols. For explicit annotations to be registered as such
 rather than parsed as Constants, set kwarg `constants=false`.
 """
 function fromexpr(c::Context, e, ::Type{InCtx{T}}; kw...) where T
-  (binding, localcontext) = @match normalize_decl(e) begin
+  (binding, localcontext) = @match e begin
     Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
     e => (e, TypeScope())
   end
@@ -809,7 +803,9 @@ toexpr(c::Context, ts::TypeScope; kw...) =
   Expr(:vect,[Expr(:(::), nameof(b), toexpr(c, getvalue(b); kw...)) for b in ts]...)
 
 function fromexpr(c::Context, e, ::Type{JudgmentBinding})
-  (binding, localcontext) = @match normalize_decl(e; axiom=true) begin
+  e = normalize_decl(e)
+
+  (binding, localcontext) = @match e begin
     Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
     e => (e, TypeScope())
   end
@@ -818,12 +814,12 @@ function fromexpr(c::Context, e, ::Type{JudgmentBinding})
 
   (head, type_expr) = @match binding begin
     Expr(:(::), head, type_expr) => (head, type_expr)
-    _ => (binding, :default)
+    _ => (binding, nothing)
   end
 
   @match head begin
-    Expr(:(:=), name, equation) => parseaxiom(c′, localcontext, type_expr, equation; name)
-    Expr(:call, :(==), _, _) => parseaxiom(c′, localcontext, type_expr, head)
+    Expr(:(:=), name, equation) => parseaxiom(c, localcontext, type_expr, equation; name)
+    Expr(:call, :(==), _, _) => parseaxiom(c, localcontext, type_expr, head)
     _ => begin
       (name, arglist) = @match head begin
         Expr(:call, name, args...) => (name, args)
