@@ -495,10 +495,24 @@ function equations(context::TypeCtx, args::AbstractVector{Ident}, theory::GAT; i
   ways_of_computing
 end
 
+function equations(theory::GAT, t::TypeInCtx)
+  tc = getvalue(theory[headof(t.trm)])
+  extended = ScopeList([t.ctx, Scope([Binding{AlgType, Nothing}(nothing, t.trm)])])
+  lastx = last(getidents(extended))
+  accessor_args = zip(idents(tc.localcontext; lid=tc.args), t.trm.args)
+  init = Dict{Ident, InferExpr}(map(accessor_args) do (accessor, arg)
+    hasident(t.ctx, headof(arg)) || error("Case not yet handled")
+    headof(arg) => AccessorApplication(accessor, lastx)
+  end)
+  equations(extended, Ident[], theory; init=init)
+end
+
 """Get equations for a term or type constructor"""
 equations(theory::GAT, x::Ident) = let x = getvalue(theory[x]);
   equations(x, idents(x; lid=x.args),theory) 
 end
+
+
 
 function compile(expr_lookup::Dict{Ident}, term::AlgTerm; theorymodule=nothing)
   if term.head isa Constant
