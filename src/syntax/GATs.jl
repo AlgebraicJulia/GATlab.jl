@@ -177,7 +177,7 @@ function fromexpr!(c::Context, e, bound::TypeScope, ::Type{AlgType}; kw...)::Alg
     s::Symbol => AlgType(fromexpr(c, s, Ident))
     Expr(:call, head, args...) =>
       AlgType(fromexpr(c, head, Ident), 
-              fromexpr!.(Ref(c), args, Ref(bound), Ref(AlgTerm); kw...))
+              Vector{AlgTerm}(fromexpr!.(Ref(c), args, Ref(bound), Ref(AlgTerm); kw...)))
     _ => error("could not parse AlgType from $e")
   end
 end
