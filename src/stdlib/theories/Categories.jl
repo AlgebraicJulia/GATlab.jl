@@ -30,11 +30,11 @@ The data of a category without any axioms of associativity or identities.
 """ ThLawlessCat
 
 @theory ThAscCat <: ThLawlessCat begin
-  assoc := ((f ⋅ g) ⋅ h) == (f ⋅ (g ⋅ h)) :: Hom(a,d) ⊣
+  assoc := ((f ⋅ g) ⋅ h) == (f ⋅ (g ⋅ h)) ⊣
     [a::Ob, b::Ob, c::Ob, d::Ob, f::Hom(a,b), g::Hom(b,c), h::Hom(c,d)]
 end
 
-@doc """    ThAscCat
+@doc """    ThAsCat
 
 The theory of a category with the associative law for composition.
 """ ThAscCat
@@ -49,8 +49,8 @@ The theory of a category without identity axioms.
 """ ThIdLawlessCat
 
 @theory ThCategory <: ThIdLawlessCat begin
-  idl := id(a) ⋅ f == f :: Hom(a,b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
-  idr := f ⋅ id(b) == f :: Hom(a,b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
+  idl := id(a) ⋅ f == f ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
+  idr := f ⋅ id(b) == f ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
 end
 
 @doc """    ThCategory
@@ -59,7 +59,7 @@ The theory of a category with composition operations and associativity and ident
 """ ThCategory
 
 @theory ThThinCategory <: ThCategory begin
-  thineq := f == g :: Hom(A,B) ⊣ [A::Ob, B::Ob, f::Hom(A,B), g::Hom(A,B)]
+  thineq := f == g ⊣ [A::Ob, B::Ob, f::Hom(A,B), g::Hom(A,B)]
 end
 
 @doc """    ThThinCategory
