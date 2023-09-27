@@ -1,13 +1,13 @@
 module ModelInterface
 
-export Model, implements, TypeCheckFail, SignatureMismatchError, @model, @instance, @withmodel, @fail
+export Model, implements, TypeCheckFail, SignatureMismatchError, 
+       @model, @instance, @withmodel, @fail, @migrate
 
 using ...Syntax
 using ...Util.MetaUtils
 
 using MLStyle
 using DataStructures: DefaultDict
-
 
 """
 `Model{Tup <: Tuple}`
@@ -134,15 +134,15 @@ macro instance(head, model, body)
   # Parse the head of @instance to get theory and instance types
   (theory_module, instance_types) = @match head begin
     :($ThX{$(Ts...)}) => (ThX, Ts)
+    :($ThX) => (ThX, nothing)
     _ => error("invalid syntax for head of @instance macro: $head")
   end
-
 
   # Get the underlying theory
   theory = macroexpand(__module__, :($theory_module.@theory))
 
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
-  jltype_by_sort = Dict(zip(sorts(theory), instance_types)) # for type checking
+  jltype_by_sort = isnothing(instance_types) ? nothing : Dict(zip(sorts(theory), instance_types)) # for type checking
 
   # Get the model type that we are overloading for, or nothing if this is the
   # default instance for `instance_types`
@@ -155,9 +155,12 @@ macro instance(head, model, body)
   # Checks that all the functions are defined with the correct types Add default
   # methods for type constructors and type argument accessors if these methods
   # are missing
-  typechecked_functions =
-    typecheck_instance(theory, functions, ext_functions, jltype_by_sort; oldinstance)
-
+  typechecked_functions = if !isnothing(jltype_by_sort) 
+    typecheck_instance(theory, functions, ext_functions, jltype_by_sort; 
+                       oldinstance)
+  else 
+    [functions..., ext_functions...] # skip typechecking and expand_fail
+  end
   # Adds keyword arguments to the functions, and qualifies them by
   # `theory_module`, i.e. changes `Ob(x) = blah` to `ThCategory.Ob(x; model::M,
   # context=nothing) = blah`
@@ -247,6 +250,9 @@ function default_accessor_impl(
     nothing, :(error($errormsg * " in model $model"))
   )
 end
+
+julia_signature(theory::GAT, x::Ident, jltype_by_sort::Dict{AlgSort}) = 
+  julia_signature(theory, x, getvalue(theory[x]), jltype_by_sort)
 
 function julia_signature(
   theory::GAT,
@@ -382,7 +388,7 @@ function typecheck_instance(
         throw(SignatureMismatchError(f.name, toexpr(sig), expected_signatures[f.name]))
       end
 
-      push!(typechecked, expand_fail(judgment, theory, x, f))
+      push!(typechecked, expand_fail(theory, x, f))
     else
       x = undefined_signatures[sig]
 
@@ -390,7 +396,7 @@ function typecheck_instance(
         judgment = getvalue(theory, x)
 
         if judgment isa AlgTypeConstructor
-          f = expand_fail(judgment, theory, x, f)
+          f = expand_fail(theory, x, f)
         end
       end
 
@@ -417,7 +423,7 @@ function typecheck_instance(
   typechecked
 end
 
-function expand_fail(typecon::AlgTypeConstructor, theory::GAT, x::Ident, f::JuliaFunction)
+function expand_fail(theory::GAT, x::Ident, f::JuliaFunction)
   argname(arg::Expr) = first(arg.args)
   setimpl(
     f,
@@ -504,4 +510,141 @@ macro withmodel(model, subsexpr, body)
   )
 end
 
+
+"""
+Given a Theory Morphism T->U and a type Mᵤ (whose values are models of U), 
+obtain a type Mₜ which has one parameter (of type Mᵤ) and is a model of T.
+
+E.g. given NatIsMonoid: ThMonoid->ThNatPlus and IntPlus <: Model{Tuple{Int}}
+and IntPlus implements ThNatPlus:
+
+```
+@migrate IntPlusMonoid = NatIsMonoid(IntPlus){Int}
+```
+
+Yields:
+
+```
+struct IntPlusMonoid <: Model{Tuple{Int}}
+  model::IntPlus
 end
+
+@instance ThMonoid{Int} [model::IntPlusMonoid] begin ... end 
+```
+
+Future work: There is some subtlety in how accessor functions should be handled.
+TODO: The new instance methods do not yet handle the `context` keyword argument.
+"""
+macro migrate(head)
+  # Parse
+  (name, mapname, modelname) = @match head begin
+    Expr(:(=), name, Expr(:call, mapname, modelname)) => 
+      (name, mapname, modelname)
+    _ => error("could not parse head of @theory: $head")
+  end
+  codom_types = :(only(supertype($(esc(modelname))).parameters).types)
+  # Unpack
+  tmap = macroexpand(__module__, :($mapname.@map))
+  dom_module = macroexpand(__module__, :($mapname.@dom))
+  codom_module = macroexpand(__module__, :($mapname.@codom))
+  dom_theory, codom_theory = TheoryMaps.dom(tmap), TheoryMaps.codom(tmap)
+
+  codom_jltype_by_sort = Dict{Ident,Expr0}(map(enumerate(sorts(codom_theory))) do (i,v) 
+    v.ref => Expr(:ref, codom_types, i)
+  end)
+  _x = gensym("val")
+
+  dom_types = map(sorts(dom_theory)) do s 
+    codom_jltype_by_sort[typemap(tmap)[s.ref].trm.head]
+  end
+  jltype_by_sort = Dict(zip(sorts(dom_theory), dom_types))
+
+  # TypeCons for @instance macro
+  funs = map(collect(typemap(tmap))) do (x, fx)
+    xname = nameof(x)
+    fxname = nameof(fx.trm.head)
+    tc = getvalue(dom_theory[x])
+    jltype_by_sort[AlgSort(fx.trm.head)] = jltype_by_sort[AlgSort(x)]
+    sig = julia_signature(dom_theory, x, jltype_by_sort)
+
+    argnames = [_x, nameof.(argsof(tc))...]
+    args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
+
+    impls = to_call_impl.(fx.trm.args, Ref(termcons(codom_theory)), Ref(codom_module))
+    impl = Expr(:call, Expr(:ref, :($codom_module.$fxname), :(model.model)), _x, impls...)
+    JuliaFunction(;name=xname, args=args, return_type=sig.types[1], impl=impl)
+  end
+
+  # TermCons for @instance macro
+  funs2 = map(collect(termmap(tmap))) do (x, fx)
+    tc = getvalue(dom_theory[x])
+
+    sig = julia_signature(dom_theory, x, jltype_by_sort)
+    argnames = nameof.(argsof(tc))
+    ret_type = jltype_by_sort[AlgSort(typemap(tmap)[tc.type.head].trm.head)]
+
+    args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
+
+    impl = to_call_impl(fx.trm, termcons(codom_theory), codom_module)
+
+    JuliaFunction(;name=nameof(x), args=args, return_type=ret_type, impl=impl)
+  end
+
+  funs3 = [] # accessors
+  for (x, fx) in pairs(typemap(tmap))
+    tc = getvalue(dom_theory[x])
+    eq = equations(codom_theory, fx)
+    args = [:($_x::$(jltype_by_sort[AlgSort(fx.trm.head)]))]
+    scopedict = Dict{ScopeTag,ScopeTag}(gettag(tc.localcontext)=>gettag(fx.ctx))
+    for accessor in idents(tc.localcontext; lid=tc.args)
+      accessor = retag(scopedict, accessor)
+      a = nameof(accessor)
+      # If we have a default means of computing the accessor...
+      if !isempty(eq[accessor])
+        rtype = tc.localcontext[ident(tc.localcontext; name=a)]
+        ret_type = jltype_by_sort[AlgSort(getvalue(rtype))]
+        impl = to_call_impl(first(eq[accessor]), _x, codom_module)
+        jf = JuliaFunction(;name=a, args=args, return_type=ret_type, impl=impl)
+        push!(funs3, jf)
+      end
+    end
+  end
+
+  model_expr = Expr(
+    :curly, 
+    GlobalRef(Syntax.TheoryInterface, :Model), 
+    Expr(:curly, :Tuple, dom_types...)
+  )
+
+  quote
+    struct $(esc(name)) <: $model_expr
+      model :: $(esc(modelname))
+    end
+
+    @instance $dom_module [model :: $(esc(name))] begin
+      $(generate_function.([funs...,funs2..., funs3...])...)
+    end
+  end
+end
+
+"""
+Compile an AlgTerm into a Julia call Expr where termcons (e.g. `f`) are 
+interpreted as `mod.f[model.model](...)`.
+"""
+function to_call_impl(t::AlgTerm, termcons, mod::Module)
+  args = to_call_impl.(t.args, Ref(termcons), Ref(mod))
+  name = nameof(headof(t))
+  if t.head in termcons
+    Expr(:call, Expr(:ref, :($mod.$name), :(model.model)), args...)
+  else
+    isempty(args) || error("Bad term $t (termcons=$termcons)")
+    name
+  end
+end
+
+function to_call_impl(t::GATs.AccessorApplication, x::Symbol, mod::Module)
+  rest = t.to isa Ident ? x : to_call_impl(t.to, x, mod)
+  Expr(:call, Expr(:ref, :($mod.$(nameof(t.accessor))), :(model.model)), rest)
+end
+
+end # module

@@ -49,10 +49,9 @@ seg_expr = quote
   ]
 end
 
-
 seg = fromexpr(TypeScope(), seg_expr, GATSegment)
 
-seg[ident(seg;name=:compose, isunique=true)].value.args
+O, H, i, cmp = idents(seg; lid=LID.(1:4))
 
 @test toexpr(TypeScope(), seg) == seg_expr
 

@@ -1,8 +1,11 @@
 module Algebra
-export ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing,
+export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing,
   ThCRing, ThRig, ThCRig, ThElementary, ThPreorder
 
 using ....Syntax
+
+@theory ThEmpty begin 
+end
 
 @theory ThSet begin
   default::TYPE

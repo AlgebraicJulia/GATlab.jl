@@ -5,22 +5,19 @@ export SwapMonoid, NatPlusMonoid, PreorderCat, OpCat
 using ...StdTheories
 using ....Syntax
 
-using GATlab
 SwapMonoid = @theorymap ThMonoid => ThMonoid begin
   default => default
   x⋅y ⊣ [x, y] => y⋅x
   e => e
 end
 
-
-NatPlusMonoid = @theorymap ThMonoid => ThNatPlus  begin
+@theorymap NatPlusMonoid(ThMonoid, ThNatPlus)  begin
   default => ℕ 
   e => Z
   (x ⋅ y) ⊣ [x, y] => x+y
 end
 
-
-OpCat = @theorymap ThCategory => ThCategory begin
+@theorymap OpCat(ThCategory, ThCategory) begin
   Ob => Ob
   Hom(dom, codom) ⊣ [dom::Ob, codom::Ob] => Hom(codom, dom)
   id(a) ⊣ [a::Ob] => id(a)
@@ -28,7 +25,7 @@ OpCat = @theorymap ThCategory => ThCategory begin
 end
 
 """Preorders are categories"""
-PreorderCat = @theorymap ThCategory => ThPreorder begin
+@theorymap PreorderCat(ThCategory, ThPreorder) begin
   Ob => default
   Hom(dom, codom) ⊣ [dom::Ob, codom::Ob] => Leq(dom, codom)
   compose(f, g) ⊣ [a::Ob, b::Ob, c::Ob, f::(a → b), g::(b → c)] => trans(f, g)
@@ -36,8 +33,8 @@ PreorderCat = @theorymap ThCategory => ThPreorder begin
 end
 
 """Thin categories are isomorphic to preorders"""
-# PreorderThinCat = compose(PreorderCat, Incl(ThCategory, ThThinCategory))
-# ThinCatPreorder = inv(PreorderThinCat)
+# PreorderThinCat = @compose(PreorderCat, Incl(ThCategory, ThThinCategory))
+# ThinCatPreorder = @inv(PreorderThinCat)
 
 
 end # module

@@ -5,7 +5,7 @@ export IdTheoryMap, TheoryIncl, AbsTheoryMap, TheoryMap, @theorymap,
 using ..GATs, ..Scopes, ..ExprInterop
 using ..Scopes: unsafe_pushbinding!
 using ..GATs: InCtx, TrmTyp, bindingexprs, bind_localctx, substitute_term
-
+using ..TheoryInterface
 import ..ExprInterop: toexpr, fromexpr
 
 using StructEquality, MLStyle
@@ -309,14 +309,31 @@ reorder(b::Binding{T, Sig}, tag::ScopeTag, perm::Dict{Int,Int}) where {T,Sig} =
 
 
 macro theorymap(head, body)
-  (domname, codomname) = @match head begin
-    Expr(:call,:(=>), name, parent) => (name, parent)
+  (name, domname, codomname) = @match head begin
+    Expr(:call, name, domname, codomname) => (name, domname, codomname)
     _ => error("could not parse head of @theory: $head")
   end
 
+  dommod = macroexpand(__module__, :($domname.@theory_module))
+  codommod = macroexpand(__module__, :($codomname.@theory_module))
   dom = macroexpand(__module__, :($domname.@theory))
   codom = macroexpand(__module__, :($codomname.@theory))
-  fromexpr(dom, codom, body, TheoryMap)
+  tmap = fromexpr(dom, codom, body, TheoryMap)
+
+  esc(
+    Expr(
+      :toplevel,
+      :(
+        module $name
+          const MAP = $tmap
+          macro map() $tmap end
+          macro dom() $dommod end
+          macro codom() $codommod end
+        end
+      ),
+      :(Core.@__doc__ $(name)),
+    )
+  )
 end
 
 end # module
