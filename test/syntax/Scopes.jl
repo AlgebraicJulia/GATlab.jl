@@ -67,12 +67,10 @@ bind_y = Binding{String}(:y, "why")
 
 @test nameof(bind_x) == :x
 @test getvalue(bind_x) == "ex"
-@test isnothing(getsignature(bind_x))
 @test basicprinted(bind_x) == "x => \"ex\""
 
-bind_z = Binding{String, Int}(:x, "ex", 1)
+bind_z = Binding{String}(:x, "ex")
 
-@test getsignature(bind_z) == 1
 @test getline(setline(bind_z, LineNumberNode(1))) == LineNumberNode(1)
 
 # Context
@@ -121,9 +119,9 @@ value_scope = Scope{Union{Int, String}}(:x => 1, :y => 1)
 @test values(value_scope) == [1, 1]
 @test getvalue(value_scope, :x) == 1
 
-s = Scope{String, Int}()
+s = Scope{String}()
 
-bind_x_typed = Binding{String, Int}(:x, "ex", 2)
+bind_x_typed = Binding{String}(:x, "ex")
 
 Scopes.unsafe_pushbinding!(s, bind_x_typed)
 @test_throws ErrorException Scopes.unsafe_pushbinding!(s, bind_x_typed)
