@@ -10,7 +10,7 @@ export
   hasident, ident, getidents, idents, canonicalize,
   HasScope, haslid, getscope, getbindings, getbinding,
   identvalues, namevalues,
-  Scope, ScopeList, HasScopeList, AppendScope,
+  Scope, ScopeList, HasScopeList, AppendContext,
   EmptyContext
 
 using UUIDs
@@ -213,11 +213,15 @@ function Base.show(io::IO, b::Binding; crayon=nothing)
     print(io, crayon, bname)
     print(io, inv(crayon))
   end
-  print(io, " => $(repr(getvalue(b)))")
+  value = getvalue(b)
+  if value isa Alias
+    print(io, " = ", value.ref)
+  else
+    print(io, " => $(repr(getvalue(b)))")
+  end
 end
 
 Base.nameof(b::Binding) = b.name
-aliases(b::Binding) = b.aliases
 
 function MetaUtils.setname(b::Binding{T}, name::Symbol) where {T}
   Binding{T}(name, b.value, b.line)
@@ -235,6 +239,7 @@ getline(b::Binding) = b.line
 
 setline(b::Binding{T}, line::Union{LineNumberNode, Nothing}) where {T} =
   Binding{T}(b.name, b.value, line)
+
 setvalue(b::Binding{T}, t::T) where {T} = 
   Binding{T}(b.name, t, b.line)
 
@@ -255,6 +260,7 @@ this list.
 - `hasname(c::Context, name::Symbol) -> Bool`
 - `getlevel(c::Context, tag::ScopeTag) -> Int`
 - `getlevel(c::Context, name::Symbol) -> Int`
+- `alltags(c::Context) -> Set{ScopeTag}`
 """
 abstract type Context{T} end
 
@@ -273,6 +279,8 @@ hasname(hc::HasContext, name::Symbol) = hasname(getcontext(hc), name)
 getlevel(hc::HasContext, tag::ScopeTag) = getlevel(getcontext(hc), tag)
 
 getlevel(hc::HasContext, name::Symbol) = getlevel(getcontext(hc), name)
+
+alltags(hc::HasContext) = alltags(getcontext(hc))
 
 # HasScope
 ##########
@@ -309,6 +317,8 @@ getlevel(hs::HasScope, name::Symbol) =
 
 nscopes(hs::HasScope) = 1
 
+alltags(hs::HasScope) = Set([getscope(hs).tag])
+
 # Scopes
 ########
 
@@ -338,26 +348,9 @@ struct Scope{T} <: HasScope{T}
   # cached mapping
   names::Dict{Symbol, LID}
   function Scope{T}(tag, bindings, names) where {T}
-    check_names(bindings, names)
     new{T}(tag, bindings, names)
   end
 end
-
-check_names(s::Scope) = check_names(s.bindings, s.names)
- 
-function check_names(bindings, names)
-  # Check bindings don't shadow each other
-  namevals = Set([(nameof(b), getvalue(b)) for b in bindings])
-  shadow = "Scopes do not permit shadowing: $namevals"
-  length(namevals) == length(bindings) || error(shadow)
-
-  # Check names are valid 
-  allnames = Set(filter(!isnothing, nameof.(bindings)))
-  extra_names = setdiff(keys(names), allnames)
-  missing_names = setdiff(allnames, keys(names))
-  isempty(extra_names) || error("Extra names: $extra_names")
-  isempty(missing_names) || error("Missing names: $missing_names")
-end 
 
 Base.:(==)(s1::Scope, s2::Scope) = s1.tag == s2.tag
 
@@ -366,6 +359,8 @@ Base.hash(s::Scope, h::UInt64) = hash(s.tag, h)
 Scope{T}() where {T} = 
   Scope{T}(newscopetag(), Binding{T}[], Dict{Symbol, LID}())
 
+check_names(s::Scope) = make_name_dict(s.bindings) == s.names
+
 function make_name_dict(bindings::AbstractVector{Binding{T}}) where {T}
   d = Dict{Symbol, LID}()
   for (i, binding) in enumerate(bindings)
@@ -373,35 +368,23 @@ function make_name_dict(bindings::AbstractVector{Binding{T}}) where {T}
     if isnothing(name) 
       continue 
     end
+    if haskey(d, name)
+      error("Scopes do not permit shadowing: binding $binding shadows existing binding $(bindings[d[name].val])")
+    end
     d[name] = LID(i)
   end
   d
 end
 
-function make_primary_map(aliases::Dict{Symbol, Set{Symbol}})
-  primary = Dict{Symbol, Symbol}()
-  for (k, vs) in pairs(aliases)
-    for v in vs 
-      primary[v] = k 
-    end 
-  end 
-  primary
+function Scope(bindings::Vector{Binding{T}}; tag=newscopetag()) where {T}
+  Scope{T}(tag, bindings, make_name_dict(bindings))
 end
 
-function Scope(bindings::Vector{Binding{T}}; 
-               tag=newscopetag()) where {T}
-  Scope{T}(tag, bindings, make_name_dict(bindings),
-                make_primary_map(aliases))
+function Scope(pairs::Pair{Symbol, T}...; tag=newscopetag()) where {T}
+  Scope(Binding{T}[Binding{T}(x, v) for (x, v) in pairs]; tag)
 end
 
-function Scope(pairs::Pair{Symbol, T}...; 
-               tag=newscopetag()) where {T}
-  Scope(
-      Binding{T}[Binding{T}(x, v) for (x, v) in pairs]; tag)
-end
-
-function Scope{T}(pairs::Pair{Symbol, <:T}...; 
-                  tag=newscopetag()) where {T}
+function Scope{T}(pairs::Pair{Symbol, <:T}...; tag=newscopetag()) where {T}
   Scope(Binding{T}[Binding{T}(x, v) for (x, v) in pairs]; tag)
 end
 
@@ -410,9 +393,11 @@ function Scope(symbols::Symbol...; tag=newscopetag())
 end
 
 retag(replacements::Dict{ScopeTag,ScopeTag}, s::Scope{T}) where {T} =
-  Scope{T}(get(replacements, gettag(s), gettag(s)), 
-               retag.(Ref(replacements), s.bindings), 
-               s.names)
+  Scope{T}(
+    get(replacements, gettag(s), gettag(s)),
+    retag.(Ref(replacements), s.bindings),
+    s.names
+  )
 
 function Base.show(io::IO, s::Scope)
   n = length(s.bindings)
@@ -438,18 +423,15 @@ getscope(s::Scope) = s
 Add a new binding to the end of Scope `s`.
 """
 function unsafe_pushbinding!(s::Scope{T}, b::Binding{T}) where {T}
+  name = nameof(b)
   if haskey(s.names, nameof(b))
     error("name $name already defined in scope $s")
   end
-  name = nameof(b)
   if !isnothing(name)
-    if !haskey(s.aliases, name)
-      s.aliases[name] = Set{Symbol}()
-    end
     s.names[name] = LID(length(s.bindings) + 1)
   end
   push!(s.bindings, b)
-  b
+  Ident(gettag(s), LID(length(s.bindings)), nameof(b))
 end
 
 # HasScope utilities
@@ -463,8 +445,6 @@ function hasname(hs::HasScope, name::Symbol, lid::LID)
   s = getscope(hs)
   lid == s.names[name]
 end
-
-hasname(hs::HasScope, name::Symbol) = haskey(getscope(hs).names, name)
 
 hasident(hs::HasScope, x::Ident) =
   gettag(hs) == gettag(x) &&
@@ -526,6 +506,14 @@ function ident(
   level::Union{Int, Nothing}=nothing,
 )
   lid = getlid(hs; tag, name, lid, level)
+  binding = getbinding(hs, lid)
+  value = getvalue(binding)
+  if value isa Alias
+    return value.ref
+  end
+  if isnothing(name)
+    name = nameof(getbinding(hs, lid))
+  end
   Ident(gettag(hs), lid, name)
 end
 
@@ -536,10 +524,14 @@ function identvalues(hs::HasScope)
 end
 
 """This collects all the idents in a scope"""
-function getidents(hs::HasScope)
-  map(enumerate(getbindings(hs))) do (i, binding)
-    Ident(gettag(hs), LID(i), nameof(binding))
+function getidents(hs::HasScope; aliases=true)
+  xs = Ident[]
+  for (i, binding) in enumerate(getbindings(hs))
+    if aliases || !(getvalue(binding) isa Alias)
+      push!(xs, Ident(gettag(hs), LID(i), nameof(binding)))
+    end
   end
+  xs
 end
 
 function namevalues(hs::HasScope)
@@ -593,10 +585,6 @@ end
 
 function Base.in(x::Ident, s::Context)
   hasident(s, x)
-end
-
-function canonicalize(c::Context, x::Ident)
-  ident(c; level=getlevel(c, gettag(x)), lid=getlid(x))
 end
 
 """
@@ -654,7 +642,9 @@ function hasident(c::Context; kwargs...)
   end
 end
 
-"""This is a broadcasted version of `ident`"""
+"""
+This is a broadcasted version of `ident`
+"""
 function idents(
   c::Context;
   tag=Ref(nothing),
@@ -691,19 +681,49 @@ struct ScopeList{T} <: HasScopeList{T}
   scopes::Vector{HasScope{T}}
   taglookup::Dict{ScopeTag, Int}
   namelookup::Dict{Symbol, Int}
-  function ScopeList(scopes::Vector{<:HasScope{T}}) where {T}
-    allunique(gettag.(scopes)) || error("tags of scopes in ScopeList must all be unique")
-    taglookup = Dict{ScopeTag, Int}()
-    namelookup = Dict{Symbol, Int}()
-    for (i, hs) in enumerate(scopes)
-      s = getscope(hs)
-      taglookup[gettag(s)] = i
-      for name in keys(s.names)
-        namelookup[name] = i # overwrite most recent
-      end
-    end
-    new{T}(scopes, taglookup, namelookup)
+end
+
+function ScopeList(scopes::Vector{<:HasScope{T}}) where {T}
+  ScopeList{T}(scopes)
+end
+function ScopeList{T}(scopes::Vector{<:HasScope{T}}) where {T}
+  allunique(gettag.(scopes)) || error("tags of scopes in ScopeList must all be unique")
+  taglookup = Dict{ScopeTag, Int}()
+  namelookup = Dict{Symbol, Int}()
+  c = ScopeList{T}(scopes, taglookup, namelookup)
+  for (i, hs) in enumerate(scopes)
+    unsafe_updatecache!(c, i, hs)
   end
+  c
+end
+
+function Base.copy(c::ScopeList{T}) where {T}
+  ScopeList{T}(copy(c.scopes), copy(c.taglookup), copy(c.namelookup))
+end
+
+function ScopeList{T}() where {T}
+  ScopeList{T}(HasScope{T}[])
+end
+
+function unsafe_pushbinding!(c::ScopeList{T}, binding::Binding{T}) where {T}
+  name = nameof(binding)
+  if !isnothing(name)
+    c.namelookup[name] = length(c.scopes)
+  end
+  unsafe_pushbinding!(getscope(c.scopes[end]), binding)
+end
+
+function unsafe_updatecache!(c::ScopeList{T}, i::Int, hs::HasScope{T}) where {T}
+  s = getscope(hs)
+  c.taglookup[gettag(s)] = i
+  for name in keys(s.names)
+    c.namelookup[name] = i # overwrite most recent
+  end
+end
+
+function unsafe_pushscope!(c::ScopeList{T}, scope::HasScope{T}) where {T}
+  push!(c.scopes, scope)
+  unsafe_updatecache!(c, length(c.scopes), scope)
 end
 
 getscopelist(c::ScopeList) = c
@@ -725,7 +745,7 @@ end
 
 
 getscope(hsl::HasScopeList, level::Int) =
-  getscopelist(hsl).scopes[level]
+  getscope(getscopelist(hsl).scopes[level])
 
 nscopes(hsl::HasScopeList) =
   length(getscopelist(hsl).scopes)
@@ -742,81 +762,56 @@ hastag(hsl::HasScopeList, t::ScopeTag) =
 hasname(hsl::HasScopeList, name::Symbol) =
   haskey(getscopelist(hsl).namelookup, name)
 
-getidents(hsl::HasScopeList; kw...) = vcat(getidents.(getscopelist(hsl))...)
+getidents(hsl::HasScopeList; kw...) = vcat(getidents.(getscopelist(hsl); kw...)...)
 
-"""
-Flatten a scopelist if possible. This will fail if any of the bindings shadow 
-bindings in earlier scopes.
-"""
-function flatten(hsl::HasScopeList{T}) where {T}
-  if nscopes(hsl) == 0
-    Scope{T}() 
-  else 
-    res = Scope(getbindings(deepcopy(getscope(hsl, 1))))
-    newtag = gettag(res)
-    retagdict = Dict{ScopeTag, ScopeTag}(gettag(getscope(hsl, 1))=>newtag)
-    for i in 2:nscopes(hsl)
-      nextscope = getscope(hsl, i)
-      retagdict[gettag(nextscope)] = newtag
-      nextscope = retag(retagdict, nextscope)
-      for b in getbindings(nextscope)
-        unsafe_pushbinding!(res, b)
-      end
-    end
-    res
+alltags(hsl::HasScopeList) = Set(gettag.(getscopelist(hsl).scopes))
+
+# AppendContext
+###############
+
+struct AppendContext{T₁, T₂} <: Context{Union{T₁,T₂}}
+  ctx1::Context{T₁}
+  ctx2::Context{T₂}
+  function AppendContext(ctx1::Context{T₁}, ctx2::Context{T₂}) where {T₁, T₂}
+    isempty(intersect(alltags(ctx1), alltags(ctx2))) ||
+      error("All scopes in context must have unique tags")
+    new{T₁, T₂}(ctx1, ctx2)
   end
 end
 
-flatten(s::Scope) = s
-
-# AppendScope
-#############
-
-struct AppendScope{T₁, T₂} <: Context{Union{T₁,T₂}}
-  context::Context{T₁}
-  last::Scope{T₂}
-  function AppendScope(context::Context{T₁}, last::Scope{T₂}) where {T₁, T₂}
-    !hastag(context, gettag(last)) || error("All scopes in context must have unique tags: collision with level $(getlevel(context, gettag(last)))")
-    new{T₁, T₂}(context, last)
-  end
-end
-
-function AppendScope(context::Context, last::ScopeList)
-  res = context
-  for scope in getscope.(Ref(last), 1:nscopes(last))
-    res = AppendScope(res, scope)
-  end
-  res
-end
-
-getscope(c::AppendScope, level::Int) =
-  if level == nscopes(c)
-    c.last
+getscope(c::AppendContext, level::Int) =
+  if level > nscopes(c.ctx1)
+    getscope(c.ctx2, level - nscopes(c.ctx1))
   else
-    getscope(c.context, level)
+    getscope(c.ctx1, level)
   end
 
-nscopes(c::AppendScope) = nscopes(c.context) + 1
+nscopes(c::AppendContext) = nscopes(c.ctx1) + nscopes(c.ctx2)
 
-getlevel(c::AppendScope, name::Symbol) =
-  if name ∈ keys(c.last.names)
-    nscopes(c)
+getlevel(c::AppendContext, name::Symbol) =
+  if hasname(c.ctx2, name)
+    getlevel(c.ctx2, name) + nscopes(c.ctx1)
   else 
-    getlevel(c.context, name)
+    getlevel(c.ctx1, name)
   end
   
-getlevel(c::AppendScope, tag::ScopeTag) =
-  gettag(c.last) == tag ? nscopes(c) : getlevel(c.context, tag)
+getlevel(c::AppendContext, tag::ScopeTag) =
+  if hastag(c.ctx2, tag)
+    getlevel(c.ctx2, tag) + nscopes(c.ctx1)
+  else
+    getlevel(c.ctx1, tag)
+  end
 
-hasname(c::AppendScope, name::Symbol) =
-  hasname(c.last, name) || hasname(c.context, name)
+hasname(c::AppendContext, name::Symbol) =
+  hasname(c.ctx2, name) || hasname(c.ctx1, name)
 
-hastag(c::AppendScope, tag::ScopeTag) =
-  hastag(c.last, tag) || hastag(c.context, tag)
+hastag(c::AppendContext, tag::ScopeTag) =
+  hastag(c.ctx2, tag) || hastag(c.ctx1, tag)
 
-getidents(scope::AppendScope; kw...) = 
-  vcat(getidents(scope.context; kw...), getidents(scope.last; kw...))
+getidents(c::AppendContext; kw...) =
+  vcat(getidents(c.ctx1; kw...), getidents(c.ctx2; kw...))
 
+alltags(c::AppendContext) = union(alltags(c.ctx1), alltags(c.ctx2))
 
 # EmptyContext
 ##############
@@ -835,5 +830,7 @@ getlevel(::EmptyContext, tag::ScopeTag) = throw(KeyError(tag))
 hasname(::EmptyContext, name::Symbol) = false
 
 hastag(::EmptyContext, tag::ScopeTag) = false
+
+alltags(::EmptyContext) = Set{ScopeTag}()
 
 end # module
