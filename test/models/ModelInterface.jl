@@ -100,9 +100,9 @@ end
     f
   end
 
-  function Hom(values::Vector{Int}, dom::FinSet, codom::FinSet)
-    FinFunction(values, dom, codom)
-  end
+  # function Hom(values::Vector{Int}, dom::FinSet, codom::FinSet)
+  #   FinFunction(values, dom, codom)
+  # end
 
   dom(f::FinFunction) = f.dom 
   codom(f::FinFunction) = f.codom
