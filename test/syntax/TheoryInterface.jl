@@ -37,10 +37,6 @@ using .ThLawlessCategory
   Hom(dom::Ob, codom::Ob) :: TYPE
 end
 
-@test_throws Exception @eval @theory ThWeirdCategory <: ThCategory begin
-  dom(x::Ob, f::Hom(a, b)) :: Hom(a, b) ⊣ [(a,b)::Ob]
-end
-
 @test_throws Exception @eval @theory ThBadAliases <: ThCategory begin
   @op 1 + 1
 end

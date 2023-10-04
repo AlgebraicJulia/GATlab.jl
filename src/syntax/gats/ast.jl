@@ -145,6 +145,8 @@ function AlgSort(c::Context, t::AlgTerm)
   end
 end
 
+Base.nameof(sort::AlgSort) = nameof(sort.head)
+
 # Type Contexts
 ###############
 

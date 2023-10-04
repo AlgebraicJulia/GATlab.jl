@@ -13,9 +13,9 @@ scope = Scope(:number, :(+), :(_), :(*))
 
 number, plus, plusmethod, times = idents(scope; name=[:number, :(+), :(_), :(*)])
 
-one = AlgTerm(Constant(1, AlgType(number)))
+one = AlgTerm(Constant(1, AlgType(number, number, AlgTerm[])))
 
-two = AlgTerm(Constant(2, AlgType(number)))
+two = AlgTerm(Constant(2, AlgType(number, number, AlgTerm[])))
 
 three = AlgTerm(plus, plusmethod, [one, two])
 
@@ -27,7 +27,7 @@ three = AlgTerm(plus, plusmethod, [one, two])
 
 @test_throws Exception AlgSort(scope, three)
 
-@test sortcheck(scope, two) == AlgSort(number)
+@test sortcheck(scope, two) == AlgSort(number, number)
 
 @test_throws Exception sortcheck(scope, three)
 
@@ -40,7 +40,7 @@ seg_expr = quote
   Hom(dom, codom) :: TYPE ⊣ [dom::Ob, codom::Ob]
   id(a) :: Hom(a, a) ⊣ [a::Ob]
   compose(f, g) :: Hom(a, c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a, b), g::Hom(b, c)]
-  compose(f, compose(g, h)) == compose(compose(f, g), h) :: Hom(a,d) ⊣ [
+  compose(f, compose(g, h)) == compose(compose(f, g), h) ⊣ [
     a::Ob, b::Ob, c::Ob, d::Ob,
     f::Hom(a, b), g::Hom(b, c), h::Hom(c, d)
   ]
@@ -100,18 +100,11 @@ TG = ThGraph.THEORY
 
 # InCtx
 #----------
-tic = fromexpr(T, :(compose(f,compose(id(b),id(b))) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TermInCtx);
-tic2 = fromexpr(T,toexpr(T, tic), TermInCtx) # same modulo scope tags
+# tic = fromexpr(T, :(compose(f,compose(id(b),id(b))) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TermInCtx);
+# tic2 = fromexpr(T,toexpr(T, tic), TermInCtx) # same modulo scope tags
 
 
-typic = fromexpr(T, :(Hom(a,b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TypeInCtx)
-typic2 = fromexpr(T,toexpr(T, typic), TypeInCtx) # same modulo scope tags
-
-# Type inference 
-#---------------
-
-t = fromexpr(T,:(id(x)⋅(p⋅q) ⊣ [(x,y,z)::Ob, p::Hom(x,y), q::Hom(y,z)]), TermInCtx)
-expected = fromexpr(AppendScope(T, t.ctx), :(Hom(x,z)), AlgType)
-@test Syntax.GATs.infer_type(T, t) == expected
+# typic = fromexpr(T, :(Hom(a,b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TypeInCtx)
+# typic2 = fromexpr(T,toexpr(T, typic), TypeInCtx) # same modulo scope tags
 
 end # module

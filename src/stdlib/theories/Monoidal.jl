@@ -16,8 +16,8 @@ end
 
 @theory ThStrictMonCat <: ThLawlessMonCat begin
   (A ⊗ B) ⊗ C == (A ⊗ (B ⊗ C)) :: Ob ⊣ [(A,B,C)::Ob]
-  I ⊗ A == A :: Ob ⊣ [A::Ob]
-  A ⊗ I == A :: Ob ⊣ [A::Ob]
+  I() ⊗ A == A :: Ob ⊣ [A::Ob]
+  A ⊗ I() == A :: Ob ⊣ [A::Ob]
 end
 
 end

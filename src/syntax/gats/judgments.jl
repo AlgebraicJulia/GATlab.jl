@@ -127,7 +127,7 @@ A declaration of an axiom
 """
 @struct_hash_equal struct AlgAxiom <: Judgment
   localcontext::TypeScope
-  type::AlgType
+  sort::AlgSort
   equands::Vector{AlgTerm}
 end
 

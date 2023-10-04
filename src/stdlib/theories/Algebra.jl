@@ -12,7 +12,7 @@ end
 end
 
 @theory ThMagma <: ThSet begin
-  (x ⋅ y) :: default
+  (x ⋅ y) :: default ⊣ [x, y]
 end
 
 @theory ThSemiGroup <: ThMagma begin
@@ -20,15 +20,15 @@ end
 end
 
 @theory ThMonoid <: ThSemiGroup begin
-  e :: default
-  e ⋅ x == x ⊣ [x]
-  x ⋅ e == x ⊣ [x]
+  e() :: default
+  e() ⋅ x == x ⊣ [x]
+  x ⋅ e() == x ⊣ [x]
 end
 
 @theory ThGroup <: ThMonoid begin
-  i(x)
-  i(x) ⋅ x == e ⊣ [x]
-  x ⋅ i(x) == e ⊣ [x]
+  i(x) :: default ⊣ [x]
+  i(x) ⋅ x == e() ⊣ [x]
+  x ⋅ i(x) == e() ⊣ [x]
 end
 
 @theory ThCMonoid <: ThMonoid begin
@@ -69,11 +69,11 @@ end
 # end
 
 @theory ThPreorder <: ThSet begin
-  Leq(dom, codom)::TYPE
+  Leq(dom, codom)::TYPE ⊣ [dom, codom]
   @op (≤) := Leq
   refl(p)::Leq(p,p) ⊣ [p]
   trans(f::Leq(p,q),g::Leq(q,r))::Leq(p,r)  ⊣ [p,q,r]
-  irrev := f == g :: Leq(p,q) ⊣ [p,q, (f,g)::Leq(p,q)]
+  irrev := f == g ⊣ [p,q, (f,g)::Leq(p,q)]
 end
 
 end

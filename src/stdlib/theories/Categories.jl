@@ -40,7 +40,7 @@ end
 The theory of a category with the associative law for composition.
 """
 @theory ThAscCat <: ThLawlessCat begin
-  assoc := ((f ⋅ g) ⋅ h) == (f ⋅ (g ⋅ h)) :: Hom(a, d) ⊣
+  assoc := ((f ⋅ g) ⋅ h) == (f ⋅ (g ⋅ h)) ⊣
     [(a, b, c, d)::Ob, f::(a→b), g::(b→c), h::(c→d)]
 end
 
@@ -57,8 +57,8 @@ end
 The theory of a category with composition operations and associativity and identity axioms.
 """
 @theory ThCategory <: ThIdLawlessCat begin
-  idl := id(a) ⋅ f == f :: (a → b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
-  idr := f ⋅ id(b) == f :: (a → b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
+  idl := id(a) ⋅ f == f ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
+  idr := f ⋅ id(b) == f ⊣ [a::Ob, b::Ob, f::Hom(a,b)]
 end
 
 """    ThThinCategory
@@ -67,7 +67,7 @@ The theory of a thin category meaning that if two morphisms have the same domain
 These are equivalent to preorders.
 """
 @theory ThThinCategory <: ThCategory begin
-  thineq := f == g :: Hom(a, b) ⊣ [a::Ob, b::Ob, f::Hom(a,b), g::Hom(a,b)]
+  thineq := f == g ⊣ [a::Ob, b::Ob, f::Hom(a,b), g::Hom(a,b)]
 end
 
 end

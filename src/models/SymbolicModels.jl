@@ -244,9 +244,10 @@ macro symbolic_model(decl, theoryname, body)
       end
       f = parse_function(line)
       juliasig = parse_function_sig(f)
-      gatsig = AlgSort.(idents(theory; name=juliasig.types))
-      x = ident(theory; name=f.name, sig=gatsig)
-      overrides[x] = f
+      decl = ident(theory; name=juliasig.name)
+      sig = fromexpr.(Ref(GATContext(theory)), juliasig.types, Ref(AlgSort))
+      method = resolvemethod(theory.resolvers[decl], sig)
+      overrides[method] = f
     end
   end
 
@@ -262,7 +263,7 @@ macro symbolic_model(decl, theoryname, body)
                     internal_constructors(theory)...]
 
   module_decl = :(module $(esc(name))
-    export $(nameof.(typecons(theory))...)
+    export $(nameof.(sorts(theory))...)
     using ..($(nameof(__module__)))
     import ..($(nameof(__module__))): $theoryname
     const $(esc(:THEORY_MODULE)) = $(esc(theoryname))
@@ -276,8 +277,8 @@ macro symbolic_model(decl, theoryname, body)
 
   # Part 4: Generating generators.
 
-  # generator_overloads = symbolic_generators(theorymodule, theory)
   generator_overloads = []
+  # generator_overloads = symbolic_generators(theorymodule, theory)
 
   Expr(
     :toplevel,
@@ -297,13 +298,13 @@ function symbolic_struct(name, abstract_type, parentmod)::Expr
 end
 
 function symbolic_structs(theory::GAT, abstract_types, parentmod)::Vector{Expr}
-  map(zip(theory.typecons, abstract_types)) do (X, abstract_type)
+  map(zip(theory.sorts, abstract_types)) do (X, abstract_type)
     symbolic_struct(nameof(X), abstract_type, parentmod)
   end
 end
 
 function typename(theory::GAT, type::AlgType; parentmod=nothing)
-  name = nameof(sortname(theory, type))
+  name = nameof(type.body.head)
   if !isnothing(parentmod)
     Expr(:(.), parentmod, QuoteNode(name))
   else
@@ -312,12 +313,15 @@ function typename(theory::GAT, type::AlgType; parentmod=nothing)
 end
 
 function internal_accessors(theory::GAT)
-  map(typecons(theory)) do X
-    map(enumerate(argsof(getvalue(theory[X])))) do (i, binding)
+  map(theory.sorts) do sort
+    typecon = getvalue(theory[sort.method])
+    map(collect(pairs(theory.accessors[sort.method]))) do (i, acc)
+      accessor = getvalue(theory[acc])
+      return_type = getvalue(typecon[typecon.args[i]])
       JuliaFunction(
-        name=esc(nameof(binding)),
-        args=[:(x::$(esc(nameof(X))))],
-        return_type = typename(theory, getvalue(binding)),
+        name=esc(nameof(getdecl(accessor))),
+        args=[:(x::$(esc(nameof(sort.head))))],
+        return_type = typename(theory, return_type),
         impl=:(x.type_args[$i])
       )
     end
@@ -325,14 +329,14 @@ function internal_accessors(theory::GAT)
 end
 
 function internal_constructors(theory::GAT)::Vector{JuliaFunction}
-  map(termcons(theory)) do f
-    name = nameof(f)
-    termcon = getvalue(theory, f)
+  map(termcons(theory)) do (decl, method)
+    name = nameof(decl)
+    termcon = getvalue(theory, method)
     args = map(argsof(termcon)) do binding 
       Expr(:(::), nameof(binding), typename(theory, getvalue(binding)))
     end  
 
-    eqs = equations(theory, f)
+    eqs = equations(theory, method)
 
     throw_expr = Expr(
       :call,
@@ -345,28 +349,33 @@ function internal_constructors(theory::GAT)::Vector{JuliaFunction}
       )
     )
 
+    arg_expr_lookup = Dict{Ident, Any}(map(termcon.args) do lid
+      x = ident(termcon.localcontext; lid)
+      x => nameof(x)
+    end)
+
     check_expr = Expr(
       :&&,
       map(filter(exprs -> length(exprs) > 1, collect(values(eqs)))) do exprs
         cmp_expr = []
         for e in exprs 
-          append!(cmp_expr, [build_infer_expr(e), esc(:(==))])
+          append!(cmp_expr, [compile(arg_expr_lookup, e), esc(:(==))])
         end
         Expr(:comparison, cmp_expr[1:end-1]...)
       end...
     )
 
     check_or_error = Expr(:(||), :(!strict), check_expr, throw_expr)
-    exprs = getidents(termcon.localcontext)
-    expr_lookup = Dict{Ident, Any}(map(exprs) do x 
-      x => build_infer_expr(first(eqs[x]))
+    context_xs = getidents(termcon.localcontext)
+    expr_lookup = Dict{Ident, Any}(map(context_xs) do x
+      x => compile(arg_expr_lookup, first(eqs[x]))
     end)
 
     build = Expr(
       :call,
       Expr(:curly, typename(theory, termcon.type), Expr(:quote, name)),
       Expr(:vect, nameof.(argsof(termcon))...),
-      Expr(:ref, GATExpr, compile.(Ref(expr_lookup), termcon.type.args)...)
+      Expr(:ref, GATExpr, compile.(Ref(expr_lookup), termcon.type.body.args)...)
     )
 
     JuliaFunction(
@@ -390,27 +399,29 @@ function symbolic_instance_methods(
 
   type_con_funs = []
   accessors_funs = []
-  for type_con_id in typecons(theory) 
-    type_con = getvalue(theory[type_con_id])
-    symgen = symbolic_generator(theorymodule, syntaxname, type_con_id, type_con, theory)
+  for sort in sorts(theory)
+    type_con = getvalue(theory[sort.method])
+    symgen = symbolic_generator(theorymodule, syntaxname, sort.method, type_con, theory)
     push!(type_con_funs, symgen)
     for binding in argsof(type_con)
-      push!(accessors_funs, symbolic_accessor(theorymodule, theory, syntaxname, type_con_id, binding))
+      push!(accessors_funs, symbolic_accessor(theorymodule, theory, syntaxname, sort.method, binding))
     end
   end
 
-  type_replacements = [nameof(X) => Expr(:(.), syntaxname, QuoteNode(nameof(X))) for X in typecons(theory)]
+  type_replacements = [
+    nameof(X) => Expr(:(.), syntaxname, QuoteNode(nameof(X))) for X in sorts(theory)
+  ]
 
-  term_con_funs = map(termcons(theory)) do term_con_id
-    if haskey(overrides, term_con_id)
+  term_con_funs = map(termcons(theory)) do (decl, method)
+    if haskey(overrides, method)
       replace_symbols(
         Dict([
-          :new => Expr(:(.), syntaxname, QuoteNode(nameof(term_con_id))); type_replacements
+          :new => Expr(:(.), syntaxname, QuoteNode(nameof(decl))); type_replacements
         ]),
-        setname(overrides[term_con_id], Expr(:(.), theorymodule, QuoteNode(nameof(term_con_id))))
+        setname(overrides[method], Expr(:(.), theorymodule, QuoteNode(nameof(decl))))
       )
     else
-      symbolic_termcon(theorymodule, theory, syntaxname, term_con_id)
+      symbolic_termcon(theorymodule, theory, syntaxname, method)
     end
   end
   [type_con_funs..., accessors_funs..., term_con_funs...]
@@ -419,7 +430,7 @@ end
 
 function symbolic_generator(theorymodule, syntaxname, X::Ident, typecon::AlgTypeConstructor, theory::GAT)
   value_param = gensym(:value)
-  name = nameof(X)
+  name = nameof(getdecl(typecon))
   args = [
     Expr(:(::), value_param, Any);
     [Expr(:(::), nameof(binding), typename(theory, getvalue(binding); parentmod=syntaxname))
@@ -438,8 +449,8 @@ function symbolic_generator(theorymodule, syntaxname, X::Ident, typecon::AlgType
   JuliaFunction(name=Expr(:(.), theorymodule, QuoteNode(name)), args=args,impl=impl )
 end
 
-function symbolic_accessor(theorymodule, theory, name, typecon::Ident, accessor::Binding, )
-  typcon_name = QuoteNode(nameof(typecon))
+function symbolic_accessor(theorymodule, theory, name, typecon::Ident, accessor::Binding)
+  typcon_name = QuoteNode(nameof(getdecl(getvalue(theory[typecon]))))
   accessor_name = QuoteNode(nameof(accessor))
   JuliaFunction(
     name=Expr(:(.), theorymodule, accessor_name),
@@ -449,9 +460,9 @@ function symbolic_accessor(theorymodule, theory, name, typecon::Ident, accessor:
   )
 end
 
-function symbolic_termcon(theorymodule, theory, syntaxname, termcon_id::Ident )
-  termcon_name = QuoteNode(nameof(termcon_id))
-  termcon = getvalue(theory[termcon_id])
+function symbolic_termcon(theorymodule, theory, syntaxname, method::Ident)
+  termcon = getvalue(theory[method])
+  termcon_name = QuoteNode(nameof(getdecl(termcon)))
   return_type = typename(theory, termcon.type; parentmod=syntaxname)
   args = if !isempty(termcon.args)
     map(argsof(termcon)) do argbinding
@@ -476,7 +487,7 @@ end
 function invoke_term(syntax_module::Module, constructor_name::Symbol, args)
   theory_module = syntax_module.THEORY_MODULE
   theory = theory_module.THEORY
-  syntax_types = Tuple(getfield(syntax_module, nameof(cons)) for cons in typecons(theory))
+  syntax_types = Tuple(getfield(syntax_module, nameof(sort)) for sort in sorts(theory))
   invoke_term(theory_module, syntax_types, constructor_name, args)
 end
 
@@ -579,7 +590,8 @@ function parse_json_sexpr(syntax_module::Module, sexpr;
   theory_module = syntax_module.THEORY_MODULE
   theory = theory_module.THEORY
   type_lens = Dict(
-    nameof(binding) => length(getvalue(binding).args) for binding in [theory[tc] for tc in typecons(theory)]
+    nameof(getdecl(getvalue(binding))) => length(getvalue(binding).args)
+    for binding in [theory[sort.method] for sort in sorts(theory)]
   )
 
   function parse_impl(sexpr::Vector, ::Type{Val{:expr}})
