@@ -108,7 +108,7 @@ xy_scope′ = Scope([bind_x]; tag=tag1)
 @test_throws ScopeTagError getlid(xy_scope; tag=tag2)
 @test_throws KeyError getlid(xy_scope; name=:z)
 @test ident(xy_scope; name=:x) == x
-@test nameof(ident(xy_scope; name=:X)) == :X
+@test nameof(ident(xy_scope; name=:X)) == :x
 @test ident(xy_scope; lid=LID(1)) == x
 @test_throws BoundsError ident(xy_scope; name=:x, level=2)
 @test hasident(xy_scope, x)

@@ -50,47 +50,45 @@ References:
     finite limits")
  - (Freyd, 1972, "Aspects of topoi")
 
-This function gives expressions for computing each of the elements of `context`
-  from the `args`, as well as checking that the args are well-typed.
+This function gives expressions for computing the elements of `c.context`
+  which can be inferred from applying accessor functions to elements of `args`.
 
 Example:
 > equations({f::Hom(a,b), g::Hom(b,c)}, {a::Ob, b::Ob, c::Ob}, ThCategory)
 ways_of_computing = Dict(a => [dom(f)], b => [codom(f), dom(g)], c => [codom(g)],
                          f => [f], g => [g])
-
-Algorithm:
-
-Start from the arguments. We know how to compute each of the arguments; they are
-given. Each argument tells us how to compute other arguments, and also elements
-of the context
 """
-function equations(context::TypeCtx, args::AbstractVector{Ident}, theory::Context; init=nothing)
+function equations(c::GATContext, args::AbstractVector{Ident}; init=nothing)
+  theory = c.theory
+  context = c.context
   ways_of_computing = Dict{Ident, Set{AlgTerm}}()
-  to_expand = Pair{Ident, AlgTerm}[x => x for x in args]
+  to_expand = Pair{Ident, AlgTerm}[x => AlgTerm(x) for x in args]
+
   if !isnothing(init)
     append!(to_expand, pairs(init))
   end
 
   while !isempty(to_expand)
-    x, expr = pop!(to_expand)
+    x, t = pop!(to_expand)
+
     if !haskey(ways_of_computing, x)
       ways_of_computing[x] = Set{AlgTerm}()
     end
-    push!(ways_of_computing[x], expr)
 
-    xtype = getvalue(context[x])
-    xtypecon = getvalue(theory[xtype.head])
+    push!(ways_of_computing[x], t)
 
-    for (i, arg) in enumerate(xtype.args)
-      if arg.head isa Constant
-        continue
-      elseif arg.head ∈ theory
+    type = getvalue(context[x])
+    typecon = getvalue(theory[type.body.method])
+
+    for (i, arg) in enumerate(type.body.args)
+      if isconstant(arg) || isapp(arg)
         continue
       else
-        @assert arg.head ∈ context
-        a = ident(xtypecon; lid=LID(i))
-        y = arg.head
-        expr′ = AccessorApplication(a, expr)
+        y = arg.body
+        @assert y ∈ context
+        a = theory.accessors[type.body.method][i]
+        acc = getvalue(theory[a])
+        expr′ = AlgTerm(getdecl(acc), a, [t])
         push!(to_expand, y => expr′)
       end
     end
@@ -111,8 +109,9 @@ function equations(theory::GAT, t::TypeInCtx)
 end
 
 """Get equations for a term or type constructor"""
-equations(theory::Context, x::Ident) = let x = getvalue(theory[x]);
-  equations(x, idents(x; lid=x.args),theory)
+function equations(theory::GAT, x::Ident)
+  judgment = getvalue(theory, x)
+  equations(GATContext(theory, judgment), idents(judgment.localcontext; lid=judgment.args))
 end
 
 function compile(expr_lookup::Dict{Ident}, term::AlgTerm; theorymodule=nothing)
@@ -123,7 +122,7 @@ function compile(expr_lookup::Dict{Ident}, term::AlgTerm; theorymodule=nothing)
     else
       esc(name)
     end
-    Expr(:call, fun, [compile(expr_lookup, arg; theorymodule) for arg in term.args]...)
+    Expr(:call, fun, [compile(expr_lookup, arg; theorymodule) for arg in term.body.args]...)
   elseif isvariable(term)
     expr_lookup[term.body]
   elseif isconstant(term)
@@ -150,86 +149,17 @@ function InCtx{AlgType}(g::GAT, k::Ident)
   TypeInCtx(tcon.localcontext, AlgType(k, AlgTerm.(idents(tcon; lid=tcon.args))))
 end
 
-
-"""
-Infer the type of the term of a term. If it is not in context, recurse on its
-arguments. The term constructor's output type yields the resulting type once
-its localcontext variables are substituted with the relevant AlgTerms.
-
-              (x,y,z)::Ob, p::Hom(x,y), q::Hom(y,z)
-E.g. given    --------------------------------------
-                           id(x)⋅(p⋅q)
-
-                 (a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c)
-and output type:  ------------------------------------
-                              Hom(a,c)
-
-We first recursively find `{id(x) => Hom(x,x), p⋅q => Hom(x,z)}`. We ultimately
-want an AlgTerm for everything in the output type's context such that we can
-substitute into `Hom(a,c)` to get the final answer. It will help to also compute
-the AlgType for everything in the context. We work backwards, since we start by
-knowing `{f => id(x)::Hom(x,x), g=> p⋅q :: Hom(x,z)}`. For `a` `b` and `c`,
-we use `equations` which tell us, e.g., that `a = dom(f)`. So we can grab the
-first argument of the *type* of `f` (i.e. grab `x` from `Hom(x,x)`).
-"""
-function infer_type(ctx::Context, t::AlgTerm)
-  if isvariable(t)
-    getvalue(ctx[head])
-  elseif isconstant(t)
-    t.body.type
-  else
-    typed_terms = bind_localctx(ctx, t.body)
-    tc = ctx[t.body.method]
-    substitute_type(tc.type, typed_terms)
-  end
-end
-
-infer_type(ctx::Context, t::TermInCtx) = infer_type(AppendContext(ctx, t.ctx), t.trm)
-
-"""
-Take a term constructor and determine terms of its local context.
-
-This function is mutually recursive with `infer_type`.
-"""
-function bind_localctx(ctx::Context, t::MethodApp{AlgTerm})
-  tc = getvalue(ctx[t.method])
-
-  eqs = equations(ctx, head)
-
-  typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
-  for (i,a) in zip(tc.args, t.args)
-    tt = (a => infer_type(ctx, a))
-    typed_terms[ident(tc; lid=i)] = tt
-  end
-
-  for lc_arg in reverse(getidents(tc))
-    if getlid(lc_arg) ∈ tc.args
-      continue
-    end
-    # one way of determining lc_arg's value
-    filt(e) = e isa AccessorApplication && e.to isa Ident
-    app = first(filter(filt, eqs[lc_arg]))
-    inferred_term = typed_terms[app.to][2].args[app.accessor.lid.val]
-    inferred_type = infer_type(ctx, inferred_term)
-    typed_terms[lc_arg] = inferred_term => inferred_type
-  end
-
-  Dict([k=>v[1] for (k,v) in pairs(typed_terms)])
-end
-
-bind_localctx(ctx::Context, t::InCtx) = bind_localctx(AppendContext(ctx, t.ctx), t.trm)
-
 """ Replace idents with AlgTerms. """
-function substitute_term(t::T, dic::Dict{Ident,AlgTerm}) where T<:Union{AlgType, AlgTerm}
+function substitute_term(t::T, subst::Dict{Ident,AlgTerm}) where T<:Union{AlgType, AlgTerm}
   if isvar(t)
     dic[t.body]
   elseif isconst(t)
     t
   else
-    T(substitute_term(t.body, dic))
+    T(substitute_term(t.body, subst))
   end
 end
 
-function substitute_term(ma::MethodApp{AlgTerm}, dic::Dict{Ident, AlgTerm})
-  MethodApp(ma.head, ma.method, substitute_term.(ma.args, Ref(dic)))
+function substitute_term(ma::MethodApp{AlgTerm}, subst::Dict{Ident, AlgTerm})
+  MethodApp(ma.head, ma.method, substitute_term.(ma.args, Ref(subst)))
 end

@@ -22,7 +22,15 @@ end
 
 function fromexpr(c::GATContext, e, ::Type{AlgTerm})
   @match e begin
-    s::Symbol => AlgTerm(fromexpr(c, s, Ident))
+    s::Symbol => begin
+      x = fromexpr(c, s, Ident)
+      value = getvalue(c[x])
+      if value isa AlgType
+        AlgTerm(fromexpr(c, s, Ident))
+      else
+        error("nullary constructors must be explicitly called: $e")
+      end
+    end
     Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(c, head, argexprs))
     Expr(:(::), val, type) => Constant(val, fromexpr(c, type, AlgType))
     e::Expr => error("could not parse AlgTerm from $e")
@@ -49,6 +57,17 @@ function toexpr(c::Context, type::AlgType)
   else
     Expr(:call, toexpr(c, type.body.head), toexpr.(Ref(c), type.body.args)...)
   end
+end
+
+function fromexpr(c::GATContext, e, ::Type{AlgSort})
+  e isa Symbol || error("expected a Symbol to parse a sort, got: $e")
+  decl = ident(c.theory; name=e)
+  method = only(allmethods(c.theory.resolvers[decl]))[2]
+  AlgSort(decl, method)
+end
+
+function toexpr(c::GATContext, s::AlgSort)
+  toexpr(c, getdecl(s))
 end
 
 toexpr(c::Context, constant::Constant; kw...) =
@@ -176,17 +195,19 @@ function parseargs!(theory::GAT, exprs::AbstractVector, scope::TypeScope)
   end
 end
 
-function parseaxiom!(theory::GAT, localcontext, type_expr, e; name=nothing)
+function parseaxiom!(theory::GAT, localcontext, sort_expr, e; name=nothing)
   @match e begin
     Expr(:call, :(==), lhs_expr, rhs_expr) => begin
       c = GATContext(theory, localcontext)
       equands = fromexpr.(Ref(c), [lhs_expr, rhs_expr], Ref(AlgTerm))
-      type = if isnothing(type_expr)
-        infer_type(c, first(equands))
+      sorts = sortcheck.(Ref(c), equands)
+      @assert allequal(sorts)
+      sort = if isnothing(sort_expr)
+        first(sorts)
       else
-        fromexpr(c, type_expr, AlgType)
+        fromexpr(c, sort_expr, AlgSort)
       end
-      axiom = AlgAxiom(localcontext, type, equands)
+      axiom = AlgAxiom(localcontext, sort, equands)
       Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, axiom))
     end
     _ => error("failed to parse equation from $e")
@@ -323,8 +344,13 @@ function parse_gat_line!(theory::GAT, e::Expr, linenumber)
         end
       end
     end
-    Expr(:import, Expr(:(:), Expr(:(.), mod), imports)) => begin
-      # create appropriate declarations
+    Expr(:import, Expr(:(:), Expr(:(.), mod...), imports...)) => begin
+      imports = map(imports) do expr
+        expr.args[1]
+      end
+      for name in imports
+        Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration([mod; name])))
+      end
     end
     _ => begin
       parse_binding_line!(theory, e, linenumber)

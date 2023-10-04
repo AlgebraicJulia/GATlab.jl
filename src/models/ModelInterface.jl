@@ -339,6 +339,9 @@ function typecheck_instance(
    "the types for this model declaration do not permit Julia overloading to distinguish between GAT overloads"
 
   for (decl, resolver) in theory.resolvers
+    if nameof(decl) ∈ ext_functions
+      continue
+    end
     for (_, x) in allmethods(resolver)
       sig = julia_signature(getvalue(theory[x]), jltype_by_sort; oldinstance, X=x)
       if haskey(undefined_signatures, sig)
@@ -392,10 +395,10 @@ function typecheck_instance(
     end
   end
 
-  for (_, (decl, method)) in undefined_signatures
+  for (sig, (decl, method)) in undefined_signatures
     judgment = getvalue(theory[method])
     if judgment isa AlgTermConstructor
-      error("Failed to implement $(nameof(n))")
+      error("Failed to implement $(toexpr(sig))")
     elseif judgment isa AlgTypeConstructor
       push!(typechecked, default_typecon_impl(method, theory, jltype_by_sort))
     elseif judgment isa AlgAccessor

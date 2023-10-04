@@ -8,7 +8,7 @@ include("FinMatrices.jl")
 include("SliceCategories.jl")
 include("Op.jl")
 include("Nothings.jl")
-include("GATs.jl")
+# include("GATs.jl")
 
 @reexport using .FinSets
 @reexport using .Arithmetic
@@ -16,6 +16,6 @@ include("GATs.jl")
 @reexport using .SliceCategories
 @reexport using .Op
 @reexport using .Nothings
-@reexport using .GATs
+# @reexport using .GATs
 
 end

@@ -325,8 +325,8 @@ end
 @theory ThGroupoid <: ThCategory begin
   invert(f::(A → B))::(B → A) ⊣ [A::Ob, B::Ob]
 
-  (f ⋅ invert(f) == id(A)) :: Hom(A, A) ⊣ [A::Ob, B::Ob, f::(A → B)]
-  (invert(f) ⋅ f == id(B)) :: Hom(B, B) ⊣ [A::Ob, B::Ob, f::(A → B)]
+  f ⋅ invert(f) == id(A) ⊣ [A::Ob, B::Ob, f::(A → B)]
+  invert(f) ⋅ f == id(B) ⊣ [A::Ob, B::Ob, f::(A → B)]
 end
 
 using .ThGroupoid
@@ -379,8 +379,8 @@ of a functor that's total on objects and partial on morphisms.
 """
 @theory ThPointedSetCategory <: ThCategory begin
   zeromap(A::Ob,B::Ob)::Hom(A,B)
-  (compose(zeromap(A,B),f::(B→C))==zeromap(A,C)) :: Hom(A, C) ⊣ [A::Ob,B::Ob,C::Ob]
-  (compose(g::(A→B),zeromap(A,B))==zeromap(A,C)) :: Hom(A, C) ⊣ [A::Ob,B::Ob,C::Ob]
+  (compose(zeromap(A,B),f)==zeromap(A,C)) ⊣ [A::Ob,B::Ob,C::Ob,f::(A→B)]
+  (compose(g,zeromap(A,B))==zeromap(A,C)) ⊣ [A::Ob,B::Ob,C::Ob,g::(A→B)]
 end
 
 @symbolic_model FreePointedSetCategory{ObExpr,HomExpr} ThPointedSetCategory begin

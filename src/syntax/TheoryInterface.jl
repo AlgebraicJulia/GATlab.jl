@@ -59,6 +59,18 @@ macro theory(head, body)
 
   push!(modulelines, :(export $(allnames(theory; aliases=true)...)))
 
+  for x in keys(theory.resolvers)
+    decl = getvalue(theory[x])
+    if !isnothing(decl.overloads)
+      push!(
+        modulelines,
+        Expr(:import,
+          Expr(:(:), Expr(:(.), decl.overloads[1:end-1]...), Expr(:(.), decl.overloads[end]))
+        )
+      )
+    end
+  end
+
   if !isnothing(parentname)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
   end
@@ -117,12 +129,14 @@ end
 function invoke_term(theory_module, types, name, args; model=nothing)
   theory = theory_module.THEORY
   method = getproperty(theory_module, name)
-  type_idx = findfirst(==(name), nameof.(typecons(theory)))
+  type_idx = findfirst(==(name), nameof.(sorts(theory)))
   if !isnothing(type_idx) && length(args) <= 1
     args = method(types[type_idx], args...)
   elseif isnothing(model) && isempty(args)
-    termcon = getvalue(theory, ident(theory; name, sig=AlgSort[]))
-    idx = findfirst(==(termcon.type.head), typecons(theory))
+    x = ident(theory; name)
+    method_id = resolvemethod(theory.resolvers[x], AlgSort[])
+    termcon = getvalue(theory[method_id])
+    idx = findfirst(==(AlgSort(termcon.type)), sorts(theory))
     method(types[idx])
   elseif isnothing(model)
     method(args...)

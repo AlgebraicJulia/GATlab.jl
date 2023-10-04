@@ -31,7 +31,11 @@ function MethodResolver()
 end
 
 addmethod!(m::MethodResolver, sig::AlgSorts, method::Ident) =
-  m.bysignature[sig] = method
+  if haskey(m.bysignature, sig)
+    error("method already overloaded for signature: $sig")
+  else
+    m.bysignature[sig] = method
+  end
 
 resolvemethod(m::MethodResolver, sig::AlgSorts) = m.bysignature[sig]
 
@@ -53,6 +57,7 @@ struct GAT <: HasScopeList{Judgment}
   segments::ScopeList{Judgment}
   resolvers::Dict{Ident, MethodResolver}
   sorts::Vector{AlgSort}
+  accessors::Dict{Ident, Dict{Int, Ident}}
   axioms::Vector{Ident}
 end
 
@@ -62,6 +67,7 @@ function Base.copy(theory::GAT; name=theory.name)
     copy(theory.segments),
     deepcopy(theory.resolvers),
     copy(theory.sorts),
+    deepcopy(theory.accessors),
     copy(theory.axioms)
   )
 end
@@ -72,6 +78,7 @@ function GAT(name::Symbol)
     ScopeList{Judgment}(),
     Dict{Ident, MethodResolver}(),
     AlgSort[],
+    Dict{Ident, Dict{Int, Ident}}(),
     Ident[]
   )
 end
@@ -86,17 +93,19 @@ function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgDeclaration)
   theory.resolvers[x] = MethodResolver()
 end
 
-function unsafe_updatecache!(
-  theory::GAT,
-  x::Ident,
-  judgment::Union{AlgTermConstructor, AlgAccessor}
-)
+function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgTermConstructor)
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
 end
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgTypeConstructor)
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
   push!(theory.sorts, AlgSort(getdecl(judgment), x))
+  theory.accessors[x] = Dict{Int, Ident}()
+end
+
+function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgAccessor)
+  addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
+  theory.accessors[judgment.typecon][judgment.arg] = x
 end
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgAxiom)
@@ -139,6 +148,18 @@ function allnames(theory::GAT; aliases=false)
 end
 
 sorts(theory::GAT) = theory.sorts
+
+function termcons(theory::GAT)
+  xs = Tuple{Ident, Ident}[]
+  for (decl, resolver) in theory.resolvers
+    for (_, method) in allmethods(resolver)
+      if getvalue(theory, method) isa AlgTermConstructor
+        push!(xs, (decl, method))
+      end
+    end
+  end
+  xs
+end
 
 Base.issubset(t1::GAT, t2::GAT) =
   all(s->hastag(t2, s), gettag.(Scopes.getscopelist(t1).scopes))
