@@ -147,6 +147,8 @@ end
 
 Base.nameof(sort::AlgSort) = nameof(sort.head)
 
+getdecl(s::AlgSort) = s.head
+
 # Type Contexts
 ###############
 
