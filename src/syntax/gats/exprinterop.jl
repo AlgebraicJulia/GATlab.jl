@@ -32,7 +32,7 @@ function fromexpr(c::GATContext, e, ::Type{AlgTerm})
       end
     end
     Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(c, head, argexprs))
-    Expr(:(::), val, type) => Constant(val, fromexpr(c, type, AlgType))
+    Expr(:(::), val, type) => AlgTerm(Constant(val, fromexpr(c, type, AlgType)))
     e::Expr => error("could not parse AlgTerm from $e")
     constant::Constant => AlgTerm(constant)
   end
@@ -75,7 +75,7 @@ toexpr(c::Context, constant::Constant; kw...) =
 
 function fromexpr(c::GATContext, e, ::Type{InCtx{T}}; kw...) where T
   (termexpr, localcontext) = @match e begin
-    Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, parsetypescope(c, args))
+    Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, fromexpr(c, args, TypeScope))
     e => (e, TypeScope())
   end
   term = fromexpr(AppendContext(c, localcontext), termexpr, T)
@@ -83,10 +83,10 @@ function fromexpr(c::GATContext, e, ::Type{InCtx{T}}; kw...) where T
 end
 
 function toexpr(c::Context, tic::InCtx; kw...)
-  c′ = AppendScope(c, tic.ctx)
+  c′ = AppendContext(c, tic.ctx)
   etrm = toexpr(c′, tic.trm; kw...)
   flat = Scopes.flatten(tic.ctx)
-  ectx = toexpr(AppendScope(c,flat), flat; kw...)
+  ectx = toexpr(AppendContext(c,flat), flat; kw...)
   Expr(:call, :(⊣), etrm, ectx)
 end
 
@@ -128,7 +128,11 @@ end
 function judgmenthead(theory::GAT, name, judgment::AlgAxiom)
   c = GATContext(theory, judgment.localcontext)
   untyped = Expr(:call, :(==), toexpr(c, judgment.equands[1]), toexpr(c, judgment.equands[2]))
-  Expr(:(::), untyped, toexpr(c, judgment.type))
+  if isnothing(name)
+    untyped
+  else 
+    Expr(:(:=), name, untyped)
+  end
 end
 
 function toexpr(c::GAT, binding::Binding{Judgment})

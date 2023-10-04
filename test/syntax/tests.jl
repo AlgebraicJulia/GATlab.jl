@@ -15,9 +15,9 @@ end
   include("GATs.jl")
 end
 
-# @testset "Presentations" begin
-#   include("Presentations.jl")
-# end
+@testset "Presentations" begin
+  include("Presentations.jl")
+end
 
 @testset "TheoryInterface" begin
   include("TheoryInterface.jl")
