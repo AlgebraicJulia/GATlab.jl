@@ -5,7 +5,11 @@ function parse_methodapp(c::GATContext, head::Symbol, argexprs)
   args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
   fun = fromexpr(c, head, Ident)
   signature = AlgSort.(Ref(c), args)
-  method = methodlookup(c, fun, signature)
+  method = try
+    methodlookup(c, fun, signature)
+  catch e
+    error("couldn't find method for $(Expr(:call, head, argexprs...))")
+  end
   MethodApp{AlgTerm}(fun, method, args)
 end
 
@@ -222,7 +226,7 @@ function parseconstructor!(theory::GAT, localcontext, type_expr, e)
   (name, arglist) = @match e begin
     Expr(:call, name, args...) => (name, args)
     name::Symbol => (name, [])
-    _ => error("failed to parse head of term constructor $head")
+    _ => error("failed to parse head of term constructor $e")
   end
   args = parseargs!(theory, arglist, localcontext)
   @match type_expr begin
@@ -324,41 +328,45 @@ function toexpr(theory::GAT, seg::GATSegment)
 end
 
 function parse_gat_line!(theory::GAT, e::Expr, linenumber)
-  @match e begin
-    Expr(:macrocall, var"@op", _, aliasexpr) => begin
-      lines = @match aliasexpr begin
-        Expr(:block, lines...) => lines
-        _ => [aliasexpr]
-      end
-      for line in lines
-        @switch line begin
-          @case (_::LineNumberNode)
-            nothing
-          @case :($alias := $name)
-            # check if there is already a declaration for name, if not, create declaration
-            decl = if hasname(theory, name)
-              ident(theory; name)
-            else
-              Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration(nothing)))
-            end
-            binding = Binding{Judgment}(alias, Alias(decl), linenumber)
-            Scopes.unsafe_pushbinding!(theory, binding)
-          @case _
-            error("could not match @op expression $line")
+  try
+    @match e begin
+      Expr(:macrocall, var"@op", _, aliasexpr) => begin
+        lines = @match aliasexpr begin
+          Expr(:block, lines...) => lines
+          _ => [aliasexpr]
+        end
+        for line in lines
+          @switch line begin
+            @case (_::LineNumberNode)
+              nothing
+            @case :($alias := $name)
+              # check if there is already a declaration for name, if not, create declaration
+              decl = if hasname(theory, name)
+                ident(theory; name)
+              else
+                Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration(nothing)))
+              end
+              binding = Binding{Judgment}(alias, Alias(decl), linenumber)
+              Scopes.unsafe_pushbinding!(theory, binding)
+            @case _
+              error("could not match @op expression $line")
+          end
         end
       end
-    end
-    Expr(:import, Expr(:(:), Expr(:(.), mod...), imports...)) => begin
-      imports = map(imports) do expr
-        expr.args[1]
+      Expr(:import, Expr(:(:), Expr(:(.), mod...), imports...)) => begin
+        imports = map(imports) do expr
+          expr.args[1]
+        end
+        for name in imports
+          Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration([mod; name])))
+        end
       end
-      for name in imports
-        Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration([mod; name])))
+      _ => begin
+        parse_binding_line!(theory, e, linenumber)
       end
     end
-    _ => begin
-      parse_binding_line!(theory, e, linenumber)
-    end
+  catch _
+    error("error parsing expression $e at line $linenumber")
   end
 end
 

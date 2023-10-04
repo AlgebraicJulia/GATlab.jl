@@ -1,5 +1,5 @@
 module TheoryInterface
-export @theory, Model, invoke_term
+export @theory, @signature, Model, invoke_term
 
 using ..Scopes, ..GATs, ..ExprInterop
 
@@ -39,7 +39,15 @@ dictionary pointing to the module corresponding to the new theory.
 """
 const GAT_MODULE_LOOKUP = Dict{ScopeTag, Module}()
 
+macro signature(head, body)
+  theory_impl(head, body, __module__)
+end
+
 macro theory(head, body)
+  theory_impl(head, body, __module__)
+end
+
+function theory_impl(head, body, __module__)
   (name, parentname) = @match head begin
     (name::Symbol) => (name, nothing)
     Expr(:(<:), name, parent) => (name, parent)

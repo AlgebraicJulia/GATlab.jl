@@ -37,7 +37,9 @@ addmethod!(m::MethodResolver, sig::AlgSorts, method::Ident) =
     m.bysignature[sig] = method
   end
 
-resolvemethod(m::MethodResolver, sig::AlgSorts) = m.bysignature[sig]
+function resolvemethod(m::MethodResolver, sig::AlgSorts)
+  m.bysignature[sig]
+end
 
 allmethods(m::MethodResolver) = pairs(m.bysignature)
 
@@ -82,6 +84,7 @@ function GAT(name::Symbol)
     Ident[]
   )
 end
+
 
 # Mutators which should only be called during construction of a theory
 
@@ -184,6 +187,11 @@ Scopes.getcontext(c::GATContext) = AppendContext(c.theory, c.context)
 Scopes.AppendContext(c::GATContext, context::Context{AlgType}) =
   GATContext(c.theory, AppendContext(c.context, context))
 
-function methodlookup(c::GATContext, decl::Ident, sig::AlgSorts)
-  resolvemethod(c.theory.resolvers[decl], sig)
+function methodlookup(c::GATContext, x::Ident, sig::AlgSorts)
+  theory = c.theory
+  if haskey(theory.resolvers, x) && haskey(theory.resolvers[x].bysignature, sig)
+    resolvemethod(theory.resolvers[x], sig)
+  else
+    error("no method of $x found with signature $(getdecl.(sig))")
+  end
 end
