@@ -21,7 +21,7 @@ function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
 end
 
 # sortcheck(ctx::Context, t::TermInCtx)::AlgSort =
-#   sortcheck(AppendScope(ctx, t.ctx), t.trm)
+#   sortcheck(AppendContext(ctx, t.ctx), t.trm)
 
 """
 `sortcheck(ctx::Context, t::AlgType)`

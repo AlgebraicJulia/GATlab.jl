@@ -2,21 +2,22 @@ module Presentations
 export Presentation, @present
 
 using ...Util
-using ..Scopes, ..GATs, ..ExprInterop
+using ..Scopes, ..GATs
 using StructEquality
 using MLStyle
+import ..ExprInterop: fromexpr, toexpr
 
 """
 A presentation has a set of generators, given by a `TypeScope`, and a set of 
 equations among terms which can refer to those generators. Each element of 
 `eqs` is a list of terms which are asserted to be equal.
 """
-@struct_hash_equal struct Presentation <: HasContext{AlgType, Nothing}
+@struct_hash_equal struct Presentation <: HasContext{AlgType}
   theory::GAT
   scope::TypeScope
   eqs::Vector{Vector{AlgTerm}}
   function Presentation(gat, scope, eqs=[])
-    gatscope = AppendScope(gat, scope)
+    gatscope = AppendContext(gat, scope)
     # scope terms must be defined in GAT 
     sortcheck.(Ref(gatscope), getvalue.(scope))
     # eq terms must be defined in GAT ++ scope
@@ -28,12 +29,14 @@ equations among terms which can refer to those generators. Each element of
   end
 end
 
-Scopes.getcontext(p::Presentation) = AppendScope(p.theory, p.scope)
+Scopes.getcontext(p::Presentation) = GATContext(p.theory, p.scope)
+
+fromexpr(p::Presentation, e, t) = fromexpr(Scopes.getcontext(p), e, t)
 
 """Context of presentation is the underlying GAT"""
-ExprInterop.toexpr(p::Presentation) = toexpr(p.theory, p)
+toexpr(p::Presentation) = toexpr(p.theory, p)
 
-function ExprInterop.toexpr(c::Context, p::Presentation)
+function toexpr(c::Context, p::Presentation)
   c == p.theory || error("Invalid context for presentation")
   decs = GATs.bindingexprs(c, p.scope)
   eqs = map(p.eqs) do ts
@@ -55,7 +58,7 @@ h′::Hom(a, c)
 compose(f, g) == h == h′
 ```
 """
-function ExprInterop.fromexpr(ctx::Context, e, ::Type{Presentation})
+function fromexpr(ctx::GATContext, e, ::Type{Presentation})
   e.head == :block || error("expected a block to parse into a GATSegment, got: $e")
   scopelines, eqlines = [], Vector{Expr0}[]
   for line in e.args
@@ -70,13 +73,13 @@ function ExprInterop.fromexpr(ctx::Context, e, ::Type{Presentation})
         push!(scopelines, line)
     end
   end
-  scope = GATs.parsetypescope(ctx, scopelines)
-  apscope = AppendScope(ctx, scope)
-  Presentation(ctx, scope, [fromexpr.(Ref(apscope), ts, AlgTerm) for ts in eqlines])
+  scope = fromexpr(ctx, Expr(:block, scopelines...), TypeScope)
+  apscope = AppendContext(ctx, scope)
+  Presentation(ctx.theory, scope, [fromexpr.(Ref(apscope), ts, AlgTerm) for ts in eqlines])
 end
 
 function construct_presentation(m::Module, e)
-  fromexpr(m.THEORY, e, Presentation)
+  fromexpr(GATContext(m.THEORY), e, Presentation)
 end
 
 macro present(head, body)

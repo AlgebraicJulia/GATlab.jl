@@ -217,7 +217,7 @@ function toexpr(m::AbsTheoryMap)
   typs, trms = map([typemap(m), termmap(m)]) do tm 
     map(collect(tm)) do (k,v)
       domterm = toexpr(dom(m), InCtx(dom(m), k))
-      Expr(:call, :(=>), domterm, toexpr(AppendScope(codom(m), v.ctx), v.trm)) 
+      Expr(:call, :(=>), domterm, toexpr(AppendContext(codom(m), v.ctx), v.trm)) 
     end
   end
   Expr(:block, typs...,trms...)
@@ -237,7 +237,7 @@ function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
     e1, e2 = @match expr begin Expr(:call, :(=>), e1, e2) => (e1,e2) end
     flat_term, ctx = @match e1 begin 
       Expr(:call, :⊣, flat_term, Expr(:vect, typescope...)) => begin 
-        flat_term, GATs.parsetypescope(dom, typescope)
+        flat_term, fromexpr(dom, typescope, TypeScope)
       end
       _ => (e1, TypeScope())
     end
@@ -258,7 +258,7 @@ function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
     reorder_init = Dict(zip(getvalue.(getlid.(args)), getvalue.(tc.args)))
     reordered_ctx = reorder(ctx, tc.localcontext, reorder_init)
     fctx = pushforward(dom, typs, trms, reordered_ctx)
-    val = fromexpr(AppendScope(codom, fctx), e2, T)
+    val = fromexpr(AppendContext(codom, fctx), e2, T)
     dic = T == AlgType ? typs : trms
     dic[x] = InCtx{T}(fctx, val)
   end
