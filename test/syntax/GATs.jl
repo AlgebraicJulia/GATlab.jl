@@ -21,7 +21,7 @@ three = AlgTerm(plus, plusmethod, [one, two])
 
 @test toexpr(scope, three) == :((1::number) + (2::number))
 
-@test fromexpr(GATContext(GAT(:Empty), TypeScope()), two.body, AlgTerm) == two
+@test fromexpr(GAT(:Empty), two.body, AlgTerm) == two
 
 @test basicprinted(two) == "AlgTerm(2::number)"
 
@@ -50,7 +50,7 @@ thcat = fromexpr(GAT(:ThCat), seg_expr, GAT)
 
 O, H, i, cmp = idents(thcat; name=[:Ob, :Hom, :id, :compose])
 
-ObT = fromexpr(GATContext(thcat), :Ob, AlgType)
+ObT = fromexpr(thcat, :Ob, AlgType)
 ObS = AlgSort(ObT)
 
 # Extend seg with a context of (A: Ob)

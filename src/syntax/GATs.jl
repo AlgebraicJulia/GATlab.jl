@@ -1,12 +1,12 @@
 module GATs
-export Constant, AlgTerm, AlgType,
+export Constant, AlgTerm, AlgType, AlgAST,
   TypeScope, TypeCtx, AlgSort, AlgSorts,
   AlgDeclaration, AlgTermConstructor, AlgTypeConstructor, AlgAccessor, AlgAxiom,
   sortsignature, getdecl,
   GATSegment, GAT, GATContext, allmethods, resolvemethod,
-  termcons, accessors,
+  termcons,typecons, accessors,
   equations, build_infer_expr, compile, sortcheck, allnames, sorts, sortname,
-  InCtx, TermInCtx, TypeInCtx, headof, argsof, argcontext
+  InCtx, TermInCtx, TypeInCtx, headof, argsof, methodof, bodyof, argcontext
 
 using ..Scopes
 import ..ExprInterop: fromexpr, toexpr
@@ -15,6 +15,7 @@ import ..Scopes: retag, rename
 
 using StructEquality
 using MLStyle
+using DataStructures: OrderedDict
 
 include("gats/ast.jl")
 include("gats/judgments.jl")

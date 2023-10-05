@@ -1,5 +1,7 @@
 # AST
 #####
+"""Coerce GATs to GAT contexts"""
+fromexpr(g::GAT, e, t) = fromexpr(GATContext(g), e, t)
 
 function parse_methodapp(c::GATContext, head::Symbol, argexprs)
   args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
@@ -79,18 +81,18 @@ toexpr(c::Context, constant::Constant; kw...) =
 
 function fromexpr(c::GATContext, e, ::Type{InCtx{T}}; kw...) where T
   (termexpr, localcontext) = @match e begin
-    Expr(:call, :(⊣), binding, Expr(:vect, args...)) => (binding, fromexpr(c, args, TypeScope))
+    Expr(:call, :(⊣), binding, tscope) => (binding, fromexpr(c, tscope, TypeScope))
     e => (e, TypeScope())
   end
   term = fromexpr(AppendContext(c, localcontext), termexpr, T)
-  InCtx{T}(localcontext, t)
+  InCtx{T}(localcontext, term)
 end
 
 function toexpr(c::Context, tic::InCtx; kw...)
   c′ = AppendContext(c, tic.ctx)
-  etrm = toexpr(c′, tic.trm; kw...)
-  flat = Scopes.flatten(tic.ctx)
-  ectx = toexpr(AppendContext(c,flat), flat; kw...)
+  etrm = toexpr(c′, tic.val; kw...)
+  flat = TypeScope(tic.ctx)
+  ectx = toexpr(c, flat; kw...)
   Expr(:call, :(⊣), etrm, ectx)
 end
 
@@ -289,7 +291,7 @@ function parse_binding_line!(theory::GAT, e, linenumber)
 
   (binding, localcontext) = @match e begin
     Expr(:call, :(⊣), binding, ctxexpr) && if ctxexpr.head == :vect end =>
-      (binding, fromexpr(GATContext(theory), ctxexpr, TypeScope))
+      (binding, fromexpr(theory, ctxexpr, TypeScope))
     e => (e, TypeScope())
   end
 

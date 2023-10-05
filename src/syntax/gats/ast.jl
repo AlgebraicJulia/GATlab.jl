@@ -40,17 +40,22 @@ retag(reps::Dict{ScopeTag, ScopeTag}, t::MethodApp{T}) where {T} =
     retag.(Ref(reps), t.args)
   )
 
+abstract type AlgAST end
+
+bodyof(t::AlgAST) = t.body
+
 """
 `AlgTerm`
 
 One syntax tree to rule all the terms.
 """
-@struct_hash_equal struct AlgTerm
+@struct_hash_equal struct AlgTerm <: AlgAST
   body::Union{Ident, MethodApp{AlgTerm}, AbstractConstant}
   function AlgTerm(body::Union{Ident, MethodApp{AlgTerm}, AbstractConstant})
     new(body)
   end
 end
+
 
 const EMPTY_ARGS = AlgTerm[]
 
@@ -76,11 +81,16 @@ retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
 `AlgType`
 
 One syntax tree to rule all the types.
-`head` must be reference to a `AlgTypeConstructor`
 """
-@struct_hash_equal struct AlgType
+@struct_hash_equal struct AlgType <: AlgAST
   body::MethodApp{AlgTerm}
 end
+
+function AlgType(fun::Ident, method::Ident)
+  AlgType(MethodApp{AlgTerm}(fun, method, EMPTY_ARGS))
+end
+
+bodyof(t::AlgType) = t.body
 
 isvariable(t::AlgType) = false
 

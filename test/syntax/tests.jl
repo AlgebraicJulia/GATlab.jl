@@ -23,8 +23,8 @@ end
   include("TheoryInterface.jl")
 end
 
-# @testset "TheoryMaps" begin
-#   include("TheoryMaps.jl")
-# end
+@testset "TheoryMaps" begin
+  include("TheoryMaps.jl")
+end
 
 end

@@ -12,11 +12,14 @@ struct TypeScope <: HasScope{AlgType}
 end
 
 TypeScope() = TypeScope(Scope{AlgType}())
+TypeScope(t::TypeScope) = t
 
 TypeScope(bindings::Vector{Binding{AlgType}}; tag=newscopetag()) = TypeScope(Scope(bindings; tag))
 TypeScope(bindings::Pair{Symbol, AlgType}...) = TypeScope(Scope{AlgType}(bindings...))
 
 Scopes.getscope(ts::TypeScope) = ts.scope
+Scopes.unsafe_pushbinding!(ts::TypeScope, b) = 
+  Scopes.unsafe_pushbinding!(ts.scope, b)
 
 function Base.show(io::IO, ts::TypeScope)
   print(io, toexpr(EmptyContext{AlgType}(), ts))
