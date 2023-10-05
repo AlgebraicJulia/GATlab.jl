@@ -133,7 +133,6 @@ end
 `AlgSort`
 
 A *sort*, which is essentially a type constructor without arguments
-`ref` must be reference to a `AlgTypeConstructor`
 """
 @struct_hash_equal struct AlgSort
   head::Ident
@@ -141,6 +140,9 @@ A *sort*, which is essentially a type constructor without arguments
 end
 
 AlgSort(t::AlgType) = AlgSort(t.body.head, t.body.method)
+
+headof(a::AlgSort) = a.head
+methodof(a::AlgSort) = a.method
 
 function AlgSort(c::Context, t::AlgTerm)
   if isconstant(t)
@@ -179,3 +181,6 @@ end
 
 const TermInCtx = InCtx{AlgTerm}
 const TypeInCtx = InCtx{AlgType}
+
+Scopes.getvalue(i::InCtx) = i.val
+Scopes.getcontext(i::InCtx) = i.ctx
