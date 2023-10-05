@@ -175,7 +175,7 @@ bind_localctx(ctx::GATContext, t::InCtx) =
   bind_localctx(GATContext(ctx.theory, AppendContext(ctx.context, t.ctx)), t.val)
 
 function bind_localctx(ctx::GATContext, t::AlgAST)
-  m = GATs.methodof(t.body)
+  m = methodof(t.body)
   tc = getvalue(ctx[m])
   eqs = equations(ctx.theory, m)
   typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()

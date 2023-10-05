@@ -258,7 +258,7 @@ function default_accessor_impl(x::Ident, theory::GAT, jltype_by_sort::Dict{AlgSo
 end
 
 julia_signature(theory::GAT, x::Ident, jltype_by_sort::Dict{AlgSort}) = 
-  julia_signature(theory, x, getvalue(theory[x]), jltype_by_sort)
+  julia_signature(getvalue(theory[x]), jltype_by_sort; X=x)
 
 function julia_signature(
   termcon::AlgTermConstructor,
@@ -502,140 +502,145 @@ macro withmodel(model, subsexpr, body)
 end
 
 
-# """
-# Given a Theory Morphism T->U and a type Mᵤ (whose values are models of U),
-# obtain a type Mₜ which has one parameter (of type Mᵤ) and is a model of T.
+"""
+Given a Theory Morphism T->U and a type Mᵤ (whose values are models of U),
+obtain a type Mₜ which has one parameter (of type Mᵤ) and is a model of T.
 
-# E.g. given NatIsMonoid: ThMonoid->ThNatPlus and IntPlus <: Model{Tuple{Int}}
-# and IntPlus implements ThNatPlus:
+E.g. given NatIsMonoid: ThMonoid->ThNatPlus and IntPlus <: Model{Tuple{Int}}
+and IntPlus implements ThNatPlus:
 
-# ```
-# @migrate IntPlusMonoid = NatIsMonoid(IntPlus){Int}
-# ```
+```
+@migrate IntPlusMonoid = NatIsMonoid(IntPlus){Int}
+```
 
-# Yields:
+Yields:
 
-# ```
-# struct IntPlusMonoid <: Model{Tuple{Int}}
-#   model::IntPlus
-# end
+```
+struct IntPlusMonoid <: Model{Tuple{Int}}
+  model::IntPlus
+end
 
-# @instance ThMonoid{Int} [model::IntPlusMonoid] begin ... end
-# ```
+@instance ThMonoid{Int} [model::IntPlusMonoid] begin ... end
+```
 
-# Future work: There is some subtlety in how accessor functions should be handled.
-# TODO: The new instance methods do not yet handle the `context` keyword argument.
-# """
-# macro migrate(head)
-#   # Parse
-#   (name, mapname, modelname) = @match head begin
-#     Expr(:(=), name, Expr(:call, mapname, modelname)) =>
-#       (name, mapname, modelname)
-#     _ => error("could not parse head of @theory: $head")
-#   end
-#   codom_types = :(only(supertype($(esc(modelname))).parameters).types)
-#   # Unpack
-#   tmap = macroexpand(__module__, :($mapname.@map))
-#   dom_module = macroexpand(__module__, :($mapname.@dom))
-#   codom_module = macroexpand(__module__, :($mapname.@codom))
-#   dom_theory, codom_theory = TheoryMaps.dom(tmap), TheoryMaps.codom(tmap)
+Future work: There is some subtlety in how accessor functions should be handled.
+TODO: The new instance methods do not yet handle the `context` keyword argument.
+"""
+macro migrate(head)
+  # Parse
+  (name, mapname, modelname) = @match head begin
+    Expr(:(=), name, Expr(:call, mapname, modelname)) =>
+      (name, mapname, modelname)
+    _ => error("could not parse head of @theory: $head")
+  end
+  codom_types = :(only(supertype($(esc(modelname))).parameters).types)
+  # Unpack
+  tmap = macroexpand(__module__, :($mapname.@map))
+  dom_module = macroexpand(__module__, :($mapname.@dom))
+  codom_module = macroexpand(__module__, :($mapname.@codom))
+  dom_theory, codom_theory = TheoryMaps.dom(tmap), TheoryMaps.codom(tmap)
 
-#   codom_jltype_by_sort = Dict{Ident,Expr0}(map(enumerate(sorts(codom_theory))) do (i,v)
-#     v.ref => Expr(:ref, codom_types, i)
-#   end)
-#   _x = gensym("val")
+  codom_jltype_by_sort = Dict{Ident,Expr0}(map(enumerate(sorts(codom_theory))) do (i,v)
+    v.method => Expr(:ref, codom_types, i)
+  end)
+  _x = gensym("val")
+  dom_types = map(methodof.(sorts(dom_theory))) do s
+    codom_jltype_by_sort[typemap(tmap)[s].val.body.method]
+  end
+  jltype_by_sort = Dict(zip(sorts(dom_theory), dom_types))
 
-#   dom_types = map(sorts(dom_theory)) do s
-#     codom_jltype_by_sort[typemap(tmap)[s.ref].trm.head]
-#   end
-#   jltype_by_sort = Dict(zip(sorts(dom_theory), dom_types))
+  # TypeCons for @instance macro
+  funs = map(collect(typemap(tmap))) do (x, fx)
+    tcon = getvalue(dom_theory[x])
+    fxbody = bodyof(fx.val)
+    fxdecl, fxmethod = headof(fxbody), methodof(fxbody)
+    fxname = nameof(fxdecl)
+    xdecl = tcon.declaration
+    xname = nameof(xdecl)
+    jltype_by_sort[AlgSort(fxdecl, fxmethod)] = jltype_by_sort[AlgSort(xdecl, x)]
+    sig = julia_signature(dom_theory, x, jltype_by_sort)
+    argnames = [_x, nameof.(argsof(tcon))...]
+    args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
+    impls = to_call_impl.(fxbody.args, Ref(termcons(codom_theory)), Ref(codom_module))
+    impl = Expr(:call, Expr(:ref, :($codom_module.$fxname), :(model.model)), _x, impls...)
+    JuliaFunction(;name=xname, args=args, return_type=sig.types[1], impl=impl)
+  end
 
-#   # TypeCons for @instance macro
-#   funs = map(collect(typemap(tmap))) do (x, fx)
-#     xname = nameof(x)
-#     fxname = nameof(fx.trm.head)
-#     tc = getvalue(dom_theory[x])
-#     jltype_by_sort[AlgSort(fx.trm.head)] = jltype_by_sort[AlgSort(x)]
-#     sig = julia_signature(dom_theory, x, jltype_by_sort)
+  # TermCons for @instance macro
+  funs2 = map(collect(termmap(tmap))) do (x, fx)
+    tcon = getvalue(dom_theory[x])
+    xname = nameof(tcon.declaration)
+    sig = julia_signature(dom_theory, x, jltype_by_sort)
+    argnames = nameof.(argsof(tcon))
+    ftype = typemap(tmap)[tcon.type.body.method].val.body
+    ret_type = jltype_by_sort[AlgSort(headof(ftype), methodof(ftype))]
 
-#     argnames = [_x, nameof.(argsof(tc))...]
-#     args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
+    args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
 
-#     impls = to_call_impl.(fx.trm.args, Ref(termcons(codom_theory)), Ref(codom_module))
-#     impl = Expr(:call, Expr(:ref, :($codom_module.$fxname), :(model.model)), _x, impls...)
-#     JuliaFunction(;name=xname, args=args, return_type=sig.types[1], impl=impl)
-#   end
+    impl = to_call_impl(fx.val, first.(termcons(codom_theory)), codom_module)
 
-#   # TermCons for @instance macro
-#   funs2 = map(collect(termmap(tmap))) do (x, fx)
-#     tc = getvalue(dom_theory[x])
+    JuliaFunction(;name=xname, args=args, return_type=ret_type, impl=impl)
+  end
 
-#     sig = julia_signature(dom_theory, x, jltype_by_sort)
-#     argnames = nameof.(argsof(tc))
-#     ret_type = jltype_by_sort[AlgSort(typemap(tmap)[tc.type.head].trm.head)]
+  funs3 = [] # accessors
+  for (x, fx) in pairs(typemap(tmap))
+    tc = getvalue(dom_theory[x])
+    eq = equations(codom_theory, fx)
+    args = [:($_x::$(jltype_by_sort[AlgSort(fx.val)]))]
+    scopedict = Dict{ScopeTag,ScopeTag}(gettag(tc.localcontext)=>gettag(fx.ctx))
+    for accessor in idents(tc.localcontext; lid=tc.args)
+      accessor = retag(scopedict, accessor)
+      a = nameof(accessor)
+      # If we have a default means of computing the accessor...
+      if !isempty(eq[accessor])
+        rtype = tc.localcontext[ident(tc.localcontext; name=a)]
+        ret_type = jltype_by_sort[AlgSort(getvalue(rtype))]
+        impl = to_call_accessor(first(eq[accessor]), _x, codom_module)
+        jf = JuliaFunction(;name=a, args=args, return_type=ret_type, impl=impl)
+        push!(funs3, jf)
+      end
+    end
+  end
 
-#     args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
+  model_expr = Expr(
+    :curly,
+    GlobalRef(Syntax.TheoryInterface, :Model),
+    Expr(:curly, :Tuple, dom_types...)
+  )
 
-#     impl = to_call_impl(fx.trm, termcons(codom_theory), codom_module)
+  quote
+    struct $(esc(name)) <: $model_expr
+      model :: $(esc(modelname))
+    end
 
-#     JuliaFunction(;name=nameof(x), args=args, return_type=ret_type, impl=impl)
-#   end
+    @instance $dom_module [model :: $(esc(name))] begin
+      $(generate_function.([funs...,funs2..., funs3...])...)
+    end
+  end
+end
 
-#   funs3 = [] # accessors
-#   for (x, fx) in pairs(typemap(tmap))
-#     tc = getvalue(dom_theory[x])
-#     eq = equations(codom_theory, fx)
-#     args = [:($_x::$(jltype_by_sort[AlgSort(fx.trm.head)]))]
-#     scopedict = Dict{ScopeTag,ScopeTag}(gettag(tc.localcontext)=>gettag(fx.ctx))
-#     for accessor in idents(tc.localcontext; lid=tc.args)
-#       accessor = retag(scopedict, accessor)
-#       a = nameof(accessor)
-#       # If we have a default means of computing the accessor...
-#       if !isempty(eq[accessor])
-#         rtype = tc.localcontext[ident(tc.localcontext; name=a)]
-#         ret_type = jltype_by_sort[AlgSort(getvalue(rtype))]
-#         impl = to_call_impl(first(eq[accessor]), _x, codom_module)
-#         jf = JuliaFunction(;name=a, args=args, return_type=ret_type, impl=impl)
-#         push!(funs3, jf)
-#       end
-#     end
-#   end
+"""
+Compile an AlgTerm into a Julia call Expr where termcons (e.g. `f`) are
+interpreted as `mod.f[model.model](...)`.
+"""
+function to_call_impl(t::AlgTerm, termcons, mod::Module)
+  b = bodyof(t)
+  if GATs.isvariable(t)
+    nameof(b)
+  else 
+    args = to_call_impl.(argsof(b), Ref(termcons), Ref(mod))
+    name = nameof(headof(b))
+    b.head in termcons || error("t $t termcons $termcons")
+    Expr(:call, Expr(:ref, :($mod.$name), :(model.model)), args...)
+  end
+end
 
-#   model_expr = Expr(
-#     :curly,
-#     GlobalRef(Syntax.TheoryInterface, :Model),
-#     Expr(:curly, :Tuple, dom_types...)
-#   )
+function to_call_accessor(t::AlgTerm, x::Symbol, mod::Module)
+  b = bodyof(t)
+  arg = only(b.args)
+  rest = GATs.isvariable(arg) ? x : to_call_accessor(arg, x, mod)
+  Expr(:call, Expr(:ref, :($mod.$(nameof(headof(b)))), :(model.model)), rest)
+end
 
-#   quote
-#     struct $(esc(name)) <: $model_expr
-#       model :: $(esc(modelname))
-#     end
-
-#     @instance $dom_module [model :: $(esc(name))] begin
-#       $(generate_function.([funs...,funs2..., funs3...])...)
-#     end
-#   end
-# end
-
-# """
-# Compile an AlgTerm into a Julia call Expr where termcons (e.g. `f`) are
-# interpreted as `mod.f[model.model](...)`.
-# """
-# function to_call_impl(t::AlgTerm, termcons, mod::Module)
-#   args = to_call_impl.(t.args, Ref(termcons), Ref(mod))
-#   name = nameof(headof(t))
-#   if t.head in termcons
-#     Expr(:call, Expr(:ref, :($mod.$name), :(model.model)), args...)
-#   else
-#     isempty(args) || error("Bad term $t (termcons=$termcons)")
-#     name
-#   end
-# end
-
-# function to_call_impl(t::GATs.AccessorApplication, x::Symbol, mod::Module)
-#   rest = t.to isa Ident ? x : to_call_impl(t.to, x, mod)
-#   Expr(:call, Expr(:ref, :($mod.$(nameof(t.accessor))), :(model.model)), rest)
-# end
 
 end # module

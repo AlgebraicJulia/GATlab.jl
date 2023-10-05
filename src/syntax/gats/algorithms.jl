@@ -94,15 +94,16 @@ function equations(c::GATContext, args::AbstractVector{Ident}; init=nothing)
 end
 
 function equations(theory::GAT, t::TypeInCtx)
-  tc = getvalue(theory[headof(t.val)])
-  extended = ScopeList([t.ctx, Scope([Binding{AlgType, Nothing}(nothing, t.val)])])
-  lastx = last(getidents(extended))
-  accessor_args = zip(idents(tc.localcontext; lid=tc.args), t.val.args)
-  init = Dict{Ident, AlgTerm}(map(accessor_args) do (accessor, arg)
-    hasident(t.ctx, headof(arg)) || error("Case not yet handled")
-    headof(arg) => AlgType(headof(t.val), accessor, lastx)
+  b = bodyof(t.val)
+  m = methodof(b)
+  newscope = Scope([Binding{AlgType}(nothing, t.val)])
+  newterm = AlgTerm(only(getidents(newscope)))
+  extended = ScopeList([t.ctx, newscope])
+  init = Dict{Ident, AlgTerm}(map(collect(theory.accessors[m])) do (i, acc)
+    algacc = getvalue(theory[acc])
+    bodyof(b.args[i]) => AlgTerm(algacc.declaration, acc, [newterm])
   end)
-  equations(extended, Ident[], theory; init=init)
+  equations(GATContext(theory, extended), Ident[]; init=init)
 end
 
 """Get equations for a term or type constructor"""

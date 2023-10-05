@@ -8,7 +8,7 @@ using .ThCategory
 expected = @theorymap ThMonoid => ThNatPlus begin
   default => ℕ
   x ⋅ y ⊣ [x, y] => y + x
-  e => Z
+  e() => Z()
 end
 
 @withmodel GATC() (Ob, Hom, id, compose, dom, codom) begin
