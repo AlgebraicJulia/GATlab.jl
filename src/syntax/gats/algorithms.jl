@@ -20,9 +20,6 @@ function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
   end
 end
 
-# sortcheck(ctx::Context, t::TermInCtx)::AlgSort =
-#   sortcheck(AppendContext(ctx, t.ctx), t.trm)
-
 """
 `sortcheck(ctx::Context, t::AlgType)`
 
@@ -97,13 +94,13 @@ function equations(c::GATContext, args::AbstractVector{Ident}; init=nothing)
 end
 
 function equations(theory::GAT, t::TypeInCtx)
-  tc = getvalue(theory[headof(t.trm)])
-  extended = ScopeList([t.ctx, Scope([Binding{AlgType, Nothing}(nothing, t.trm)])])
+  tc = getvalue(theory[headof(t.val)])
+  extended = ScopeList([t.ctx, Scope([Binding{AlgType, Nothing}(nothing, t.val)])])
   lastx = last(getidents(extended))
-  accessor_args = zip(idents(tc.localcontext; lid=tc.args), t.trm.args)
+  accessor_args = zip(idents(tc.localcontext; lid=tc.args), t.val.args)
   init = Dict{Ident, AlgTerm}(map(accessor_args) do (accessor, arg)
     hasident(t.ctx, headof(arg)) || error("Case not yet handled")
-    headof(arg) => AccessorApplication(accessor, lastx)
+    headof(arg) => AlgType(headof(t.val), accessor, lastx)
   end)
   equations(extended, Ident[], theory; init=init)
 end
@@ -134,11 +131,12 @@ InCtx(g::GAT, k::Ident) =
   (getvalue(g[k]) isa AlgTermConstructor ? TermInCtx : TypeInCtx)(g, k)
 
 """
-Get the canonical term + ctx associated with a term constructor.
+Get the canonical term + ctx associated with a method.
 """
-function InCtx{AlgTerm}(g::GAT, k::Ident)
+function InCtx{T}(g::GAT, k::Ident) where T<:AlgAST
   tcon = getvalue(g[k])
-  TermInCtx(tcon.localcontext, AlgTerm(k, AlgTerm.(idents(tcon; lid=tcon.args))))
+  args = T.(idents(tcon.localcontext; lid=tcon.args))
+  TermInCtx(tcon.localcontext, T(tcon.declaration, k, args))
 end
 
 """
@@ -146,14 +144,16 @@ Get the canonical type + ctx associated with a type constructor.
 """
 function InCtx{AlgType}(g::GAT, k::Ident)
   tcon = getvalue(g[k])
-  TypeInCtx(tcon.localcontext, AlgType(k, AlgTerm.(idents(tcon; lid=tcon.args))))
+  args = AlgTerm[AlgTerm.(idents(tcon.localcontext; lid=tcon.args))...]
+  dec = getvalue(g[k]).declaration
+  TypeInCtx(tcon.localcontext, AlgType(MethodApp(dec, k, args)))
 end
 
 """ Replace idents with AlgTerms. """
-function substitute_term(t::T, subst::Dict{Ident,AlgTerm}) where T<:Union{AlgType, AlgTerm}
-  if isvar(t)
-    dic[t.body]
-  elseif isconst(t)
+function substitute_term(t::T, subst::Dict{Ident,AlgTerm}) where T <: AlgAST
+  if isvariable(t)
+    subst[t.body]
+  elseif isconstant(t)
     t
   else
     T(substitute_term(t.body, subst))
@@ -161,5 +161,5 @@ function substitute_term(t::T, subst::Dict{Ident,AlgTerm}) where T<:Union{AlgTyp
 end
 
 function substitute_term(ma::MethodApp{AlgTerm}, subst::Dict{Ident, AlgTerm})
-  MethodApp(ma.head, ma.method, substitute_term.(ma.args, Ref(subst)))
+  MethodApp{AlgTerm}(ma.head, ma.method, substitute_term.(ma.args, Ref(subst)))
 end

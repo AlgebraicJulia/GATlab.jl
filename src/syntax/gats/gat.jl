@@ -57,9 +57,9 @@ GATs allow overloading but not shadowing.
 struct GAT <: HasScopeList{Judgment}
   name::Symbol
   segments::ScopeList{Judgment}
-  resolvers::Dict{Ident, MethodResolver}
+  resolvers::OrderedDict{Ident, MethodResolver}
   sorts::Vector{AlgSort}
-  accessors::Dict{Ident, Dict{Int, Ident}}
+  accessors::OrderedDict{Ident, Dict{Int, Ident}}
   axioms::Vector{Ident}
 end
 
@@ -163,6 +163,19 @@ function termcons(theory::GAT)
   end
   xs
 end
+
+function typecons(theory::GAT)
+  xs = Tuple{Ident, Ident}[]
+  for (decl, resolver) in theory.resolvers
+    for (_, method) in allmethods(resolver)
+      if getvalue(theory, method) isa AlgTypeConstructor
+        push!(xs, (decl, method))
+      end
+    end
+  end
+  xs
+end
+
 
 Base.issubset(t1::GAT, t2::GAT) =
   all(s->hastag(t2, s), gettag.(Scopes.getscopelist(t1).scopes))

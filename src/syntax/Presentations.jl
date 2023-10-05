@@ -78,9 +78,7 @@ function fromexpr(ctx::GATContext, e, ::Type{Presentation})
   Presentation(ctx.theory, scope, [fromexpr.(Ref(apscope), ts, AlgTerm) for ts in eqlines])
 end
 
-function construct_presentation(m::Module, e)
-  fromexpr(GATContext(m.THEORY), e, Presentation)
-end
+construct_presentation(m::Module, e) = fromexpr(m.THEORY, e, Presentation)
 
 macro present(head, body)
   (theory, name) = @match head begin

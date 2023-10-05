@@ -5,15 +5,15 @@ export SwapMonoid, NatPlusMonoid, PreorderCat, OpCat
 using ...StdTheories
 using ....Syntax
 
-SwapMonoid = @theorymap ThMonoid => ThMonoid begin
+@theorymap SwapMonoid(ThMonoid, ThMonoid) begin
   default => default
   x⋅y ⊣ [x, y] => y⋅x
-  e => e
+  e() => e()
 end
 
 @theorymap NatPlusMonoid(ThMonoid, ThNatPlus)  begin
   default => ℕ 
-  e => Z
+  e() => Z()
   (x ⋅ y) ⊣ [x, y] => x+y
 end
 

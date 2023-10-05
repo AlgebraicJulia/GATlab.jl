@@ -14,6 +14,7 @@ TNP = ThNatPlus.THEORY
 
 PC = PreorderCat.MAP
 NP = NatPlusMonoid.MAP
+
 # TheoryMaps 
 ############
 x = toexpr(PC)
@@ -60,21 +61,23 @@ end
 
 # Test PreorderCat
 
-(Ob, Hom), (Cmp, Id) = typecons(T), termcons(T)
-@test PC(Ob).trm == AlgType(ident(TP; name=:default))
-@test PC(Cmp) isa TermInCtx
+((Ob, om), (Hom, Hm)), ((Cmp, cm), (Id, im)) = typecons(T), termcons(T)
+((Def, dm), (Leq, lm)), ((Refl, rm), (Tr, tm)) = typecons(TP), termcons(TP)
 
-@test PC(getvalue(T[Cmp]).localcontext) isa TypeScope
+@test PC(om).val == AlgType(Def, dm)
+@test PC(cm).val.body.method == tm
 
-@test_throws KeyError PC(first(typecons(TP)))
+@test PC(getvalue(T[cm]).localcontext) isa TypeScope
+
+@test_throws KeyError PC(dm)
 
 xterm = fromexpr(TM, :(x ⊣ [x]), TermInCtx)
 res = NP(xterm)
 toexpr(ThNat.THEORY, res)
 
-xterm = fromexpr(TM, :(e⋅(e⋅x) ⊣ [x]), TermInCtx)
+xterm = fromexpr(TM, :(e()⋅(e()⋅x) ⊣ [x]), TermInCtx)
 res = NP(xterm)
-expected = fromexpr(TNP, :(Z+(Z+x) ⊣ [x::ℕ]), TermInCtx)
+expected = fromexpr(TNP, :(Z()+(Z()+x) ⊣ [x::ℕ]), TermInCtx)
 @test toexpr(TNP, res) == toexpr(TNP, expected)
 
 # Test OpCat

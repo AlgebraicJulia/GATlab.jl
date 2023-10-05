@@ -4,7 +4,7 @@ export IdTheoryMap, TheoryIncl, AbsTheoryMap, TheoryMap, @theorymap,
 
 using ..GATs, ..Scopes, ..ExprInterop
 using ..Scopes: unsafe_pushbinding!
-using ..GATs: InCtx, TrmTyp, bindingexprs, bind_localctx, substitute_term
+using ..GATs: InCtx, bindingexprs, substitute_term
 using ..TheoryInterface
 import ..ExprInterop: toexpr, fromexpr
 
@@ -64,7 +64,7 @@ end
 
 function (f::AbsTheoryMap)(t::InCtx{T}) where T
   fctx = f(t.ctx)
-  InCtx{T}(fctx, f(t.ctx, t.trm; fctx=fctx))
+  InCtx{T}(fctx, f(t.ctx, t.val; fctx=fctx))
 end
 
 """
@@ -75,15 +75,14 @@ function pushforward(
   dom::GAT, 
   tymap::OrderedDict{Ident, TypeInCtx}, 
   trmap::OrderedDict{Ident,TermInCtx}, 
-  ctx::TypeCtx
+  scope::TypeCtx
 ) 
   fctx = TypeScope()
-  scope = Scopes.flatten(ctx)
   for i in 1:length(scope)
     b = scope[LID(i)]
     partial_scope = Scope(getbindings(scope)[1:i-1]; tag=gettag(scope))
     val = pushforward(dom, tymap, trmap, partial_scope, getvalue(b); fctx=fctx)
-    new_binding = Binding{AlgType, Nothing}(b.primary, val, b.sig)
+    new_binding = Binding{AlgType}(nameof(b), val)
     unsafe_pushbinding!(fctx, new_binding)
   end
   fctx
@@ -93,27 +92,29 @@ end
 function pushforward(
   dom::GAT, 
   tymap::OrderedDict{Ident, TypeInCtx}, 
-  trmap::OrderedDict{Ident,TermInCtx},
+  trmap::OrderedDict{Ident, TermInCtx},
   ctx::TypeCtx, 
   t::T; 
   fctx=nothing
-) where {T<:TrmTyp}
+) where T<:AlgAST
   fctx = isnothing(fctx) ? f(ctx) : fctx
-  head = headof(t)
-  if hasident(ctx, head)
+  b = bodyof(t)
+  if GATs.isvariable(t)
+    hasident(ctx, b) || error("Unknown variable $t")
     retag(Dict(gettag(ctx)=>gettag(fctx)), t) # term is already in the context
   else
+    head = methodof(b)
     tcon = getvalue(dom[head]) # Toplevel Term (or Type) Constructor of t in domain
     new_term = pushforward(tymap, trmap, head) # Codom TermInCtx associated with the toplevel tcon
     # idents in bind_localctx refer to term constructors args and l.c.
     rt_dict = Dict(gettag(tcon.localcontext)=>gettag(new_term.ctx))
 
     # new_term has same context as tcon, so recursively map over components
-    lc = bind_localctx(dom, InCtx{T}(ctx, t))
+    lc = bind_localctx(GATContext(dom), InCtx{T}(ctx, t))
     flc = Dict{Ident, AlgTerm}(map(collect(pairs(lc))) do (k, v)
       retag(rt_dict, k) => pushforward(dom, tymap, trmap, ctx, v; fctx)
     end)
-    substitute_term(new_term.trm, flc)
+    substitute_term(new_term.val, flc)
   end
 end
 
@@ -125,6 +126,78 @@ function pushforward(tymap, trmap, s::Ident)
   else 
     throw(KeyError("Cannot find key $s"))
   end
+end
+
+
+"""
+Infer the type of the term of a term. If it is not in context, recurse on its 
+arguments. The term constructor's output type yields the resulting type once
+its localcontext variables are substituted with the relevant AlgTerms. 
+
+              (x,y,z)::Ob, p::Hom(x,y), q::Hom(y,z)
+E.g. given    --------------------------------------
+                           id(x)⋅(p⋅q)
+
+                 (a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c)
+and output type:  ------------------------------------
+                              Hom(a,c)
+                              
+We first recursively find `{id(x) => Hom(x,x), p⋅q => Hom(x,z)}`. We ultimately 
+want an AlgTerm for everything in the output type's context such that we can 
+substitute into `Hom(a,c)` to get the final answer. It will help to also compute 
+the AlgType for everything in the context. We work backwards, since we start by
+knowing `{f => id(x)::Hom(x,x), g=> p⋅q :: Hom(x,z)}`. For `a` `b` and `c`, 
+we use `equations` which tell us, e.g., that `a = dom(f)`. So we can grab the 
+first argument of the *type* of `f` (i.e. grab `x` from `Hom(x,x)`). 
+"""
+function infer_type(ctx::Context, t::AlgTerm)
+  b = bodyof(t)
+  if GATs.isvariable(t)
+    getvalue(ctx[b])
+  else 
+    head = methodof(b)
+    tc = getvalue(ctx[head])
+    typed_terms = bind_localctx(ctx, t)
+    typ = bodyof(tc.type)
+    args = substitute_term.(argsof(typ), Ref(typed_terms))
+    AlgType(headof(typ), methodof(typ), args)
+  end
+end
+
+infer_type(ctx::Context, t::TermInCtx) = infer_type(AppendScope(ctx, t.ctx), t.val)
+
+"""
+Take a term constructor and determine terms of its local context.
+
+This function is mutually recursive with `infer_type`. 
+""" 
+bind_localctx(ctx::GATContext, t::InCtx) = 
+  bind_localctx(GATContext(ctx.theory, AppendContext(ctx.context, t.ctx)), t.val)
+
+function bind_localctx(ctx::GATContext, t::AlgAST)
+  m = GATs.methodof(t.body)
+  tc = getvalue(ctx[m])
+  eqs = equations(ctx.theory, m)
+  typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
+  for (i,a) in zip(tc.args, t.body.args)
+    tt = (a => infer_type(ctx, a))
+    typed_terms[ident(tc, lid=i, level=1)] = tt 
+  end
+
+  for lc_arg in reverse(getidents(getcontext(tc)))
+    if getlid(lc_arg) ∈ tc.args 
+      continue 
+    end 
+    # one way of determining lc_arg's value
+    app = bodyof(first(filter(GATs.isapp, eqs[lc_arg])))
+    to = bodyof(only(argsof(app)))
+    m = methodof(app)
+    inferred_term = typed_terms[to][2].body.args[getvalue(ctx.theory[m]).arg]
+    inferred_type = infer_type(ctx, inferred_term)
+    typed_terms[lc_arg] = inferred_term => inferred_type
+  end
+
+  Dict([k=>v[1] for (k,v) in pairs(typed_terms)])
 end
 
 # ID 
@@ -163,10 +236,10 @@ A theory inclusion has a subset of scopes
 end
 
 typemap(ι::Union{IdTheoryMap,TheoryIncl}) = 
-  OrderedDict(k => TypeInCtx(dom(ι), k) for k in typecons(dom(ι)))
+  OrderedDict(k => TypeInCtx(dom(ι), k) for k in last.(typecons(dom(ι))))
 
 termmap(ι::Union{IdTheoryMap,TheoryIncl}) = 
-  OrderedDict(k=>TermInCtx(dom(ι), k) for k in termcons(dom(ι)))
+  OrderedDict(k=>TermInCtx(dom(ι), k) for k in last.(termcons(dom(ι))))
 
 compose(f::TheoryIncl, g::TheoryIncl) = TheoryIncl(dom(f), codom(g))
 
@@ -190,10 +263,10 @@ TODO: check that it is well-formed, axioms are preserved.
   typemap::OrderedDict{Ident,TypeInCtx}
   termmap::OrderedDict{Ident,TermInCtx}
   function TheoryMap(dom, codom, typmap, trmmap)
-    missing_types = setdiff(Set(keys(typmap)), Set(typecons(dom))) 
-    missing_terms = setdiff(Set(keys(trmmap)), Set(termcons(dom))) 
+    missing_types = setdiff(Set(keys(typmap)), Set(last.(typecons(dom)))) 
+    missing_terms = setdiff(Set(keys(trmmap)), Set(last.(termcons(dom)))) 
     isempty(missing_types) || error("Missing types $missing_types")
-    isempty(missing_terms) || error("Missing types $missing_terms")
+    isempty(missing_terms) || error("Missing terms $missing_terms")
 
     tymap′, trmap′ = map([typmap, trmmap]) do tmap 
       OrderedDict(k => v isa Ident ? InCtx(codom, v) : v for (k,v) in pairs(tmap))
@@ -217,7 +290,7 @@ function toexpr(m::AbsTheoryMap)
   typs, trms = map([typemap(m), termmap(m)]) do tm 
     map(collect(tm)) do (k,v)
       domterm = toexpr(dom(m), InCtx(dom(m), k))
-      Expr(:call, :(=>), domterm, toexpr(AppendContext(codom(m), v.ctx), v.trm)) 
+      Expr(:call, :(=>), domterm, toexpr(AppendContext(codom(m), v.ctx), v.val)) 
     end
   end
   Expr(:block, typs...,trms...)
@@ -236,8 +309,8 @@ function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
   for expr in exprs
     e1, e2 = @match expr begin Expr(:call, :(=>), e1, e2) => (e1,e2) end
     flat_term, ctx = @match e1 begin 
-      Expr(:call, :⊣, flat_term, Expr(:vect, typescope...)) => begin 
-        flat_term, fromexpr(dom, typescope, TypeScope)
+      Expr(:call, :⊣, flat_term, tscope) => begin 
+        flat_term, fromexpr(dom, tscope, TypeScope)
       end
       _ => (e1, TypeScope())
     end
@@ -246,21 +319,22 @@ function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
       Expr(:call, f::Symbol, args...) => (f, args)
     end
 
-    is_term = xname ∈ nameof.(termcons(dom))
+    is_term = xname ∈ nameof.(first.(termcons(dom)))
     T = is_term ? AlgTerm : AlgType
 
     args = idents(ctx; name=argnames)
-    sig = is_term ? [AlgSort(getvalue(ctx[i])) for i in args] : nothing
-    x = ident(dom; name=xname, sig)
+    sig = [AlgSort(getvalue(ctx[i])) for i in args]
+    x = ident(dom; name=xname)
+    m = GATs.methodlookup(GATContext(dom), x, sig)
 
     # reorder the context to match that of the canonical localctx + args
-    tc = getvalue(dom[x])
+    tc = getvalue(dom[m])
     reorder_init = Dict(zip(getvalue.(getlid.(args)), getvalue.(tc.args)))
     reordered_ctx = reorder(ctx, tc.localcontext, reorder_init)
     fctx = pushforward(dom, typs, trms, reordered_ctx)
-    val = fromexpr(AppendContext(codom, fctx), e2, T)
+    val = fromexpr(GATContext(codom, fctx), e2, T)
     dic = T == AlgType ? typs : trms
-    dic[x] = InCtx{T}(fctx, val)
+    dic[m] = InCtx{T}(fctx, val)
   end
   TheoryMap(dom, codom, typs, trms)
 end
@@ -272,13 +346,15 @@ reorder([(B,C,A)::Ob, G::B→C, F::A→B], [(a,b,c)::Ob, f::a→b, g::b→c], {4
 
 Is the reordered first context: [(A,B,C)::Ob, F::A→B, G::B→C]
 """
-function reorder(domctx::Scope{T,Sig}, codomctx::Scope{T, Sig}, perm::Dict{Int,Int}) where {T,Sig}
+function reorder(domctx::TypeScope, codomctx::TypeScope, perm::Dict{Int,Int})
   N = length(domctx)
   N == length(codomctx) || error("Mismatched lengths $N != $(length(codomctx))")
   for dom_i in reverse(1:N)
     codom_i = perm[dom_i] 
     dom_lids, codom_lids = map([domctx=>dom_i, codomctx=>codom_i]) do (ctx, i) 
-      getvalue.(getlid.(headof.(argsof(getvalue(ctx[LID(i)])))))
+      map(bodyof.(argsof(getvalue(ctx[LID(i)]).body))) do arg 
+        getvalue(getlid(arg))
+      end
     end
     for (dom_j, codom_j) in zip(dom_lids, codom_lids)
       if !haskey(perm, dom_j)
@@ -289,22 +365,28 @@ function reorder(domctx::Scope{T,Sig}, codomctx::Scope{T, Sig}, perm::Dict{Int,I
     end
   end
   isperm(collect(values(perm))) || error("We need to permute the LIDs")
-  Scope([reorder(domctx[LID(perm[i])], gettag(domctx), perm) for i in 1:N], 
-        aliases=domctx.aliases, tag=gettag(domctx))
+
+  TypeScope(Binding{AlgType}[reorder(domctx[LID(perm[i])], gettag(domctx), perm) for i in 1:N], 
+             tag=gettag(domctx))
 end
 
 """Change LIDs recursively"""
-function reorder(t::T, tag::ScopeTag, perm::Dict{Int,Int}) where T <: TrmTyp
-  args = AlgTerm[reorder.(argsof(t), Ref(tag), Ref(perm))...]
-  head = headof(t) 
-  if head isa Ident && gettag(head) == tag
-    T(Ident(gettag(head), LID(perm[getvalue(getlid(head))]), nameof(head)), args)
+function reorder(t::T, tag::ScopeTag, perm::Dict{Int,Int}) where T<:AlgAST
+  b = bodyof(t)
+  if GATs.isvariable(t)
+    if gettag(b) == tag 
+      AlgTerm(Ident(gettag(b), LID(perm[getvalue(getlid(b))]), nameof(b)))
+    else 
+      t 
+    end
   else 
-    T(head, args)
+    args = AlgTerm[reorder.(argsof(b), Ref(tag), Ref(perm))...]
+    T(headof(b), methodof(b), args)
   end
 end
 
-reorder(b::Binding{T, Sig}, tag::ScopeTag, perm::Dict{Int,Int}) where {T,Sig} = 
+
+reorder(b::Binding{T}, tag::ScopeTag, perm::Dict{Int,Int}) where {T} = 
   setvalue(b, reorder(getvalue(b), tag, perm))
 
 
