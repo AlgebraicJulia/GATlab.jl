@@ -1,15 +1,10 @@
 module StdTheories
 
-using Reexport
+using ...Syntax
 
-include("Categories.jl")
-include("Algebra.jl")
-include("Monoidal.jl")
-include("Naturals.jl")
-
-@reexport using .Categories
-@reexport using .Algebra
-@reexport using .Monoidal
-@reexport using .Naturals
+include("categories.jl")
+include("algebra.jl")
+include("monoidal.jl")
+include("naturals.jl")
 
 end

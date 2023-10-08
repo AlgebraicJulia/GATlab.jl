@@ -3,7 +3,7 @@ export Constant, AlgTerm, AlgType, AlgAST,
   TypeScope, TypeCtx, AlgSort, AlgSorts,
   AlgDeclaration, AlgTermConstructor, AlgTypeConstructor, AlgAccessor, AlgAxiom,
   sortsignature, getdecl,
-  GATSegment, GAT, GATContext, allmethods, resolvemethod,
+  GATSegment, GAT, Presentation, gettheory, gettypecontext, allmethods, resolvemethod,
   termcons,typecons, accessors,
   equations, build_infer_expr, compile, sortcheck, allnames, sorts, sortname,
   InCtx, TermInCtx, TypeInCtx, headof, argsof, methodof, bodyof, argcontext

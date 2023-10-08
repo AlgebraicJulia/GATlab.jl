@@ -73,9 +73,24 @@ isapp(t::AlgTerm) = t.body isa MethodApp
 
 isconstant(t::AlgTerm) = t.body isa AbstractConstant
 
-rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) = AlgTerm(rename(tag, reps, t.body))
+rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
+  AlgTerm(rename(tag, reps, t.body))
 
 retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
+
+"""
+`Eq`
+
+The type of equality judgments.
+"""
+@struct_hash_equal struct Eq
+  equands::Tuple{AlgTerm, AlgTerm}
+end
+
+retag(reps::Dict{ScopeTag, ScopeTag}, eq::Eq) = Eq(retag.(Ref(reps), eq.equands))
+
+rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, eq::Eq) =
+  Eq(retag.(Ref(tag), Ref(reps), eq.equands))
 
 """
 `AlgType`
@@ -83,7 +98,7 @@ retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
 One syntax tree to rule all the types.
 """
 @struct_hash_equal struct AlgType <: AlgAST
-  body::MethodApp{AlgTerm}
+  body::Union{MethodApp{AlgTerm}, Eq}
 end
 
 function AlgType(fun::Ident, method::Ident)
@@ -94,12 +109,17 @@ bodyof(t::AlgType) = t.body
 
 isvariable(t::AlgType) = false
 
-isapp(t::AlgType) = true
+isapp(t::AlgType) = t.body isa MethodApp
+
+iseq(t::AlgType) = t.body isa Eq
 
 isconstant(t::AlgType) = false
 
 AlgType(head::Ident, method::Ident, args::Vector{AlgTerm}) =
   AlgType(MethodApp{AlgTerm}(head, method, args))
+
+AlgType(lhs::AlgTerm, rhs::AlgTerm) =
+  AlgType(Eq((lhs, rhs)))
 
 retag(reps::Dict{ScopeTag,ScopeTag}, t::AlgType) =
   AlgType(retag(reps, t.body))

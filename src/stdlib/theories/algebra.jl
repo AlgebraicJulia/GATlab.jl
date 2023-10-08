@@ -1,10 +1,7 @@
-module Algebra
 export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing,
   ThCRing, ThRig, ThCRig, ThElementary, ThPreorder
 
-using ....Syntax
-
-@theory ThEmpty begin 
+@theory ThEmpty begin
 end
 
 @theory ThSet begin
@@ -74,6 +71,4 @@ end
   refl(p)::Leq(p,p) ⊣ [p]
   trans(f::Leq(p,q),g::Leq(q,r))::Leq(p,r)  ⊣ [p,q,r]
   irrev := f == g ⊣ [p,q, (f,g)::Leq(p,q)]
-end
-
 end

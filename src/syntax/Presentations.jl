@@ -8,45 +8,6 @@ using MLStyle
 import ..ExprInterop: fromexpr, toexpr
 
 """
-A presentation has a set of generators, given by a `TypeScope`, and a set of 
-equations among terms which can refer to those generators. Each element of 
-`eqs` is a list of terms which are asserted to be equal.
-"""
-@struct_hash_equal struct Presentation <: HasContext{AlgType}
-  theory::GAT
-  scope::TypeScope
-  eqs::Vector{Vector{AlgTerm}}
-  function Presentation(gat, scope, eqs=[])
-    gatscope = AppendContext(gat, scope)
-    # scope terms must be defined in GAT 
-    sortcheck.(Ref(gatscope), getvalue.(scope))
-    # eq terms must be defined in GAT ++ scope
-    for eq in eqs 
-      length(eq) > 1 || error("At least two things must be equated")
-      sortcheck.(Ref(gatscope), eq)
-    end
-    new(gat, scope, collect.(eqs))
-  end
-end
-
-Scopes.getcontext(p::Presentation) = GATContext(p.theory, p.scope)
-
-fromexpr(p::Presentation, e, t) = fromexpr(Scopes.getcontext(p), e, t)
-
-"""Context of presentation is the underlying GAT"""
-toexpr(p::Presentation) = toexpr(p.theory, p)
-
-function toexpr(c::Context, p::Presentation)
-  c == p.theory || error("Invalid context for presentation")
-  decs = GATs.bindingexprs(c, p.scope)
-  eqs = map(p.eqs) do ts
-    exprs = zip(toexpr.(Ref(p), ts),Iterators.repeated(:(==)))
-    Expr(:comparison, collect(Iterators.flatten(exprs))[1:(end-1)]...)
-  end
-  Expr(:block, [decs..., eqs...]...)
-end
-
-"""
 Parse, e.g.:
 
 ```
@@ -58,37 +19,31 @@ h′::Hom(a, c)
 compose(f, g) == h == h′
 ```
 """
-function fromexpr(ctx::GATContext, e, ::Type{Presentation})
-  e.head == :block || error("expected a block to parse into a GATSegment, got: $e")
-  scopelines, eqlines = [], Vector{Expr0}[]
-  for line in e.args
-    @switch line begin
-      @case Expr(:call, :(==), a, b) 
-        push!(eqlines, [a, b])
-      @case Expr(:comparison, xs...) 
-        er = "Bad comparison $line"
-        all(((i,v),)-> iseven(i) == (v == :(==)), enumerate(line.args)) || error(er)
-        push!(eqlines, xs[1:2:end])
-      @case _ 
-        push!(scopelines, line)
-    end
-  end
-  scope = fromexpr(ctx, Expr(:block, scopelines...), TypeScope)
-  apscope = AppendContext(ctx, scope)
-  Presentation(ctx.theory, scope, [fromexpr.(Ref(apscope), ts, AlgTerm) for ts in eqlines])
+function fromexpr(p::Presentation, e, ::Type{Presentation})
+  e.head == :block || error("expected a block to parse into a Presentation, got: $e")
+  newscope = fromexpr(p, e, TypeScope)
+  Presentation(gettheory(p), ScopeList([allscopes(gettypecontext(p)); newscope]))
 end
 
-construct_presentation(m::Module, e) = fromexpr(m.THEORY, e, Presentation)
-
 macro present(head, body)
-  (theory, name) = @match head begin
-    Expr(:call, name, theory) => (theory, name)
+  (parent, name) = @match head begin
+    Expr(:call, name, mod) => (:($(Presentation)($(mod).THEORY)), name)
+    Expr(:(<:), name, parent) => (parent, name)
     _ => error("invalid head for @present macro: $head")
   end
 
   esc(quote
-    const $name = $(construct_presentation)($theory, $(QuoteNode(body)))
+    const $name = $(fromexpr)($parent, $(QuoteNode(body)), $(Presentation))
   end)
+end
+
+function Base.show(io::IO, p::Presentation)
+  println(io, "Presentation(", nameof(p.theory), "):")
+  for scope in allscopes(gettypecontext(p))
+    for binding in scope
+      println(io, "  ", toexpr(p, binding))
+    end
+  end
 end
 
 end # module 
