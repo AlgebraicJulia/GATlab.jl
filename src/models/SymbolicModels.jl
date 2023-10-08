@@ -245,7 +245,7 @@ macro symbolic_model(decl, theoryname, body)
       f = parse_function(line)
       juliasig = parse_function_sig(f)
       decl = ident(theory; name=juliasig.name)
-      sig = fromexpr.(Ref(GATContext(theory)), juliasig.types, Ref(AlgSort))
+      sig = fromexpr.(Ref(Presentation(theory)), juliasig.types, Ref(AlgSort))
       method = resolvemethod(theory.resolvers[decl], sig)
       overrides[method] = f
     end

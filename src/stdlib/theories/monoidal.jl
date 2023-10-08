@@ -1,8 +1,4 @@
-module Monoidal
 export ThLawlessMonCat, ThStrictMonCat
-
-using ..Categories
-using ....Syntax
 
 @theory ThLawlessMonCat <: ThCategory begin
   mcompose(A::Ob, B::Ob) :: Ob
@@ -18,6 +14,4 @@ end
   (A ⊗ B) ⊗ C == (A ⊗ (B ⊗ C)) :: Ob ⊣ [(A,B,C)::Ob]
   I() ⊗ A == A :: Ob ⊣ [A::Ob]
   A ⊗ I() == A :: Ob ⊣ [A::Ob]
-end
-
 end

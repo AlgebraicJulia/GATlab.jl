@@ -1,9 +1,9 @@
 # AST
 #####
 """Coerce GATs to GAT contexts"""
-fromexpr(g::GAT, e, t) = fromexpr(GATContext(g), e, t)
+fromexpr(g::GAT, e, t) = fromexpr(Presentation(g), e, t)
 
-function parse_methodapp(c::GATContext, head::Symbol, argexprs)
+function parse_methodapp(c::Presentation, head::Symbol, argexprs)
   args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
   fun = fromexpr(c, head, Ident)
   signature = AlgSort.(Ref(c), args)
@@ -15,7 +15,7 @@ function parse_methodapp(c::GATContext, head::Symbol, argexprs)
   MethodApp{AlgTerm}(fun, method, args)
 end
 
-function fromexpr(c::GATContext, e, ::Type{MethodApp{AlgTerm}})
+function fromexpr(c::Presentation, e, ::Type{MethodApp{AlgTerm}})
   @match e begin
     Expr(:call, head::Symbol, argexprs...) => parse_methodapp(c, head, argexprs)
     _ => error("expected a call expression")
@@ -26,7 +26,7 @@ function toexpr(c::Context, m::MethodApp)
   Expr(:call, toexpr(c, m.head), toexpr.(Ref(c), m.args)...)
 end
 
-function fromexpr(c::GATContext, e, ::Type{AlgTerm})
+function fromexpr(c::Presentation, e, ::Type{AlgTerm})
   @match e begin
     s::Symbol => begin
       x = fromexpr(c, s, Ident)
@@ -48,38 +48,44 @@ function toexpr(c::Context, term::AlgTerm)
   toexpr(c, term.body)
 end
 
-function fromexpr(c::GATContext, e, ::Type{AlgType})::AlgType
-  (head, argexprs) = @match e begin
-    s::Symbol => (s, [])
-    Expr(:call, head, args...) => (head, args)
+function fromexpr(p::Presentation, e, ::Type{AlgType})::AlgType
+  @match e begin
+    s::Symbol => AlgType(parse_methodapp(p, s, []))
+    Expr(:call, head, args...) && if head != :(==) end =>
+      AlgType(parse_methodapp(p, head, args))
+    Expr(:call, :(==), lhs, rhs) =>
+      AlgType(fromexpr(p, lhs, AlgTerm), fromexpr(p, rhs, AlgTerm))
     _ => error("could not parse AlgType from $e")
   end
-  AlgType(parse_methodapp(c, head, argexprs))
 end
 
 function toexpr(c::Context, type::AlgType)
-  if length(type.body.args) == 0
-    toexpr(c, type.body.head)
+  if isapp(type)
+    if length(type.body.args) == 0
+      toexpr(c, type.body.head)
+    else
+      Expr(:call, toexpr(c, type.body.head), toexpr.(Ref(c), type.body.args)...)
+    end
   else
-    Expr(:call, toexpr(c, type.body.head), toexpr.(Ref(c), type.body.args)...)
+    Expr(:call, :(==), type.body.equands...)
   end
 end
 
-function fromexpr(c::GATContext, e, ::Type{AlgSort})
+function fromexpr(c::Presentation, e, ::Type{AlgSort})
   e isa Symbol || error("expected a Symbol to parse a sort, got: $e")
   decl = ident(c.theory; name=e)
   method = only(allmethods(c.theory.resolvers[decl]))[2]
   AlgSort(decl, method)
 end
 
-function toexpr(c::GATContext, s::AlgSort)
+function toexpr(c::Presentation, s::AlgSort)
   toexpr(c, getdecl(s))
 end
 
 toexpr(c::Context, constant::Constant; kw...) =
   Expr(:(::), constant.value, toexpr(c, constant.type; kw...))
 
-function fromexpr(c::GATContext, e, ::Type{InCtx{T}}; kw...) where T
+function fromexpr(c::Presentation, e, ::Type{InCtx{T}}; kw...) where T
   (termexpr, localcontext) = @match e begin
     Expr(:call, :(⊣), binding, tscope) => (binding, fromexpr(c, tscope, TypeScope))
     e => (e, TypeScope())
@@ -100,6 +106,17 @@ end
 ###########
 
 # toexpr
+
+function toexpr(p::Context, b::Binding{AlgType})
+  val = getvalue(b)
+  if isapp(val)
+    Expr(:(::), nameof(b), toexpr(p, val))
+  elseif iseq(val)
+    Expr(:call, :(==), toexpr.(Ref(p), val.body.equands)...)
+  elseif val isa Alias
+    Expr(:(=), nameof(b), toexpr(Ref(p), name.ref))
+  end
+end
 
 function bindingexprs(c::Context, s::HasScope)
   c′ = AppendContext(c, s)
@@ -127,12 +144,12 @@ end
 function judgmenthead(theory::GAT, _, judgment::AlgTermConstructor)
   name = nameof(getdecl(judgment))
   untyped = Expr(:call, name, nameof.(argsof(judgment))...)
-  c = GATContext(theory, judgment.localcontext)
+  c = Presentation(theory, judgment.localcontext)
   Expr(:(::), untyped, toexpr(c, judgment.type))
 end
 
 function judgmenthead(theory::GAT, name, judgment::AlgAxiom)
-  c = GATContext(theory, judgment.localcontext)
+  c = Presentation(theory, judgment.localcontext)
   untyped = Expr(:call, :(==), toexpr(c, judgment.equands[1]), toexpr(c, judgment.equands[2]))
   if isnothing(name)
     untyped
@@ -155,43 +172,69 @@ function toexpr(c::GAT, binding::Binding{Judgment})
   Expr(:call, :(⊣), head, Expr(:vect, bindingexprs(c, judgment.localcontext)...))
 end
 
-# fromexpr
-
-function fromexpr(c::GATContext, e, ::Type{Binding{AlgType}})
-  @match e begin
-    Expr(:(::), name::Symbol, type_expr) =>
-        Binding{AlgType}(name, fromexpr(c, type_expr, AlgType))
-    _ => error("could not parse binding of name to type from $e")
+function toexpr(c::Context, p::Presentation)
+  c == p.theory || error("Invalid context for presentation")
+  decs = GATs.bindingexprs(c, p.scope)
+  eqs = map(p.eqs) do ts
+    exprs = zip(toexpr.(Ref(p), ts),Iterators.repeated(:(==)))
+    Expr(:comparison, collect(Iterators.flatten(exprs))[1:(end-1)]...)
   end
+  Expr(:block, [decs..., eqs...]...)
 end
 
-function fromexpr(c::GATContext, e, ::Type{TypeScope})
-  exprs = e.args
-  scope = TypeScope()
-  c′ = AppendContext(c, scope)
-  line = nothing
-  for expr in exprs
-    binding_exprs = @match expr begin
-      a::Symbol => [Expr(:(::), a, :default)]
-      Expr(:tuple, names...) => [:($name :: default) for name in names]
-      Expr(:(::), Expr(:tuple, names...), T) => [:($name :: $T) for name in names]
-      :($a :: $T) => [expr]
-      l::LineNumberNode => begin
-        line = l
-        []
+# fromexpr
+
+"""
+`f(pushbinding!, expr)` should inspect `expr` and call `pushbinding!`
+0 or more times with two arguments: the name and value of a new binding.
+"""
+function parse_scope!(f::Function, scope::Scope, lines::AbstractVector)
+  currentln = nothing
+  for e in lines
+    @match e begin
+      l::LineNumberNode => (currentln = l)
+      _ => f(e) do binding
+        Scopes.unsafe_pushbinding!(scope, setline(binding, currentln))
       end
-      _ => error("invalid binding expression $expr")
-    end
-    for binding_expr in binding_exprs
-      binding = fromexpr(c′, binding_expr, Binding{AlgType})
-      Scopes.unsafe_pushbinding!(getscope(scope), setline(binding, line))
     end
   end
   scope
 end
 
+function fromexpr(c::Presentation, e, ::Type{Binding{AlgType}}; line=nothing)
+  @match e begin
+    Expr(:(::), name::Symbol, type_expr) =>
+        Binding{AlgType}(name, fromexpr(c, type_expr, AlgType), line)
+    _ => error("could not parse binding of name to type from $e")
+  end
+end
+
+function parse_binding_expr!(c::Presentation, pushbinding!, e)
+  p!(name, type_expr) = pushbinding!(Binding{AlgType}(name, fromexpr(c, type_expr, AlgType)))
+  @match e begin
+    a::Symbol => p!(a, :default)
+    Expr(:tuple, names...) => p!.(names, Ref(:default))
+    Expr(:(::), Expr(:tuple, names...), T) => p!.(names, Ref(T))
+    Expr(:(::), name, T) => p!(name, T)
+    Expr(:call, :(==), lhs, rhs) =>
+      pushbinding!(Binding{AlgType}(
+        nothing, AlgType(fromexpr(c, lhs, AlgTerm), fromexpr(c, rhs, AlgTerm))
+      ))
+    _ => error("invalid binding expression $e")
+  end
+end
+
+function fromexpr(p::Presentation, e, ::Type{TypeScope})
+  ts = TypeScope()
+  c = AppendContext(p, ts)
+  parse_scope!(ts.scope, e.args) do pushbinding!, arg
+    parse_binding_expr!(c, pushbinding!, arg)
+  end
+  ts
+end
+
 function parseargs!(theory::GAT, exprs::AbstractVector, scope::TypeScope)
-  c = GATContext(theory, scope)
+  c = Presentation(theory, scope)
   map(exprs) do expr
     binding_expr = @match expr begin
       a::Symbol => getlid(ident(scope; name=a))
@@ -208,7 +251,7 @@ end
 function parseaxiom!(theory::GAT, localcontext, sort_expr, e; name=nothing)
   @match e begin
     Expr(:call, :(==), lhs_expr, rhs_expr) => begin
-      c = GATContext(theory, localcontext)
+      c = Presentation(theory, localcontext)
       equands = fromexpr.(Ref(c), [lhs_expr, rhs_expr], Ref(AlgTerm))
       sorts = sortcheck.(Ref(c), equands)
       @assert allequal(sorts)
@@ -251,7 +294,7 @@ function parseconstructor!(theory::GAT, localcontext, type_expr, e)
       end
     end
     _ => begin
-      c = GATContext(theory, localcontext)
+      c = Presentation(theory, localcontext)
       type = fromexpr(c, type_expr, AlgType)
       decl = if hasname(theory, name)
         ident(theory; name)
@@ -295,7 +338,7 @@ function parse_binding_line!(theory::GAT, e, linenumber)
     e => (e, TypeScope())
   end
 
-  c = GATContext(theory, localcontext)
+  c = Presentation(theory, localcontext)
 
   (head, type_expr) = @match binding begin
     Expr(:(::), head, type_expr) => (head, type_expr)
@@ -378,7 +421,7 @@ function fromexpr(parent::GAT, e, ::Type{GAT}; name=parent.name)
   e.head == :block || error("expected a block to parse into a GAT, got: $e")
   linenumber = nothing
   for line in e.args
-    bindings = @match line begin
+    @match line begin
       l::LineNumberNode => begin
         linenumber = l
       end

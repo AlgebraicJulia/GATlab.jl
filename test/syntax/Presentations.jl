@@ -2,45 +2,45 @@ module TestPresentations
 
 using GATlab
 using Test
-T = ThCategory.THEORY;
-ctx = GATContext(T);
+T = ThCategory.THEORY
+ctx = Presentation(T)
 tscope = fromexpr(
   ctx, 
-  :([(a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c), (h,h′)::Hom(a,c)]), 
+  :([(a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c), (h,h′)::Hom(a,c), f⋅g == h, h == h′]),
   TypeScope
 )
-_, _, _, f, g, h, h′ = getidents(tscope)
-h, h′ = AlgTerm.([h,h′])
-fg = fromexpr(AppendContext(ctx, tscope), :(compose(f,g)), AlgTerm)
-p1 = Presentation(T, tscope, [[fg, h]]);
-x1 = toexpr(p1)
-p1′ = fromexpr(ctx,x1, Presentation);
-@test length(only(p1′.eqs)) == 2
-
-p2 = Presentation(T, tscope, [[fg, h, h′]]);
-x2 = toexpr(p2)
-p2′ = fromexpr(ctx,x2, Presentation);
-@test length(only(p2′.eqs)) == 3
+p1 = Presentation(T, tscope)
 
 # HasContext interface
 @test nscopes(p1) == nscopes(T) + 1 
-@test length(getscope(p1, nscopes(p1))) == 7
+@test length(getscope(p1, nscopes(p1))) == 9
 @test !hastag(p1, newscopetag())
 @test hasname(p1, :f)
 @test !hasname(p1, :q)
 @test getlevel(p1, :id) < getlevel(p1, :f)
-@test getlevel(p1, gettag(f)) == nscopes(p1)
 
 @present SchGraph(ThCategory) begin
   (E,V)::Ob
   src::Hom(E,V)
   tgt::Hom(E,V)
-end;
+end
 
 src, tgt = idents(SchGraph; name=[:src, :tgt])
 Hom = ident(SchGraph; name=:Hom)
 
-@test getvalue(SchGraph[src]).body.head == Hom;
+@test getvalue(SchGraph[src]).body.head == Hom
+
+@present SchFiberedGraph <: SchGraph begin
+  (FE, FV)::Ob
+  fsrc::(FE → FV)
+  ftgt::(FE → FV)
+  v::(FV → V)
+  e::(FE → E)
+  fsrc ⋅ v == e ⋅ src
+  ftgt ⋅ v == e ⋅ tgt
+end
+
+@test nscopes(gettypecontext(SchFiberedGraph)) == 2
 
 @present Z(ThGroup) begin
   (a,)

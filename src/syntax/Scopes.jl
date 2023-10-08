@@ -5,7 +5,7 @@ export
   LID,
   Ident, Alias, gettag, getlid, isnamed,
   Binding, getvalue, setvalue, getline, setline,
-  Context, getscope, nscopes, getlevel, hasname, hastag,
+  Context, getscope, nscopes, getlevel, hasname, hastag, alltags, allscopes,
   HasContext, getcontext,
   hasident, ident, getidents, idents, canonicalize,
   HasScope, haslid, getscope, getbindings, getbinding,
@@ -585,6 +585,8 @@ function hasident(c::Context, x::Ident)
   end
 end
 
+allscopes(c::Context) = [getscope(c, i) for i in 1:nscopes(c)]
+
 function Base.in(x::Ident, s::Context)
   hasident(s, x)
 end
@@ -699,7 +701,7 @@ function ScopeList{T}(scopes::Vector{<:HasScope{T}}) where {T}
   c
 end
 
-function Scope(hsl::ScopeList{T}) where T 
+function Scope(hsl::ScopeList{T}) where T
   if nscopes(hsl) == 0
     Scope{T}() 
   else 

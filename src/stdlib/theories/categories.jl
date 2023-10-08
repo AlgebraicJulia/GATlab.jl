@@ -1,7 +1,5 @@
-module Categories
 export ThClass, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThThinCategory
 
-using ....Syntax
 
 # Category theory
 #################
@@ -68,6 +66,4 @@ These are equivalent to preorders.
 """
 @theory ThThinCategory <: ThCategory begin
   thineq := f == g ⊣ [a::Ob, b::Ob, f::Hom(a,b), g::Hom(a,b)]
-end
-
 end

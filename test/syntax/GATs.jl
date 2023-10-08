@@ -60,7 +60,7 @@ A = ident(sortscope; name=:A)
 
 ATerm = AlgTerm(A)
 
-c = GATContext(thcat, sortscope)
+c = Presentation(thcat, sortscope)
 
 HomT = fromexpr(c, :(Hom(A, A)), AlgType)
 HomS = AlgSort(HomT)

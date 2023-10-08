@@ -131,10 +131,9 @@ function Base.show(io::IO, theory::GAT)
   println(io, "GAT(", theory.name, "):")
   for seg in theory.segments.scopes
     block = toexpr(theory, seg)
-    for line in block.args[1:end-1]
+    for line in block.args
       println(io, "  ", line)
     end
-    print(io, "  ", block.args[end])
   end
 end
 
@@ -181,26 +180,30 @@ Base.issubset(t1::GAT, t2::GAT) =
   all(s->hastag(t2, s), gettag.(Scopes.getscopelist(t1).scopes))
 
 """
-`GATContext`
+`Presentation`
 
 A context consisting of two parts: a GAT and a TypeCtx
 
-Certain types (like AlgTerm) can only be parsed in a GATContext, because
+Certain types (like AlgTerm) can only be parsed in a Presentation, because
 they require access to the method resolving in the GAT.
 """
-struct GATContext <: HasContext{Union{Judgment, AlgType}}
+struct Presentation <: HasContext{Union{Judgment, AlgType}}
   theory::GAT
   context::Context{AlgType}
 end
 
-GATContext(theory::GAT) = GATContext(theory, EmptyContext{AlgType}())
+Presentation(theory::GAT) = Presentation(theory, EmptyContext{AlgType}())
 
-Scopes.getcontext(c::GATContext) = AppendContext(c.theory, c.context)
+gettheory(p::Presentation) = p.theory
 
-Scopes.AppendContext(c::GATContext, context::Context{AlgType}) =
-  GATContext(c.theory, AppendContext(c.context, context))
+gettypecontext(p::Presentation) = p.context
 
-function methodlookup(c::GATContext, x::Ident, sig::AlgSorts)
+Scopes.getcontext(c::Presentation) = AppendContext(c.theory, c.context)
+
+Scopes.AppendContext(c::Presentation, context::Context{AlgType}) =
+  Presentation(c.theory, AppendContext(c.context, context))
+
+function methodlookup(c::Presentation, x::Ident, sig::AlgSorts)
   theory = c.theory
   if haskey(theory.resolvers, x) && haskey(theory.resolvers[x].bysignature, sig)
     resolvemethod(theory.resolvers[x], sig)
