@@ -67,7 +67,7 @@ function toexpr(c::Context, type::AlgType)
       Expr(:call, toexpr(c, type.body.head), toexpr.(Ref(c), type.body.args)...)
     end
   else
-    Expr(:call, :(==), type.body.equands...)
+    Expr(:call, :(==), toexpr.(Ref(c), type.body.equands)...)
   end
 end
 
@@ -104,8 +104,6 @@ end
 
 # Judgments
 ###########
-
-# toexpr
 
 function toexpr(p::Context, b::Binding{AlgType})
   val = getvalue(b)
@@ -170,16 +168,6 @@ function toexpr(c::GAT, binding::Binding{Judgment})
     return nothing
   end
   Expr(:call, :(⊣), head, Expr(:vect, bindingexprs(c, judgment.localcontext)...))
-end
-
-function toexpr(c::Context, p::GATContext)
-  c == p.theory || error("Invalid context for presentation")
-  decs = GATs.bindingexprs(c, p.scope)
-  eqs = map(p.eqs) do ts
-    exprs = zip(toexpr.(Ref(p), ts),Iterators.repeated(:(==)))
-    Expr(:comparison, collect(Iterators.flatten(exprs))[1:(end-1)]...)
-  end
-  Expr(:block, [decs..., eqs...]...)
 end
 
 # fromexpr

@@ -58,4 +58,6 @@ a = ident(Z; name=:a)
   (r⋅r⋅r⋅r) == e()
 end
 
+@test sprint(show, D₄)[1] == 'G' # etc.
+
 end # module 

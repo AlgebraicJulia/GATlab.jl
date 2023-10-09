@@ -37,6 +37,11 @@ using .ThLawlessCategory
   Hom(dom::Ob, codom::Ob) :: TYPE
 end
 
+@test_throws Exception @eval @theory ThMonoid <: ThSemiGroup begin
+  e() :: default
+  e ⋅ x == x ⊣ [x]
+end
+
 @test_throws Exception @eval @theory ThBadAliases <: ThCategory begin
   @op 1 + 1
 end

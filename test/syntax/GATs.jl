@@ -52,6 +52,7 @@ O, H, i, cmp = idents(thcat; name=[:Ob, :Hom, :id, :compose])
 
 ObT = fromexpr(thcat, :Ob, AlgType)
 ObS = AlgSort(ObT)
+@test toexpr(GATContext(thcat), ObS) == :Ob
 
 # Extend seg with a context of (A: Ob)
 sortscope = TypeScope(:A => ObT)
@@ -63,6 +64,11 @@ ATerm = AlgTerm(A)
 c = GATContext(thcat, sortscope)
 
 HomT = fromexpr(c, :(Hom(A, A)), AlgType)
+
+AA = :(A == A)
+eqA = fromexpr(c, AA, AlgType)
+@test toexpr(c, eqA) == AA
+
 HomS = AlgSort(HomT)
 
 @test rename(gettag(sortscope), Dict(:A=>:Z), HomT) isa AlgType
