@@ -2,7 +2,7 @@ module TestGATContexts
 
 using GATlab
 using Test
-T = ThCategory.THEORY
+T = ThCategory.Meta.theory
 ctx = GATContext(T)
 tscope = fromexpr(
   ctx, 
@@ -19,7 +19,7 @@ p1 = GATContext(T, tscope)
 @test !hasname(p1, :q)
 @test getlevel(p1, :id) < getlevel(p1, :f)
 
-@present SchGraph(ThCategory) begin
+@gatcontext SchGraph(ThCategory) begin
   (E,V)::Ob
   src::Hom(E,V)
   tgt::Hom(E,V)
@@ -30,7 +30,7 @@ Hom = ident(SchGraph; name=:Hom)
 
 @test getvalue(SchGraph[src]).body.head == Hom
 
-@present SchFiberedGraph <: SchGraph begin
+@gatcontext SchFiberedGraph <: SchGraph begin
   (FE, FV)::Ob
   fsrc::(FE → FV)
   ftgt::(FE → FV)
@@ -42,7 +42,7 @@ end
 
 @test nscopes(gettypecontext(SchFiberedGraph)) == 2
 
-@present Z(ThGroup) begin
+@gatcontext Z(ThGroup) begin
   (a,)
 end
 
@@ -51,7 +51,7 @@ a = ident(Z; name=:a)
 
 @test compile(Dict(a => :a), t; theorymodule=ThGroup) == :($(ThGroup).:(⋅)($(ThGroup).i(a), 2))
 
-@present D₄(ThGroup) begin
+@gatcontext D₄(ThGroup) begin
   (r,f) :: default
 
   (f⋅f) == e() 

@@ -15,7 +15,7 @@ end
 
   codom(SwapMonoid.MAP) == dom(NatPlusMonoid.MAP)
 
-  x = toexpr(compose(id(ThMonoid.THEORY), compose(SwapMonoid.MAP, NatPlusMonoid.MAP)))
+  x = toexpr(compose(id(ThMonoid.Meta.theory), compose(SwapMonoid.MAP, NatPlusMonoid.MAP)))
 
   @test x == toexpr(expected.MAP)
 

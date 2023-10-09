@@ -226,7 +226,7 @@ end
 macro symbolic_model(decl, theoryname, body)
   # Part 0: Parsing input
   
-  theory = macroexpand(__module__, :($theoryname.@theory))
+  theory = macroexpand(__module__, :($theoryname.Meta.@theory))
   
   (name, abstract_types) = @match decl begin
     Expr(:curly, name, abstract_types...) => (name, abstract_types)
@@ -486,7 +486,7 @@ end
 
 function invoke_term(syntax_module::Module, constructor_name::Symbol, args)
   theory_module = syntax_module.THEORY_MODULE
-  theory = theory_module.THEORY
+  theory = theory_module.Meta.theory
   syntax_types = Tuple(getfield(syntax_module, nameof(sort)) for sort in sorts(theory))
   invoke_term(theory_module, syntax_types, constructor_name, args)
 end
@@ -500,6 +500,14 @@ constructor_name(expr::GATExpr{:generator}) = gat_typeof(expr)
 Get syntax module of given expression.
 """
 syntax_module(expr::GATExpr) = parentmodule(typeof(expr))
+
+
+""" Create generator of the same type as the given expression.
+"""
+function generator_like(expr::GATExpr, value)::GATExpr
+  invoke_term(syntax_module(expr), gat_typeof(expr),
+              [value; gat_type_args(expr)])
+end
 
 # Functors
 ##########
@@ -588,7 +596,7 @@ function parse_json_sexpr(syntax_module::Module, sexpr;
     symbols::Bool = true,
   )
   theory_module = syntax_module.THEORY_MODULE
-  theory = theory_module.THEORY
+  theory = theory_module.Meta.theory
   type_lens = Dict(
     nameof(getdecl(getvalue(binding))) => length(getvalue(binding).args)
     for binding in [theory[sort.method] for sort in sorts(theory)]
