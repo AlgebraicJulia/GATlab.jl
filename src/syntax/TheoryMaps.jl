@@ -110,7 +110,7 @@ function pushforward(
     rt_dict = Dict(gettag(tcon.localcontext)=>gettag(new_term.ctx))
 
     # new_term has same context as tcon, so recursively map over components
-    lc = bind_localctx(Presentation(dom), InCtx{T}(ctx, t))
+    lc = bind_localctx(GATContext(dom), InCtx{T}(ctx, t))
     flc = Dict{Ident, AlgTerm}(map(collect(pairs(lc))) do (k, v)
       retag(rt_dict, k) => pushforward(dom, tymap, trmap, ctx, v; fctx)
     end)
@@ -171,10 +171,10 @@ Take a term constructor and determine terms of its local context.
 
 This function is mutually recursive with `infer_type`. 
 """ 
-bind_localctx(ctx::Presentation, t::InCtx) = 
-  bind_localctx(Presentation(ctx.theory, AppendContext(ctx.context, t.ctx)), t.val)
+bind_localctx(ctx::GATContext, t::InCtx) = 
+  bind_localctx(GATContext(ctx.theory, AppendContext(ctx.context, t.ctx)), t.val)
 
-function bind_localctx(ctx::Presentation, t::AlgAST)
+function bind_localctx(ctx::GATContext, t::AlgAST)
   m = methodof(t.body)
   tc = getvalue(ctx[m])
   eqs = equations(ctx.theory, m)
@@ -325,14 +325,14 @@ function fromexpr(dom::GAT, codom::GAT, e, ::Type{TheoryMap})
     args = idents(ctx; name=argnames)
     sig = [AlgSort(getvalue(ctx[i])) for i in args]
     x = ident(dom; name=xname)
-    m = GATs.methodlookup(Presentation(dom), x, sig)
+    m = GATs.methodlookup(GATContext(dom), x, sig)
 
     # reorder the context to match that of the canonical localctx + args
     tc = getvalue(dom[m])
     reorder_init = Dict(zip(getvalue.(getlid.(args)), getvalue.(tc.args)))
     reordered_ctx = reorder(ctx, tc.localcontext, reorder_init)
     fctx = pushforward(dom, typs, trms, reordered_ctx)
-    val = fromexpr(Presentation(codom, fctx), e2, T)
+    val = fromexpr(GATContext(codom, fctx), e2, T)
     dic = T == AlgType ? typs : trms
     dic[m] = InCtx{T}(fctx, val)
   end

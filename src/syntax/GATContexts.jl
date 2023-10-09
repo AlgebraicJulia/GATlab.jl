@@ -1,5 +1,5 @@
-module Presentations
-export Presentation, @present
+module GATContexts
+export GATContext, @present
 
 using ...Util
 using ..Scopes, ..GATs
@@ -19,26 +19,26 @@ h′::Hom(a, c)
 compose(f, g) == h == h′
 ```
 """
-function fromexpr(p::Presentation, e, ::Type{Presentation})
-  e.head == :block || error("expected a block to parse into a Presentation, got: $e")
+function fromexpr(p::GATContext, e, ::Type{GATContext})
+  e.head == :block || error("expected a block to parse into a GATContext, got: $e")
   newscope = fromexpr(p, e, TypeScope)
-  Presentation(gettheory(p), ScopeList([allscopes(gettypecontext(p)); newscope]))
+  GATContext(gettheory(p), ScopeList([allscopes(gettypecontext(p)); newscope]))
 end
 
 macro present(head, body)
   (parent, name) = @match head begin
-    Expr(:call, name, mod) => (:($(Presentation)($(mod).THEORY)), name)
+    Expr(:call, name, mod) => (:($(GATContext)($(mod).THEORY)), name)
     Expr(:(<:), name, parent) => (parent, name)
     _ => error("invalid head for @present macro: $head")
   end
 
   esc(quote
-    const $name = $(fromexpr)($parent, $(QuoteNode(body)), $(Presentation))
+    const $name = $(fromexpr)($parent, $(QuoteNode(body)), $(GATContext))
   end)
 end
 
-function Base.show(io::IO, p::Presentation)
-  println(io, "Presentation(", nameof(p.theory), "):")
+function Base.show(io::IO, p::GATContext)
+  println(io, "GATContext(", nameof(p.theory), "):")
   for scope in allscopes(gettypecontext(p))
     for binding in scope
       println(io, "  ", toexpr(p, binding))

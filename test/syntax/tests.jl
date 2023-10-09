@@ -15,8 +15,8 @@ end
   include("GATs.jl")
 end
 
-@testset "Presentations" begin
-  include("Presentations.jl")
+@testset "GATContexts" begin
+  include("GATContexts.jl")
 end
 
 @testset "TheoryInterface" begin

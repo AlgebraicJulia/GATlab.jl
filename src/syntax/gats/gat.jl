@@ -180,30 +180,30 @@ Base.issubset(t1::GAT, t2::GAT) =
   all(s->hastag(t2, s), gettag.(Scopes.getscopelist(t1).scopes))
 
 """
-`Presentation`
+`GATContext`
 
 A context consisting of two parts: a GAT and a TypeCtx
 
-Certain types (like AlgTerm) can only be parsed in a Presentation, because
+Certain types (like AlgTerm) can only be parsed in a GATContext, because
 they require access to the method resolving in the GAT.
 """
-struct Presentation <: HasContext{Union{Judgment, AlgType}}
+struct GATContext <: HasContext{Union{Judgment, AlgType}}
   theory::GAT
   context::Context{AlgType}
 end
 
-Presentation(theory::GAT) = Presentation(theory, EmptyContext{AlgType}())
+GATContext(theory::GAT) = GATContext(theory, EmptyContext{AlgType}())
 
-gettheory(p::Presentation) = p.theory
+gettheory(p::GATContext) = p.theory
 
-gettypecontext(p::Presentation) = p.context
+gettypecontext(p::GATContext) = p.context
 
-Scopes.getcontext(c::Presentation) = AppendContext(c.theory, c.context)
+Scopes.getcontext(c::GATContext) = AppendContext(c.theory, c.context)
 
-Scopes.AppendContext(c::Presentation, context::Context{AlgType}) =
-  Presentation(c.theory, AppendContext(c.context, context))
+Scopes.AppendContext(c::GATContext, context::Context{AlgType}) =
+  GATContext(c.theory, AppendContext(c.context, context))
 
-function methodlookup(c::Presentation, x::Ident, sig::AlgSorts)
+function methodlookup(c::GATContext, x::Ident, sig::AlgSorts)
   theory = c.theory
   if haskey(theory.resolvers, x) && haskey(theory.resolvers[x].bysignature, sig)
     resolvemethod(theory.resolvers[x], sig)

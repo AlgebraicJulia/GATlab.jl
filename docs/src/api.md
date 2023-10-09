@@ -11,7 +11,7 @@ Modules = [
   GATlab.Syntax,
   GATlab.Syntax.Scopes,
   GATlab.Syntax.GATs,
-  GATlab.Syntax.Presentations,
+  GATlab.Syntax.GATContexts,
   GATlab.Syntax.ExprInterop,
   GATlab.Syntax.TheoryInterface,
 ]

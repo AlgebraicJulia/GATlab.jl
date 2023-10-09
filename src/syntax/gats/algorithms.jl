@@ -55,7 +55,7 @@ Example:
 ways_of_computing = Dict(a => [dom(f)], b => [codom(f), dom(g)], c => [codom(g)],
                          f => [f], g => [g])
 """
-function equations(c::Presentation, args::AbstractVector{Ident}; init=nothing)
+function equations(c::GATContext, args::AbstractVector{Ident}; init=nothing)
   theory = c.theory
   context = c.context
   ways_of_computing = Dict{Ident, Set{AlgTerm}}()
@@ -103,13 +103,13 @@ function equations(theory::GAT, t::TypeInCtx)
     algacc = getvalue(theory[acc])
     bodyof(b.args[i]) => AlgTerm(algacc.declaration, acc, [newterm])
   end)
-  equations(Presentation(theory, extended), Ident[]; init=init)
+  equations(GATContext(theory, extended), Ident[]; init=init)
 end
 
 """Get equations for a term or type constructor"""
 function equations(theory::GAT, x::Ident)
   judgment = getvalue(theory, x)
-  equations(Presentation(theory, judgment), idents(judgment.localcontext; lid=judgment.args))
+  equations(GATContext(theory, judgment), idents(judgment.localcontext; lid=judgment.args))
 end
 
 function compile(expr_lookup::Dict{Ident}, term::AlgTerm; theorymodule=nothing)
