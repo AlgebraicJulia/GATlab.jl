@@ -65,6 +65,9 @@ c = GATContext(thcat, sortscope)
 HomT = fromexpr(c, :(Hom(A, A)), AlgType)
 HomS = AlgSort(HomT)
 
+@test rename(gettag(sortscope), Dict(:A=>:Z), HomT) isa AlgType
+@test retag(Dict(gettag(sortscope)=>newscopetag()), HomT) isa AlgType
+
 @test sortcheck(c, AlgTerm(A)) == ObS
 
 # # Good term and bad term
@@ -97,6 +100,10 @@ T = ThCategory.Meta.theory
 TG = ThGraph.Meta.theory
 @test TG ⊆ T
 @test T ⊈ TG
+
+# ToExpr
+#-------
+toexpr.(Ref(T), T.segments)
 
 # InCtx
 #----------
