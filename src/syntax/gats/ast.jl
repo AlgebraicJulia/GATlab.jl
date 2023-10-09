@@ -61,6 +61,8 @@ in fact be `AlgTerm`.
   args::Vector{T}
 end
 
+@as_record MethodApp
+
 headof(t::MethodApp) = t.head
 methodof(t::MethodApp) = t.method
 argsof(t::MethodApp) = t.args
