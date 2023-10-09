@@ -122,7 +122,7 @@ module CatTests
 
 using GATlab, Test
 
-@theory ThCategory begin
+@theory ThCategory begin # should this be deleted?
   Ob::TYPE
   Hom(dom::Ob, codom::Ob)::TYPE
 

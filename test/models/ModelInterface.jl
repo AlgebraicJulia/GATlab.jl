@@ -38,8 +38,8 @@ try
   ThCategory.Hom[FinSetC()]([1,2,3], 3, 2)
 catch e
   @test e.model == FinSetC()
-  @test e.theory == ThCategory.THEORY
-  @test e.type == ident(ThCategory.THEORY; name=:Hom)
+  @test e.theory == ThCategory.Meta.theory
+  @test e.type == ident(ThCategory.Meta.theory; name=:Hom)
   @test e.val == [1, 2, 3]
   @test e.args == [3, 2]
   @test e.reason == "index not in codomain: 3"

@@ -396,10 +396,10 @@ macro theorymap(head, body)
     _ => error("could not parse head of @theory: $head")
   end
 
-  dommod = macroexpand(__module__, :($domname.@theory_module))
-  codommod = macroexpand(__module__, :($codomname.@theory_module))
-  dom = macroexpand(__module__, :($domname.@theory))
-  codom = macroexpand(__module__, :($codomname.@theory))
+  dommod = macroexpand(__module__, :($domname.Meta.@theory_module))
+  codommod = macroexpand(__module__, :($codomname.Meta.@theory_module))
+  dom = macroexpand(__module__, :($domname.Meta.@theory))
+  codom = macroexpand(__module__, :($codomname.Meta.@theory))
   tmap = fromexpr(dom, codom, body, TheoryMap)
 
   esc(

@@ -10,8 +10,8 @@ end
 
 @test ThCategoryTypes.Ob isa Function
 @test ThCategoryTypes.Hom isa Function
-@test Set(allnames(ThCategoryTypes.THEORY)) == Set([:Ob, :Hom, :dom, :codom])
-@test Set(allnames(ThCategoryTypes.THEORY; aliases=true)) == Set([:Ob, :Hom, :(→), :dom, :codom])
+@test Set(allnames(ThCategoryTypes.Meta.theory)) == Set([:Ob, :Hom, :dom, :codom])
+@test Set(allnames(ThCategoryTypes.Meta.theory; aliases=true)) == Set([:Ob, :Hom, :(→), :dom, :codom])
 
 using .ThCategoryTypes
 
@@ -30,8 +30,8 @@ using .ThLawlessCategory
 @test compose isa Function
 @test compose == (⋅)
 @test parentmodule(id) == ThLawlessCategory
-@test Set(allnames(ThLawlessCategory.THEORY)) == Set([:Ob, :Hom, :dom, :codom, :compose, :id])
-@test nameof(ThLawlessCategory.THEORY) == :ThLawlessCategory
+@test Set(allnames(ThLawlessCategory.Meta.theory)) == Set([:Ob, :Hom, :dom, :codom, :compose, :id])
+@test nameof(ThLawlessCategory.Meta.theory) == :ThLawlessCategory
 
 @test_throws Exception @eval @theory ThDoubleCategory <: ThCategory begin
   Hom(dom::Ob, codom::Ob) :: TYPE

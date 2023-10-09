@@ -1,5 +1,5 @@
 module GATContexts
-export GATContext, @present
+export GATContext, @gatcontext
 
 using ...Util
 using ..Scopes, ..GATs
@@ -25,11 +25,11 @@ function fromexpr(p::GATContext, e, ::Type{GATContext})
   GATContext(gettheory(p), ScopeList([allscopes(gettypecontext(p)); newscope]))
 end
 
-macro present(head, body)
+macro gatcontext(head, body)
   (parent, name) = @match head begin
-    Expr(:call, name, mod) => (:($(GATContext)($(mod).THEORY)), name)
+    Expr(:call, name, mod) => (:($(GATContext)($(mod).Meta.theory)), name)
     Expr(:(<:), name, parent) => (parent, name)
-    _ => error("invalid head for @present macro: $head")
+    _ => error("invalid head for @gatcontext macro: $head")
   end
 
   esc(quote

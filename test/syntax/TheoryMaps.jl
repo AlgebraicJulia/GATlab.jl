@@ -6,11 +6,11 @@ using Test
 # Set up 
 ########
 
-T = ThCategory.THEORY
-TP = ThPreorder.THEORY
-TLC = ThLawlessCat.THEORY
-TM = ThMonoid.THEORY
-TNP = ThNatPlus.THEORY
+T = ThCategory.Meta.theory
+TP = ThPreorder.Meta.theory
+TLC = ThLawlessCat.Meta.theory
+TM = ThMonoid.Meta.theory
+TNP = ThNatPlus.Meta.theory
 
 PC = PreorderCat.MAP
 NP = NatPlusMonoid.MAP
@@ -73,7 +73,7 @@ end
 
 xterm = fromexpr(TM, :(x ⊣ [x]), TermInCtx)
 res = NP(xterm)
-toexpr(ThNat.THEORY, res)
+toexpr(ThNat.Meta.theory, res)
 
 xterm = fromexpr(TM, :(e()⋅(e()⋅x) ⊣ [x]), TermInCtx)
 res = NP(xterm)
@@ -103,8 +103,8 @@ end
 incl = TheoryIncl(TLC, T)
 @test TheoryMaps.dom(incl) == TLC
 @test TheoryMaps.codom(incl) == T
-incl2 = TheoryIncl(ThGraph.THEORY, TLC)
-incl3 = TheoryIncl(ThGraph.THEORY, T)
+incl2 = TheoryIncl(ThGraph.Meta.theory, TLC)
+incl3 = TheoryIncl(ThGraph.Meta.theory, T)
 
 @test TheoryMaps.compose(incl2, incl) == incl3
 

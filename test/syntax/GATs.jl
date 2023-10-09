@@ -93,8 +93,8 @@ BTerm_expected = AlgTerm(ident(Bsortscope;name=:B))
 
 # Subset 
 #-------
-T = ThCategory.THEORY
-TG = ThGraph.THEORY
+T = ThCategory.Meta.theory
+TG = ThGraph.Meta.theory
 @test TG ⊆ T
 @test T ⊈ TG
 

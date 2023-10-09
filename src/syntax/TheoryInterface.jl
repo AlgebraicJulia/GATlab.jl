@@ -30,7 +30,7 @@ For all aliases, `const` declarations that make them equal to their primaries.
 
 A macro called `@theory` which expands to the `GAT` data structure for the module.
 
-A constant called `THEORY` which is the `GAT` data structure.
+A constant called `Meta.theory` which is the `GAT` data structure.
 """
 
 """
@@ -55,7 +55,7 @@ function theory_impl(head, body, __module__)
   end
 
   parent = if !isnothing(parentname)
-    macroexpand(__module__, :($parentname.@theory))
+    macroexpand(__module__, :($parentname.Meta.@theory))
   else
     GAT(:_EMPTY)
   end
@@ -83,10 +83,12 @@ function theory_impl(head, body, __module__)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
   end
 
-  push!(modulelines, :(const THEORY = $theory))
-
-  push!(modulelines, :(macro theory() $theory end))
-  push!(modulelines, :(macro theory_module() @__MODULE__ end))
+  push!(modulelines, Expr(:toplevel, :(module Meta
+    struct T end
+    const theory = $theory
+    macro theory() $theory end
+    macro theory_module() parentmodule(@__MODULE__) end
+  end)))
 
   for binding in newsegment
     judgment = getvalue(binding)
@@ -135,7 +137,7 @@ function juliadeclaration(name::Symbol, judgment::AlgDeclaration)
 end
 
 function invoke_term(theory_module, types, name, args; model=nothing)
-  theory = theory_module.THEORY
+  theory = theory_module.Meta.theory
   method = getproperty(theory_module, name)
   type_idx = findfirst(==(name), nameof.(sorts(theory)))
   if !isnothing(type_idx) && length(args) <= 1

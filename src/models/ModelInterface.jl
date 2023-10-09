@@ -82,7 +82,7 @@ implements(m::Module, ::Type{Val{tag}}) where {tag} = nothing
 implements(m::Model, tag::ScopeTag) = implements(m, Val{tag})
 
 implements(m::Model, theory_module::Module) =
-  all(!isnothing(implements(m, gettag(scope))) for scope in theory_module.THEORY.segments.scopes)
+  all(!isnothing(implements(m, gettag(scope))) for scope in theory_module.Meta.theory.segments.scopes)
 
 struct TypeCheckFail <: Exception
   model::Union{Model, Nothing}
@@ -140,7 +140,7 @@ macro instance(head, model, body)
   end
 
   # Get the underlying theory
-  theory = macroexpand(__module__, :($theory_module.@theory))
+  theory = macroexpand(__module__, :($theory_module.Meta.@theory))
 
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
   jltype_by_sort = isnothing(instance_types) ? nothing : Dict(zip(sorts(theory), instance_types)) # for type checking
