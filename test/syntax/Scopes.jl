@@ -90,6 +90,9 @@ bind_X, bind_Y = Binding{String}(:X, Alias(x)), Binding{String}(:Y, Alias(y))
 xy_scope = Scope([bind_x, bind_y, bind_X, bind_Y]; tag=tag1)
 xy_scope′ = Scope([bind_x]; tag=tag1)
 
+@test alltags(retag(Dict(tag1=>tag2),xy_scope)) == Set([tag2])
+@test identvalues(xy_scope′) == [x => "ex"]
+
 @test xy_scope == xy_scope′
 @test hash(xy_scope) == hash(xy_scope′)
 @test basicprinted(xy_scope) == "{$(basicprinted(bind_x)), $(basicprinted(bind_y)), X = x, Y = y}"

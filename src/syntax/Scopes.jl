@@ -352,8 +352,6 @@ struct Scope{T} <: HasScope{T}
   end
 end
 
-Scope(s::Scope) = s
-
 Base.:(==)(s1::Scope, s2::Scope) = s1.tag == s2.tag
 
 Base.hash(s::Scope, h::UInt64) = hash(s.tag, h)
@@ -699,24 +697,6 @@ function ScopeList{T}(scopes::Vector{<:HasScope{T}}) where {T}
     unsafe_updatecache!(c, i, hs)
   end
   c
-end
-
-function Scope(hsl::ScopeList{T}) where T
-  if nscopes(hsl) == 0
-    Scope{T}() 
-  else 
-    res = Scope{T}()
-    newtag = gettag(res)
-    retagdict = Dict{ScopeTag, ScopeTag}()
-    for nextscope in getscope.(hsl.scopes)
-      retagdict[gettag(nextscope)] = newtag
-      nextscope = retag(retagdict, nextscope)
-      for b in getbindings(nextscope)
-        unsafe_pushbinding!(res, b)
-      end
-    end
-    res
-  end
 end
 
 function Base.copy(c::ScopeList{T}) where {T}
