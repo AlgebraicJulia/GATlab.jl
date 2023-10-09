@@ -1,9 +1,9 @@
 # AST
 #####
 """Coerce GATs to GAT contexts"""
-fromexpr(g::GAT, e, t) = fromexpr(Presentation(g), e, t)
+fromexpr(g::GAT, e, t) = fromexpr(GATContext(g), e, t)
 
-function parse_methodapp(c::Presentation, head::Symbol, argexprs)
+function parse_methodapp(c::GATContext, head::Symbol, argexprs)
   args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
   fun = fromexpr(c, head, Ident)
   signature = AlgSort.(Ref(c), args)
@@ -15,7 +15,7 @@ function parse_methodapp(c::Presentation, head::Symbol, argexprs)
   MethodApp{AlgTerm}(fun, method, args)
 end
 
-function fromexpr(c::Presentation, e, ::Type{MethodApp{AlgTerm}})
+function fromexpr(c::GATContext, e, ::Type{MethodApp{AlgTerm}})
   @match e begin
     Expr(:call, head::Symbol, argexprs...) => parse_methodapp(c, head, argexprs)
     _ => error("expected a call expression")
@@ -26,7 +26,7 @@ function toexpr(c::Context, m::MethodApp)
   Expr(:call, toexpr(c, m.head), toexpr.(Ref(c), m.args)...)
 end
 
-function fromexpr(c::Presentation, e, ::Type{AlgTerm})
+function fromexpr(c::GATContext, e, ::Type{AlgTerm})
   @match e begin
     s::Symbol => begin
       x = fromexpr(c, s, Ident)
@@ -48,7 +48,7 @@ function toexpr(c::Context, term::AlgTerm)
   toexpr(c, term.body)
 end
 
-function fromexpr(p::Presentation, e, ::Type{AlgType})::AlgType
+function fromexpr(p::GATContext, e, ::Type{AlgType})::AlgType
   @match e begin
     s::Symbol => AlgType(parse_methodapp(p, s, []))
     Expr(:call, head, args...) && if head != :(==) end =>
@@ -71,21 +71,21 @@ function toexpr(c::Context, type::AlgType)
   end
 end
 
-function fromexpr(c::Presentation, e, ::Type{AlgSort})
+function fromexpr(c::GATContext, e, ::Type{AlgSort})
   e isa Symbol || error("expected a Symbol to parse a sort, got: $e")
   decl = ident(c.theory; name=e)
   method = only(allmethods(c.theory.resolvers[decl]))[2]
   AlgSort(decl, method)
 end
 
-function toexpr(c::Presentation, s::AlgSort)
+function toexpr(c::GATContext, s::AlgSort)
   toexpr(c, getdecl(s))
 end
 
 toexpr(c::Context, constant::Constant; kw...) =
   Expr(:(::), constant.value, toexpr(c, constant.type; kw...))
 
-function fromexpr(c::Presentation, e, ::Type{InCtx{T}}; kw...) where T
+function fromexpr(c::GATContext, e, ::Type{InCtx{T}}; kw...) where T
   (termexpr, localcontext) = @match e begin
     Expr(:call, :(⊣), binding, tscope) => (binding, fromexpr(c, tscope, TypeScope))
     e => (e, TypeScope())
@@ -144,12 +144,12 @@ end
 function judgmenthead(theory::GAT, _, judgment::AlgTermConstructor)
   name = nameof(getdecl(judgment))
   untyped = Expr(:call, name, nameof.(argsof(judgment))...)
-  c = Presentation(theory, judgment.localcontext)
+  c = GATContext(theory, judgment.localcontext)
   Expr(:(::), untyped, toexpr(c, judgment.type))
 end
 
 function judgmenthead(theory::GAT, name, judgment::AlgAxiom)
-  c = Presentation(theory, judgment.localcontext)
+  c = GATContext(theory, judgment.localcontext)
   untyped = Expr(:call, :(==), toexpr(c, judgment.equands[1]), toexpr(c, judgment.equands[2]))
   if isnothing(name)
     untyped
@@ -172,7 +172,7 @@ function toexpr(c::GAT, binding::Binding{Judgment})
   Expr(:call, :(⊣), head, Expr(:vect, bindingexprs(c, judgment.localcontext)...))
 end
 
-function toexpr(c::Context, p::Presentation)
+function toexpr(c::Context, p::GATContext)
   c == p.theory || error("Invalid context for presentation")
   decs = GATs.bindingexprs(c, p.scope)
   eqs = map(p.eqs) do ts
@@ -201,7 +201,7 @@ function parse_scope!(f::Function, scope::Scope, lines::AbstractVector)
   scope
 end
 
-function fromexpr(c::Presentation, e, ::Type{Binding{AlgType}}; line=nothing)
+function fromexpr(c::GATContext, e, ::Type{Binding{AlgType}}; line=nothing)
   @match e begin
     Expr(:(::), name::Symbol, type_expr) =>
         Binding{AlgType}(name, fromexpr(c, type_expr, AlgType), line)
@@ -209,7 +209,7 @@ function fromexpr(c::Presentation, e, ::Type{Binding{AlgType}}; line=nothing)
   end
 end
 
-function parse_binding_expr!(c::Presentation, pushbinding!, e)
+function parse_binding_expr!(c::GATContext, pushbinding!, e)
   p!(name, type_expr) = pushbinding!(Binding{AlgType}(name, fromexpr(c, type_expr, AlgType)))
   @match e begin
     a::Symbol => p!(a, :default)
@@ -224,7 +224,7 @@ function parse_binding_expr!(c::Presentation, pushbinding!, e)
   end
 end
 
-function fromexpr(p::Presentation, e, ::Type{TypeScope})
+function fromexpr(p::GATContext, e, ::Type{TypeScope})
   ts = TypeScope()
   c = AppendContext(p, ts)
   parse_scope!(ts.scope, e.args) do pushbinding!, arg
@@ -234,7 +234,7 @@ function fromexpr(p::Presentation, e, ::Type{TypeScope})
 end
 
 function parseargs!(theory::GAT, exprs::AbstractVector, scope::TypeScope)
-  c = Presentation(theory, scope)
+  c = GATContext(theory, scope)
   map(exprs) do expr
     binding_expr = @match expr begin
       a::Symbol => getlid(ident(scope; name=a))
@@ -251,7 +251,7 @@ end
 function parseaxiom!(theory::GAT, localcontext, sort_expr, e; name=nothing)
   @match e begin
     Expr(:call, :(==), lhs_expr, rhs_expr) => begin
-      c = Presentation(theory, localcontext)
+      c = GATContext(theory, localcontext)
       equands = fromexpr.(Ref(c), [lhs_expr, rhs_expr], Ref(AlgTerm))
       sorts = sortcheck.(Ref(c), equands)
       @assert allequal(sorts)
@@ -294,7 +294,7 @@ function parseconstructor!(theory::GAT, localcontext, type_expr, e)
       end
     end
     _ => begin
-      c = Presentation(theory, localcontext)
+      c = GATContext(theory, localcontext)
       type = fromexpr(c, type_expr, AlgType)
       decl = if hasname(theory, name)
         ident(theory; name)
@@ -338,7 +338,7 @@ function parse_binding_line!(theory::GAT, e, linenumber)
     e => (e, TypeScope())
   end
 
-  c = Presentation(theory, localcontext)
+  c = GATContext(theory, localcontext)
 
   (head, type_expr) = @match binding begin
     Expr(:(::), head, type_expr) => (head, type_expr)

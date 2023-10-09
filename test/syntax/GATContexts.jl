@@ -1,15 +1,15 @@
-module TestPresentations
+module TestGATContexts
 
 using GATlab
 using Test
 T = ThCategory.THEORY
-ctx = Presentation(T)
+ctx = GATContext(T)
 tscope = fromexpr(
   ctx, 
   :([(a,b,c)::Ob, f::Hom(a,b), g::Hom(b,c), (h,h′)::Hom(a,c), f⋅g == h, h == h′]),
   TypeScope
 )
-p1 = Presentation(T, tscope)
+p1 = GATContext(T, tscope)
 
 # HasContext interface
 @test nscopes(p1) == nscopes(T) + 1 
