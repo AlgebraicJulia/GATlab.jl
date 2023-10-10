@@ -150,7 +150,7 @@ macro instance(head, model, body)
   model_type, whereparams = parse_model_param(model)
 
   # Parse the body into functions defined here and functions defined elsewhere
-  functions, ext_functions = parse_instance_body(body)
+  functions, ext_functions = parse_instance_body(body, theory)
 
   # The old (Catlab) style of instance, where there is no explicit model
   oldinstance = isnothing(model)
@@ -160,7 +160,7 @@ macro instance(head, model, body)
   # are missing
   typechecked_functions = if !isnothing(jltype_by_sort) 
     typecheck_instance(theory, functions, ext_functions, jltype_by_sort; oldinstance)
-  else 
+  else
     [functions..., ext_functions...] # skip typechecking and expand_fail
   end
   # Adds keyword arguments to the functions, and qualifies them by
@@ -209,7 +209,7 @@ end
 """
 Parses the raw julia expression into JuliaFunctions
 """
-function parse_instance_body(expr::Expr)
+function parse_instance_body(expr::Expr, theory::GAT)
   @assert expr.head == :block
   funs = JuliaFunction[]
   ext_funs = Symbol[]
@@ -222,7 +222,9 @@ function parse_instance_body(expr::Expr)
         Expr(:tuple, args...) => [ext_funs; Symbol[args...]]
       end
     else
-      push!(funs, parse_function(elem))
+      fun = parse_function(elem)
+      fun = setname(fun, nameof(ident(theory; name=fun.name)))
+      push!(funs, fun)
     end
   end
   return (funs, ext_funs)

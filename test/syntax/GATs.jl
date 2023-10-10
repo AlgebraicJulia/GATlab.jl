@@ -46,9 +46,11 @@ seg_expr = quote
   ]
 end
 
-thcat = fromexpr(GAT(:ThCat), seg_expr, GAT)
+thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 
 O, H, i, cmp = idents(thcat; name=[:Ob, :Hom, :id, :compose])
+
+ob_decl = getvalue(thcat[O])
 
 ObT = fromexpr(thcat, :Ob, AlgType)
 ObS = AlgSort(ObT)

@@ -267,7 +267,7 @@ function parseconstructor!(theory::GAT, localcontext, type_expr, e)
       decl = if hasname(theory, name)
         ident(theory; name)
       else
-        Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration(nothing)))
+        Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration()))
       end
       typecon = AlgTypeConstructor(decl, localcontext, args)
       X = Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, typecon))
@@ -276,7 +276,7 @@ function parseconstructor!(theory::GAT, localcontext, type_expr, e)
         argdecl = if hasname(theory, argname)
           ident(theory; name=argname)
         else
-          Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(argname, AlgDeclaration(nothing)))
+          Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(argname, AlgDeclaration()))
         end
         Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, AlgAccessor(argdecl, decl, X, i)))
       end
@@ -287,7 +287,7 @@ function parseconstructor!(theory::GAT, localcontext, type_expr, e)
       decl = if hasname(theory, name)
         ident(theory; name)
       else
-        Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration(nothing)))
+        Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration()))
       end
       termcon = AlgTermConstructor(decl, localcontext, args, type)
       Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, termcon))
@@ -360,7 +360,7 @@ function toexpr(theory::GAT, seg::GATSegment)
   e
 end
 
-function parse_gat_line!(theory::GAT, e::Expr, linenumber)
+function parse_gat_line!(theory::GAT, e::Expr, linenumber; current_module)
   try
     @match e begin
       Expr(:macrocall, var"@op", _, aliasexpr) => begin
@@ -377,21 +377,13 @@ function parse_gat_line!(theory::GAT, e::Expr, linenumber)
               decl = if hasname(theory, name)
                 ident(theory; name)
               else
-                Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration(nothing)))
+                Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration()))
               end
               binding = Binding{Judgment}(alias, Alias(decl), linenumber)
               Scopes.unsafe_pushbinding!(theory, binding)
             @case _
               error("could not match @op expression $line")
           end
-        end
-      end
-      Expr(:import, Expr(:(:), Expr(:(.), mod...), imports...)) => begin
-        imports = map(imports) do expr
-          expr.args[1]
-        end
-        for name in imports
-          Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration([mod; name])))
         end
       end
       _ => begin
@@ -403,7 +395,7 @@ function parse_gat_line!(theory::GAT, e::Expr, linenumber)
   end
 end
 
-function fromexpr(parent::GAT, e, ::Type{GAT}; name=parent.name)
+function fromexpr(parent::GAT, e, ::Type{GAT}; name=parent.name, current_module::Vector{Symbol}=Symbol[])
   theory = copy(parent; name)
   unsafe_newsegment!(theory)
   e.head == :block || error("expected a block to parse into a GAT, got: $e")
@@ -413,7 +405,7 @@ function fromexpr(parent::GAT, e, ::Type{GAT}; name=parent.name)
       l::LineNumberNode => begin
         linenumber = l
       end
-      _ => parse_gat_line!(theory, line, linenumber)
+      _ => parse_gat_line!(theory, line, linenumber; current_module)
     end
   end
   theory

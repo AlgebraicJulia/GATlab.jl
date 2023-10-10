@@ -1,5 +1,7 @@
 export ThNat, ThNatPlus, ThNatPlusTimes
 
+import Base: +
+
 # Natural numbers
 @theory ThNat begin
   ℕ :: TYPE
@@ -8,7 +10,6 @@ export ThNat, ThNatPlus, ThNatPlusTimes
 end
 
 @theory ThNatPlus <: ThNat begin
-  import Base: +
   ((x::ℕ) + (y::ℕ))::ℕ
   (n + S(m) == S(n+m) :: ℕ) ⊣ [n::ℕ,m::ℕ]
 end
