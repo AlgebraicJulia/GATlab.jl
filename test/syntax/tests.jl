@@ -27,4 +27,9 @@ end
   include("TheoryMaps.jl")
 end
 
+@testset "EGraphs" begin
+  include("EGraphs.jl")
+end
+
+
 end
