@@ -46,22 +46,8 @@ Base.getindex(tc::TrmTypConstructor, lids::AbstractVector{LID}) = getindex(tc.lo
 A declaration of a constructor; constructor methods in the form of
 `AlgTermConstructors` or the accessors for `AlgTypeConstructors` follow later in
 the theory.
-
-If `overloads` is nothing, this is declared in the theory module as a new function, i.e.
-
-```julia
-function foo end
-```
-
-If `overloads` is a vector of symbols, then this is imported into the theory module
-from the fully-qualified module name given by the vector of symbols, i.e.
-
-```julia
-import Base: foo
-```
 """
 @struct_hash_equal struct AlgDeclaration <: Judgment
-  overloads::Union{Nothing, Vector{Symbol}}
 end
 
 Scopes.getcontext(::AlgDeclaration) = EmptyContext{AlgType}()

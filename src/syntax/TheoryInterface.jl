@@ -47,6 +47,19 @@ macro theory(head, body)
   theory_impl(head, body, __module__)
 end
 
+"""
+Fully Qualified Module Name
+"""
+function fqmn(mod::Module)
+  names = Symbol[]
+  while parentmodule(mod) != mod
+    push!(names, nameof(mod))
+    mod = parentmodule(mod)
+  end
+  push!(names, nameof(mod))
+  reverse(names)
+end
+
 function theory_impl(head, body, __module__)
   (name, parentname) = @match head begin
     (name::Symbol) => (name, nothing)
@@ -60,24 +73,34 @@ function theory_impl(head, body, __module__)
     GAT(:_EMPTY)
   end
 
-  theory = fromexpr(parent, body, GAT; name)
+  theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
   newsegment = theory.segments.scopes[end]
+
+  lines = Any[]
+  newnames = Symbol[]
+
+  for binding in newsegment
+    judgment = getvalue(binding)
+    bname = nameof(binding)
+    if judgment isa Union{AlgDeclaration, Alias}
+      push!(lines, juliadeclaration(bname, judgment))
+      push!(newnames, bname)
+    end
+  end
 
   modulelines = Any[]
 
   push!(modulelines, :(export $(allnames(theory; aliases=true)...)))
 
-  for x in keys(theory.resolvers)
-    decl = getvalue(theory[x])
-    if !isnothing(decl.overloads)
-      push!(
-        modulelines,
-        Expr(:import,
-          Expr(:(:), Expr(:(.), decl.overloads[1:end-1]...), Expr(:(.), decl.overloads[end]))
-        )
+  push!(
+    modulelines,
+    Expr(:using,
+      Expr(:(:),
+        Expr(:(.), :(.), :(.), nameof(__module__)),
+        Expr.(Ref(:(.)), newnames)...
       )
-    end
-  end
+    )
+  )
 
   if !isnothing(parentname)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
@@ -90,50 +113,38 @@ function theory_impl(head, body, __module__)
     macro theory_module() parentmodule(@__MODULE__) end
   end)))
 
-  for binding in newsegment
-    judgment = getvalue(binding)
-    bname = nameof(binding)
-    if judgment isa AlgDeclaration
-      push!(modulelines, juliadeclaration(bname, judgment))
-    elseif judgment isa Alias
-      push!(modulelines, :(const $bname = $(nameof(judgment.ref))))
-    end
-  end
 
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
   esc(
     Expr(
       :toplevel,
+      lines...,
       :(
         module $name
         $(modulelines...)
         end
       ),
-      :(Core.@__doc__ $(name))
+      :(Core.@__doc__ $(name)),
     )
   )
 end
 
-function juliadeclaration(name::Symbol, judgment::AlgDeclaration)
-  decl = if isnothing(judgment.overloads)
-    :(function $name end)
-  else
-    Expr(:import,
-      Expr(
-        :(:),
-        Expr(:(.), judgment.overloads[1:end-1]...),
-        Expr(:as, Expr(:(.), judgment.overloads[end]), name)
-      )
-    )
-  end
+function juliadeclaration(name::Symbol, ::AlgDeclaration)
+  decl = :(function $name end)
   quote
     $decl
 
-    function Base.getindex(::typeof($name), m::$(GlobalRef(TheoryInterface, :Model)))
-      (args...; context=nothing) -> $name($(GlobalRef(TheoryInterface, :WithModel))(m), args...; context)
+    if Base.isempty(Base.methods(Base.getindex, [typeof($name), $(GlobalRef(TheoryInterface, :Model))]))
+      function Base.getindex(::typeof($name), m::$(GlobalRef(TheoryInterface, :Model)))
+        (args...; context=nothing) -> $name($(GlobalRef(TheoryInterface, :WithModel))(m), args...; context)
+      end
     end
   end
+end
+
+function juliadeclaration(name::Symbol, alias::Alias)
+  :(const $name = $(nameof(alias.ref)))
 end
 
 function invoke_term(theory_module, types, name, args; model=nothing)
