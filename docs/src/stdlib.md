@@ -40,6 +40,5 @@ GATlab.Stdlib.StdTheories.ThIdLawlessCat
 Modules = [GATlab.Stdlib,
   GATlab.Stdlib.StdTheories,
   GATlab.Stdlib.StdModels,
-  GATlab.Stdlib.StdModels.FinSets,
   ]
 ```
