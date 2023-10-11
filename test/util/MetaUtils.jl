@@ -54,4 +54,6 @@ bindings = Dict((:r => :R, :s => :S, :t => :T))
 
 @test replace_symbols(bindings, parse_fun(:(f(r,s) = r))) == parse_fun(:(f(R, S) = R))
 
+@test concat_expr(Expr(:block, :a), Expr(:block, :b)) == Expr(:block, :a, :b)
+
 end
