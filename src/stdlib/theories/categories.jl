@@ -1,6 +1,6 @@
 export ThClass, ThGraph, ThLawlessCat, ThAscCat, ThCategory, ThThinCategory
 
-import AlgebraicInterfaces: dom, codom, compose, id
+import AlgebraicInterfaces: dom, codom, compose, id, Ob, Hom
 
 
 # Category theory

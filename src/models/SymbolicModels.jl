@@ -7,6 +7,7 @@ export GATExpr, @symbolic_model, SyntaxDomainError, head, args, gat_typeof, gat_
 using ...Util
 using ...Syntax
 import ...Syntax: invoke_term
+using ..ModelInterface
 
 using Base.Meta: ParseError
 using MLStyle
@@ -260,7 +261,7 @@ macro symbolic_model(decl, theoryname, body)
   # Part 2: Generating internal methods
 
   module_methods = [internal_accessors(theory)..., 
-                    internal_constructors(theory)...]
+                    internal_constructors(theory, theorymodule)...]
 
   module_decl = :(module $(esc(name))
     export $(nameof.(sorts(theory))...)
@@ -275,16 +276,20 @@ macro symbolic_model(decl, theoryname, body)
   # Part 3: Generating instance of theory
   theory_overloads = symbolic_instance_methods(theory, theoryname, name, overrides)
 
-  # Part 4: Generating generators.
-
-  generator_overloads = []
-  # generator_overloads = symbolic_generators(theorymodule, theory)
+  alias_overloads = ModelInterface.make_alias_definitions(
+    theory,
+    theoryname,
+    Dict(sort => :($name.$(nameof(sort))) for sort in sorts(theory)),
+    nothing,
+    [],
+    []
+  )
 
   Expr(
     :toplevel,
     module_decl,
     :(Core.@__doc__ $(esc(name))),
-    esc.(generate_function.([theory_overloads; generator_overloads]))...,
+    esc.(generate_function.([theory_overloads; alias_overloads]))...,
   )
 end
 
@@ -328,7 +333,7 @@ function internal_accessors(theory::GAT)
   end |> Iterators.flatten
 end
 
-function internal_constructors(theory::GAT)::Vector{JuliaFunction}
+function internal_constructors(theory::GAT, theorymodule)::Vector{JuliaFunction}
   map(termcons(theory)) do (decl, method)
     name = nameof(decl)
     termcon = getvalue(theory, method)
@@ -365,17 +370,18 @@ function internal_constructors(theory::GAT)::Vector{JuliaFunction}
       end...
     )
 
+    instance_types = Dict(sort => esc(nameof(sort)) for sort in sorts(theory))
     check_or_error = Expr(:(||), :(!strict), check_expr, throw_expr)
     context_xs = getidents(termcon.localcontext)
     expr_lookup = Dict{Ident, Any}(map(context_xs) do x
-      x => compile(arg_expr_lookup, first(eqs[x]))
+      x => compile(arg_expr_lookup, first(eqs[x]); theorymodule, theory, instance_types)
     end)
 
     build = Expr(
       :call,
       Expr(:curly, typename(theory, termcon.type), Expr(:quote, name)),
       Expr(:vect, nameof.(argsof(termcon))...),
-      Expr(:ref, GATExpr, compile.(Ref(expr_lookup), termcon.type.body.args)...)
+      Expr(:ref, GATExpr, compile.(Ref(expr_lookup), termcon.type.body.args; theorymodule, theory, instance_types)...)
     )
 
     JuliaFunction(

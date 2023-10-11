@@ -1,9 +1,8 @@
-module GATs
 export GATC
 
-using ....Models
-using ....Syntax
-using ...StdTheories
+using ...Models
+using ...Syntax
+using ..StdTheories
 
 using GATlab, GATlab.Models
 
@@ -16,5 +15,3 @@ end
   dom(f::AbsTheoryMap) = TheoryMaps.dom(f)
   codom(f::AbsTheoryMap) = TheoryMaps.codom(f)
 end
-
-end # module

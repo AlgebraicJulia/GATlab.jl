@@ -1,8 +1,7 @@
-module FinSets
 export FinSetC
 
-using ....Models
-using ...StdTheories
+using ...Models
+using ..StdTheories
 
 struct FinSetC <: Model{Tuple{Int, Vector{Int}}}
 end
@@ -28,6 +27,4 @@ end
 
   dom(f::Vector{Int}) = length(f)
   codom(::Vector{Int}; context) = context[:codom]
-end
-
 end

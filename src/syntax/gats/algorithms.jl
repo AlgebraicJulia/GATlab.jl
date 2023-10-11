@@ -112,7 +112,8 @@ function equations(theory::GAT, x::Ident)
   equations(GATContext(theory, judgment), idents(judgment.localcontext; lid=judgment.args))
 end
 
-function compile(expr_lookup::Dict{Ident}, term::AlgTerm; theorymodule=nothing)
+function compile(expr_lookup::Dict{Ident}, term::AlgTerm;
+                 theorymodule=nothing, instance_types=nothing, theory=nothing)
   if isapp(term)
     name = nameof(term.body.head)
     fun = if !isnothing(theorymodule)
@@ -120,7 +121,15 @@ function compile(expr_lookup::Dict{Ident}, term::AlgTerm; theorymodule=nothing)
     else
       esc(name)
     end
-    Expr(:call, fun, [compile(expr_lookup, arg; theorymodule) for arg in term.body.args]...)
+    # In the case that we have an old-style instance we need to pass in the
+    # return type in order to dispatch a nullary term constructor
+    args = if !isnothing(instance_types) && isempty(term.body.args)
+      termcon = getvalue(theory[term.body.method])
+      [instance_types[AlgSort(termcon.type)]]
+    else
+      [compile(expr_lookup, arg; theorymodule, instance_types, theory) for arg in term.body.args]
+    end
+    Expr(:call, fun, args...)
   elseif isvariable(term)
     expr_lookup[term.body]
   elseif isconstant(term)

@@ -1,8 +1,7 @@
-module SliceCategories
 export SliceC, SliceOb
 
-using ....Models
-using ...StdTheories
+using ...Models
+using ..StdTheories
 using StructEquality
 
 @struct_hash_equal struct SliceOb{ObT, HomT}
@@ -49,6 +48,4 @@ using .ThCategory
 
   compose(f::HomT, g::HomT; context=nothing) =
     compose[model.cat](f, g; context=isnothing(context) ? nothing : map(x -> x.ob, context))
-end
-
 end

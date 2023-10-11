@@ -135,7 +135,6 @@ macro instance(head, model, body)
   # TODO: should we allow instance types to be nothing? Is this in Catlab?
   (theory_module, instance_types) = @match head begin
     :($ThX{$(Ts...)}) => (ThX, Ts)
-    :($ThX) => (ThX, nothing)
     _ => error("invalid syntax for head of @instance macro: $head")
   end
 
@@ -143,33 +142,56 @@ macro instance(head, model, body)
   theory = macroexpand(__module__, :($theory_module.Meta.@theory))
 
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
-  jltype_by_sort = isnothing(instance_types) ? nothing : Dict(zip(sorts(theory), instance_types)) # for type checking
+  jltype_by_sort = Dict(zip(sorts(theory), instance_types)) # for type checking
 
   # Get the model type that we are overloading for, or nothing if this is the
   # default instance for `instance_types`
   model_type, whereparams = parse_model_param(model)
 
+
+  # Create the actual instance
+  generate_instance(theory, theory_module, jltype_by_sort, model_type, whereparams, body)
+end
+
+function generate_instance(
+  theory::GAT,
+  theory_module::Union{Expr0, Module},
+  jltype_by_sort::Dict{AlgSort},
+  model_type::Union{Expr0, Nothing},
+  whereparams::AbstractVector,
+  body::Expr;
+  typecheck=true,
+  escape=true
+)
+  # The old (Catlab) style of instance, where there is no explicit model
+  oldinstance = isnothing(model_type)
+
   # Parse the body into functions defined here and functions defined elsewhere
   functions, ext_functions = parse_instance_body(body, theory)
-
-  # The old (Catlab) style of instance, where there is no explicit model
-  oldinstance = isnothing(model)
 
   # Checks that all the functions are defined with the correct types. Adds default
   # methods for type constructors and type argument accessors if these methods
   # are missing
-  typechecked_functions = if !isnothing(jltype_by_sort) 
+  typechecked_functions = if typecheck
     typecheck_instance(theory, functions, ext_functions, jltype_by_sort; oldinstance)
   else
     [functions..., ext_functions...] # skip typechecking and expand_fail
   end
+
   # Adds keyword arguments to the functions, and qualifies them by
   # `theory_module`, i.e. changes
   # `Ob(x) = blah`
   # to
   # `ThCategory.Ob(m::WithModel{M}, x; context=nothing) = let model = m.model in blah end`
-  qualified_functions = 
+  qualified_functions =
     map(fun -> qualify_function(fun, theory_module, model_type, whereparams), typechecked_functions)
+
+  append!(
+    qualified_functions,
+    make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, whereparams, ext_functions)
+  )
+
+  # Add overloads for the alias methods
 
   # Declare that this model implements the theory
 
@@ -181,10 +203,16 @@ macro instance(head, model, body)
     []
   end
 
-  esc(Expr(:block,
+  docsink = gensym(:docsink)
+
+  code = Expr(:block,
     [generate_function(f) for f in qualified_functions]...,
-    implements_declarations...
-  ))
+    implements_declarations...,
+    :(function $docsink end),
+    :(Core.@__doc__ $docsink)
+  )
+
+  escape ? esc(code) : code
 end
 
 macro instance(head, body)
@@ -432,15 +460,59 @@ function expand_fail(theory::GAT, x::Ident, f::JuliaFunction)
   )
 end
 
+function make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, whereparams, ext_functions)
+  lines = []
+  oldinstance = isnothing(model_type)
+  for segment in theory.segments.scopes
+    for binding in segment
+      alias = getvalue(binding)
+      name = nameof(binding)
+      if alias isa Alias && name ∉ ext_functions
+        for (argsorts, method) in allmethods(theory.resolvers[alias.ref])
+          args = [(gensym(), jltype_by_sort[sort]) for sort in argsorts]
+          args = if oldinstance
+            if length(args) == 0
+              termcon = getvalue(theory[method])
+              retsort = AlgSort(termcon.type)
+              [(gensym(), Expr(:curly, Type, jltype_by_sort[retsort]))]
+            else
+              args
+            end
+          else
+            [(gensym(:m), :($(TheoryInterface.WithModel){$model_type})); args]
+          end
+          argexprs = [Expr(:(::), p...) for p in args]
+          overload = JuliaFunction(;
+            name = :($theory_module.$name),
+            args = argexprs,
+            kwargs = [Expr(:(...), :kwargs)],
+            whereparams,
+            impl = :($theory_module.$(nameof(alias.ref))($(first.(args)...); kwargs...))
+          )
+          push!(lines, overload)
+        end
+      end
+    end
+  end
+  lines
+end
+
 """
-Add `model` kwarg (it shouldn't have it already)
+Add `WithModel` param first, if this is not an old instance (it shouldn't have it already)
 Qualify method name to be in theory module
 Add `context` kwargs if not already present
-  
-TODO: throw error if there's junk kwargs present already?
 """
 function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{Expr0, Nothing}, whereparams)
-  kwargs = Expr0[Expr(:kw, :context, nothing)]
+  kwargs = filter(fun.kwargs) do kwarg
+    @match kwarg begin
+      Expr(:kw, :context, _) => false
+      :context => false
+      Expr(:(::), :context, _) => false
+      Expr(:kw, Expr(:(::), :context, _), _) => false
+      _ => true
+    end
+  end
+  kwargs = Expr0[Expr(:kw, :context, nothing); kwargs]
 
   (args, impl) = if !isnothing(model_type)
     m = gensym(:m)
@@ -471,6 +543,7 @@ function implements_declaration(model_type, scope, whereparams)
     ) where {$(whereparams...)} = $notes
   end
 end
+
 
 macro withmodel(model, subsexpr, body)
   modelvar = gensym("model")
@@ -535,7 +608,7 @@ macro migrate(head)
       (name, mapname, modelname)
     _ => error("could not parse head of @theory: $head")
   end
-  codom_types = :(only(supertype($(esc(modelname))).parameters).types)
+  codom_types = :(only(supertype($modelname).parameters).types)
   # Unpack
   tmap = macroexpand(__module__, :($mapname.@map))
   dom_module = macroexpand(__module__, :($mapname.@dom))
@@ -607,7 +680,17 @@ macro migrate(head)
   model_expr = Expr(
     :curly,
     GlobalRef(Syntax.TheoryInterface, :Model),
-    Expr(:curly, :Tuple, dom_types...)
+    Expr(:curly, :Tuple, esc.(dom_types)...)
+  )
+
+  instance_code = generate_instance(
+    dom_theory,
+    dom_module,
+    jltype_by_sort,
+    name,
+    [],
+    Expr(:block, generate_function.([funs...,funs2..., funs3...])...);
+    typecheck=false
   )
 
   quote
@@ -615,9 +698,7 @@ macro migrate(head)
       model :: $(esc(modelname))
     end
 
-    @instance $dom_module [model :: $(esc(name))] begin
-      $(generate_function.([funs...,funs2..., funs3...])...)
-    end
+    $instance_code
   end
 end
 

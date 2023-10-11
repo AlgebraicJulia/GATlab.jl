@@ -4,7 +4,7 @@ module MetaUtils
 export JuliaFunction, setimpl, setname,
   JuliaFunctionSig, parse_docstring, parse_function,
   parse_function_sig, generate_docstring, generate_function,
-  replace_symbols, strip_lines,
+  append_expr!, concat_expr, replace_symbols, strip_lines,
   Expr0
 
 using Base.Meta: ParseError
@@ -158,6 +158,28 @@ end
 
 # Operations on Julia expressions
 #################################
+
+""" Append a Julia expression to a block expression.
+"""
+function append_expr!(block::Expr, expr)::Expr
+  @assert block.head == :block
+  @match expr begin
+    Expr(:block, args...) => append!(block.args, args)
+    _ => push!(block.args, expr)
+  end
+  block
+end
+
+""" Concatenate two Julia expressions into a block expression.
+"""
+function concat_expr(expr1::Expr, expr2::Expr)::Expr
+  @match (expr1, expr2) begin
+    (Expr(:block, a1...), Expr(:block, a2...)) => Expr(:block, a1..., a2...)
+    (Expr(:block, a1...), _) => Expr(:block, a1..., expr2)
+    (_, Expr(:block, a2...)) => Expr(:block, expr1, a2...)
+    _ => Expr(:block, expr1, expr2)
+  end
+end
 
 """ Replace symbols occurring anywhere in a Julia function (except the name).
 """

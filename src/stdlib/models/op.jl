@@ -2,13 +2,12 @@
 Explicit Op model. Alternatively, see DerivedModels.jl (`OpFinSetC`) for 
 theory-morphism-derived Op models.
 """
-module Op 
 
 export OpC, op
 
 
-using ....Models
-using ...StdTheories
+using ...Models
+using ..StdTheories
 using StructEquality
 
 @struct_hash_equal struct OpC{ObT, HomT, C<:Model{Tuple{ObT, HomT}}} <: Model{Tuple{ObT, HomT}}
@@ -36,5 +35,3 @@ rename(nt::NamedTuple, d::Dict{Symbol,Symbol}) =
     compose[model.cat](g, f; 
             context=rename(context, Dict(:a=>:c, :c=>:a, :b=>:b)))
 end
-
-end # module 
