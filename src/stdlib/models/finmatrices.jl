@@ -1,8 +1,7 @@
-module FinMatrices
 export FinMatC
 
-using ....Models
-using ...StdTheories
+using ...Models
+using ..StdTheories
 
 struct FinMatC{T<:Number} <: Model{Tuple{T}}
 end
@@ -17,6 +16,4 @@ end
 
   dom(A::Matrix{T}) = size(A)[1]
   codom(A::Matrix{T}) = size(A)[2]
-end
-
 end

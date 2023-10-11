@@ -1,9 +1,7 @@
-module Arithmetic 
-
 export IntNatPlus, IntPreorder
 
-using ....Models
-using ...StdTheories
+using ...Models
+using ..StdTheories
 
 struct IntNatPlus <: Model{Tuple{Int}} end
 
@@ -24,6 +22,3 @@ struct IntPreorder <: Model{Tuple{Int, Tuple{Int,Int}}} end
     error("Cannot compose $ab and $bc")
   end
 end
-
-
-end # module 

@@ -16,7 +16,7 @@ end
 using .ThCategoryTypes
 
 @test dom isa Function
-@test Hom == →
+@test Hom != →
 @test parentmodule(dom) == TestTheoryInterface
 
 @theory ThLawlessCategory <: ThCategoryTypes begin
@@ -28,7 +28,7 @@ end
 using .ThLawlessCategory
 
 @test compose isa Function
-@test compose == (⋅)
+@test compose != (⋅)
 @test parentmodule(id) == TestTheoryInterface
 @test Set(allnames(ThLawlessCategory.Meta.theory)) == Set([:Ob, :Hom, :dom, :codom, :compose, :id])
 @test nameof(ThLawlessCategory.Meta.theory) == :ThLawlessCategory

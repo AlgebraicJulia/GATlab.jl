@@ -1,7 +1,6 @@
-module Nothings
 export NothingC
 
-using ....Models, ...StdTheories
+using ...Models, ..StdTheories
 
 struct NothingC <: Model{Tuple{Nothing, Nothing}}
 end
@@ -15,6 +14,4 @@ end
 
   compose(::Nothing, ::Nothing) = nothing
   id(::Nothing) = nothing
-end
-
 end

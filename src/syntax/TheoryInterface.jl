@@ -83,7 +83,7 @@ function theory_impl(head, body, __module__)
     judgment = getvalue(binding)
     bname = nameof(binding)
     if judgment isa Union{AlgDeclaration, Alias}
-      push!(lines, juliadeclaration(bname, judgment))
+      push!(lines, juliadeclaration(bname))
       push!(newnames, bname)
     end
   end
@@ -130,10 +130,9 @@ function theory_impl(head, body, __module__)
   )
 end
 
-function juliadeclaration(name::Symbol, ::AlgDeclaration)
-  decl = :(function $name end)
+function juliadeclaration(name::Symbol)
   quote
-    $decl
+    function $name end
 
     if Base.isempty(Base.methods(Base.getindex, [typeof($name), $(GlobalRef(TheoryInterface, :Model))]))
       function Base.getindex(::typeof($name), m::$(GlobalRef(TheoryInterface, :Model)))
@@ -141,10 +140,6 @@ function juliadeclaration(name::Symbol, ::AlgDeclaration)
       end
     end
   end
-end
-
-function juliadeclaration(name::Symbol, alias::Alias)
-  :(const $name = $(nameof(alias.ref)))
 end
 
 function invoke_term(theory_module, types, name, args; model=nothing)
