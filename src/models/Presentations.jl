@@ -15,7 +15,8 @@ export @present, Presentation, generator, generators, generator_index,
 using Base.Meta: ParseError
 using MLStyle: @match
 
-using ...Util.MetaUtils 
+import AlgebraicInterfaces: generators
+using ...Util.MetaUtils
 using ...Syntax
 import ...Syntax: equations
 using ..SymbolicModels
