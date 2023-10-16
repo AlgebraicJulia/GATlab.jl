@@ -35,7 +35,7 @@ struct Presentation{Theory,Name}
 end
 
 function Presentation{Name}(syntax::Module) where Name
-  theory_module = syntax.THEORY_MODULE 
+  theory_module = syntax.Meta.theory_module
   theory = theory_module.Meta.theory
   T = theory_module.Meta.T
   names = Tuple(nameof(sort) for sort in sorts(theory))
