@@ -582,88 +582,86 @@ end
 
 
 """
-Given a Theory Morphism T->U and a type Mᵤ (whose values are models of U),
-obtain a type Mₜ which has one parameter (of type Mᵤ) and is a model of T.
-
-E.g. given NatIsMonoid: ThMonoid->ThNatPlus and IntPlus <: Model{Tuple{Int}}
-and IntPlus implements ThNatPlus:
-
-```
-@migrate IntPlusMonoid = NatIsMonoid(IntPlus){Int}
-```
-
-Yields:
-
-```
-struct IntPlusMonoid <: Model{Tuple{Int}}
-  model::IntPlus
-end
-
-@instance ThMonoid{Int} [model::IntPlusMonoid] begin ... end
-```
+Given a Theory Morphism T->U and a model Mᵤ which implements U,
+obtain a model Mₜ which wraps Mᵤ and is a model of T.
 
 Future work: There is some subtlety in how accessor functions should be handled.
 TODO: The new instance methods do not yet handle the `context` keyword argument.
 """
 function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
 
-  # Map CODOM sorts to whereparam symbols
-  whereparamdict = OrderedDict(s=>gensym(s.head.name) for s in sorts(codom_theory))
-  whereparams = collect(values(whereparamdict))
-  name = :Migrator #gensym("migrator")
+  # Symbols
+  migrator_name = :Migrator # TODO do we need to gensym?
   _x = gensym("val")
 
+  # Map CODOM sorts to whereparam symbols
+  whereparamdict = OrderedDict(s=>gensym(s.head.name) for s in sorts(codom_theory))
+  # New model is parameterized by these types
+  whereparams = collect(values(whereparamdict))
+  # Julia types of domain sorts determined by theorymap 
   jltype_by_sort = Dict(map(sorts(dom_theory)) do v
     v => whereparamdict[AlgSort(tmap(v.method).val)]
   end)
 
-  accessor_funs = [] # accessors
+  # Create input for instance_code
+  ################################
+  accessor_funs = JuliaFunction[] # added to during typecon_funs loop
 
-  # TypeCons for @instance macro
   typecon_funs = map(collect(typemap(tmap))) do (x, fx)
     typecon = getvalue(dom_theory[x])
+
     # Accessors
-    eq = equations(codom_theory, fx)
+    #----------
+    # accessor arg is a value of the type constructor's result type
     args = [:($_x::$(jltype_by_sort[AlgSort(typecon.declaration, x)]))]
-    scopedict = Dict{ScopeTag,ScopeTag}(gettag(typecon.localcontext)=>gettag(fx.ctx))
-    for accessor in idents(typecon.localcontext; lid=typecon.args)
-      accessor = retag(scopedict, accessor)
-      a = nameof(accessor)
-      # If we have a default means of computing the accessor...
+    # Equations are how the value of the accessor is related to the type 
+    eq = equations(codom_theory, fx)
+    scopedict = Dict(gettag(typecon.localcontext) => gettag(fx.ctx))
+    accessors = idents(typecon.localcontext; lid=typecon.args)
+    for accessor in retag.(Ref(scopedict), accessors)
+      name = nameof(accessor)
+      # If we have a means of computing the accessor...
       if !isempty(eq[accessor])
-        rtype = typecon.localcontext[ident(typecon.localcontext; name=a)]
-        ret_type = jltype_by_sort[AlgSort(getvalue(rtype))]
+        rtype = typecon.localcontext[ident(typecon.localcontext; name)]
+        return_type = jltype_by_sort[AlgSort(getvalue(rtype))]
+        # Convert accessor expression into Julia expression
         impl = to_call_accessor(first(eq[accessor]), _x, codom_module)
-        jf = JuliaFunction(;name=a, args=args, return_type=ret_type, impl=impl)
-        push!(accessor_funs, jf)
+        push!(accessor_funs, JuliaFunction(;name, args, return_type, impl))
       end
     end
 
-    # Typecon function
-    codom_body = bodyof(fx.val)
+    # Type constructor function
+    #--------------------------
+    codom_body = bodyof(fx.val) 
     fxname = nameof(headof(codom_body))
-    xname = nameof(typecon.declaration)
     sig = julia_signature(dom_theory, x, jltype_by_sort)
+    
+    name = nameof(typecon.declaration)
+
     argnames = [_x, nameof.(argsof(typecon))...]
     args = [:($k::$(v)) for (k, v) in zip(argnames, sig.types)]
-    impls = to_call_impl.(codom_body.args, Ref(termcons(codom_theory)), Ref(codom_module))
-    impl = Expr(:call, Expr(:ref, :($codom_module.$fxname), :(model.model)), _x, impls...)
-    JuliaFunction(;name=xname, args=args, return_type=sig.types[1], impl=impl)
+    
+    return_type = first(sig.types)
+
+    impls = to_call_impl.(codom_body.args, Ref(codom_module))
+    impl = Expr(:call, Expr(:ref, :($codom_module.$fxname), 
+                            :(model.model)), _x, impls...)
+
+    JuliaFunction(;name, args, return_type, impl)
   end
 
-  # TermCons for @instance macro
+  # Term constructors
+  #------------------
   termcon_funs = map(collect(termmap(tmap))) do (x, fx)
     termcon = getvalue(dom_theory[x])
-    func_name = nameof(termcon.declaration)
     sig = julia_signature(dom_theory, x, jltype_by_sort)
-    argnames = nameof.(argsof(termcon))
-    ret_type = jltype_by_sort[AlgSort(termcon.type)]
 
-    args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
+    name = nameof(termcon.declaration)
+    return_type = jltype_by_sort[AlgSort(termcon.type)]
+    args = [:($k::$v) for (k, v) in zip(nameof.(argsof(termcon)), sig.types)]
+    impl = to_call_impl(fx.val, codom_module)
 
-    impl = to_call_impl(fx.val, first.(termcons(codom_theory)), codom_module)
-
-    JuliaFunction(;name=func_name, args=args, return_type=ret_type, impl=impl)
+    JuliaFunction(;name, args, return_type, impl)
   end
 
 
@@ -672,7 +670,7 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
     dom_theory,
     dom_module,
     jltype_by_sort,
-    Expr(:curly, name, whereparams...),
+    Expr(:curly, migrator_name, whereparams...),
     whereparams,
     Expr(:block, generate_function.([typecon_funs...,
                                      termcon_funs..., 
@@ -707,14 +705,13 @@ end
 Compile an AlgTerm into a Julia call Expr where termcons (e.g. `f`) are
 interpreted as `mod.f[model.model](...)`.
 """
-function to_call_impl(t::AlgTerm, termcons, mod::Module)
+function to_call_impl(t::AlgTerm, mod::Module)
   b = bodyof(t)
   if GATs.isvariable(t)
     nameof(b)
   else 
-    args = to_call_impl.(argsof(b), Ref(termcons), Ref(mod))
+    args = to_call_impl.(argsof(b), Ref(mod))
     name = nameof(headof(b))
-    b.head in termcons || error("t $t termcons $termcons")
     Expr(:call, Expr(:ref, :($mod.$name), :(model.model)), args...)
   end
 end
