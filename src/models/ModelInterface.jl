@@ -1,13 +1,16 @@
 module ModelInterface
 
 export Model, implements, TypeCheckFail, SignatureMismatchError, 
-       @model, @instance, @withmodel, @fail, @migrate
+       @model, @instance, @withmodel, @fail, migrate
 
 using ...Syntax
 using ...Util.MetaUtils
+using ...Util.MetaUtils: JuliaFunctionSigNoWhere
+
+import ...Syntax.TheoryMaps: migrator 
 
 using MLStyle
-using DataStructures: DefaultDict
+using DataStructures: DefaultDict, OrderedDict
 
 """
 `Model{Tup <: Tuple}`
@@ -16,7 +19,7 @@ A Julia value with type `Model{Tuple{Ts...}}` represents a model of some
 part of the theory hierarchy, which uses the types in `Ts...` to implement
 the sorts.
 
-A model `m::Model{Tup}` is marked as implementing a `seg::GATSegmant` iff
+A model `m::Model{Tup}` is marked as implementing a `seg::GATSegment` iff
 
 `implements(m, ::Type{Val{gettag(seg)}}) == true`
 
@@ -332,6 +335,8 @@ end
 function ExprInterop.toexpr(sig::JuliaFunctionSig)
   Expr(:call, sig.name, [Expr(:(::), type) for type in sig.types]...)
 end
+ExprInterop.toexpr(sig::JuliaFunctionSigNoWhere) = 
+  ExprInterop.toexpr(sig |> JuliaFunctionSig)
 
 struct SignatureMismatchError <: Exception
   name::Symbol
@@ -363,7 +368,7 @@ function typecheck_instance(
   typechecked = JuliaFunction[]
 
   # The overloads that we have to provide
-  undefined_signatures = Dict{JuliaFunctionSig, Tuple{Ident, Ident}}()
+  undefined_signatures = Dict{JuliaFunctionSigNoWhere, Tuple{Ident, Ident}}()
 
   overload_errormsg =
    "the types for this model declaration do not permit Julia overloading to distinguish between GAT overloads"
@@ -373,7 +378,7 @@ function typecheck_instance(
       continue
     end
     for (_, x) in allmethods(resolver)
-      sig = julia_signature(getvalue(theory[x]), jltype_by_sort; oldinstance, X=x)
+      sig = julia_signature(getvalue(theory[x]), jltype_by_sort; oldinstance, X=x) |> JuliaFunctionSigNoWhere
       if haskey(undefined_signatures, sig)
         error(overload_errormsg)
       end
@@ -388,15 +393,14 @@ function typecheck_instance(
   end
 
   for f in functions
-    sig = parse_function_sig(f)
-
+    sig = parse_function_sig(f) |> JuliaFunctionSigNoWhere
     if haskey(undefined_signatures, sig)
       (decl, method) = undefined_signatures[sig]
 
       judgment = getvalue(theory, method)
 
       if judgment isa AlgTypeConstructor
-        f = expand_fail(theory, decl, f)
+        f = expand_fail(theory, decl, f) 
       end
 
       delete!(undefined_signatures, sig)
@@ -601,104 +605,101 @@ end
 Future work: There is some subtlety in how accessor functions should be handled.
 TODO: The new instance methods do not yet handle the `context` keyword argument.
 """
-macro migrate(head)
-  # Parse
-  (name, mapname, modelname) = @match head begin
-    Expr(:(=), name, Expr(:call, mapname, modelname)) =>
-      (name, mapname, modelname)
-    _ => error("could not parse head of @theory: $head")
-  end
-  codom_types = :(only(supertype($modelname).parameters).types)
-  # Unpack
-  tmap = macroexpand(__module__, :($mapname.@map))
-  dom_module = macroexpand(__module__, :($mapname.@dom))
-  codom_module = macroexpand(__module__, :($mapname.@codom))
-  dom_theory, codom_theory = TheoryMaps.dom(tmap), TheoryMaps.codom(tmap)
+function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
 
-  codom_jltype_by_sort = Dict{Ident,Expr0}(map(enumerate(sorts(codom_theory))) do (i,v)
-    v.method => Expr(:ref, codom_types, i)
-  end)
+  # Map CODOM sorts to whereparam symbols
+  whereparamdict = OrderedDict(s=>gensym(s.head.name) for s in sorts(codom_theory))
+  whereparams = collect(values(whereparamdict))
+  name = :Migrator #gensym("migrator")
   _x = gensym("val")
-  dom_types = map(methodof.(sorts(dom_theory))) do s
-    codom_jltype_by_sort[typemap(tmap)[s].val.body.method]
-  end
-  jltype_by_sort = Dict(zip(sorts(dom_theory), dom_types))
+
+  jltype_by_sort = Dict(map(sorts(dom_theory)) do v
+    v => whereparamdict[AlgSort(tmap(v.method).val)]
+  end)
+
+  accessor_funs = [] # accessors
 
   # TypeCons for @instance macro
-  funs = map(collect(typemap(tmap))) do (x, fx)
-    tcon = getvalue(dom_theory[x])
-    fxbody = bodyof(fx.val)
-    fxdecl, fxmethod = headof(fxbody), methodof(fxbody)
-    fxname = nameof(fxdecl)
-    xdecl = tcon.declaration
-    xname = nameof(xdecl)
-    jltype_by_sort[AlgSort(fxdecl, fxmethod)] = jltype_by_sort[AlgSort(xdecl, x)]
+  typecon_funs = map(collect(typemap(tmap))) do (x, fx)
+    typecon = getvalue(dom_theory[x])
+    # Accessors
+    eq = equations(codom_theory, fx)
+    args = [:($_x::$(jltype_by_sort[AlgSort(typecon.declaration, x)]))]
+    scopedict = Dict{ScopeTag,ScopeTag}(gettag(typecon.localcontext)=>gettag(fx.ctx))
+    for accessor in idents(typecon.localcontext; lid=typecon.args)
+      accessor = retag(scopedict, accessor)
+      a = nameof(accessor)
+      # If we have a default means of computing the accessor...
+      if !isempty(eq[accessor])
+        rtype = typecon.localcontext[ident(typecon.localcontext; name=a)]
+        ret_type = jltype_by_sort[AlgSort(getvalue(rtype))]
+        impl = to_call_accessor(first(eq[accessor]), _x, codom_module)
+        jf = JuliaFunction(;name=a, args=args, return_type=ret_type, impl=impl)
+        push!(accessor_funs, jf)
+      end
+    end
+
+    # Typecon function
+    codom_body = bodyof(fx.val)
+    fxname = nameof(headof(codom_body))
+    xname = nameof(typecon.declaration)
     sig = julia_signature(dom_theory, x, jltype_by_sort)
-    argnames = [_x, nameof.(argsof(tcon))...]
-    args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
-    impls = to_call_impl.(fxbody.args, Ref(termcons(codom_theory)), Ref(codom_module))
+    argnames = [_x, nameof.(argsof(typecon))...]
+    args = [:($k::$(v)) for (k, v) in zip(argnames, sig.types)]
+    impls = to_call_impl.(codom_body.args, Ref(termcons(codom_theory)), Ref(codom_module))
     impl = Expr(:call, Expr(:ref, :($codom_module.$fxname), :(model.model)), _x, impls...)
     JuliaFunction(;name=xname, args=args, return_type=sig.types[1], impl=impl)
   end
 
   # TermCons for @instance macro
-  funs2 = map(collect(termmap(tmap))) do (x, fx)
-    tcon = getvalue(dom_theory[x])
-    xname = nameof(tcon.declaration)
+  termcon_funs = map(collect(termmap(tmap))) do (x, fx)
+    termcon = getvalue(dom_theory[x])
+    func_name = nameof(termcon.declaration)
     sig = julia_signature(dom_theory, x, jltype_by_sort)
-    argnames = nameof.(argsof(tcon))
-    ftype = typemap(tmap)[tcon.type.body.method].val.body
-    ret_type = jltype_by_sort[AlgSort(headof(ftype), methodof(ftype))]
+    argnames = nameof.(argsof(termcon))
+    ret_type = jltype_by_sort[AlgSort(termcon.type)]
 
     args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
 
     impl = to_call_impl(fx.val, first.(termcons(codom_theory)), codom_module)
 
-    JuliaFunction(;name=xname, args=args, return_type=ret_type, impl=impl)
+    JuliaFunction(;name=func_name, args=args, return_type=ret_type, impl=impl)
   end
 
-  funs3 = [] # accessors
-  for (x, fx) in pairs(typemap(tmap))
-    tc = getvalue(dom_theory[x])
-    eq = equations(codom_theory, fx)
-    args = [:($_x::$(jltype_by_sort[AlgSort(fx.val)]))]
-    scopedict = Dict{ScopeTag,ScopeTag}(gettag(tc.localcontext)=>gettag(fx.ctx))
-    for accessor in idents(tc.localcontext; lid=tc.args)
-      accessor = retag(scopedict, accessor)
-      a = nameof(accessor)
-      # If we have a default means of computing the accessor...
-      if !isempty(eq[accessor])
-        rtype = tc.localcontext[ident(tc.localcontext; name=a)]
-        ret_type = jltype_by_sort[AlgSort(getvalue(rtype))]
-        impl = to_call_accessor(first(eq[accessor]), _x, codom_module)
-        jf = JuliaFunction(;name=a, args=args, return_type=ret_type, impl=impl)
-        push!(funs3, jf)
-      end
-    end
-  end
 
-  model_expr = Expr(
-    :curly,
-    GlobalRef(Syntax.TheoryInterface, :Model),
-    Expr(:curly, :Tuple, esc.(dom_types)...)
-  )
-
+  # Generate instance code 
   instance_code = generate_instance(
     dom_theory,
     dom_module,
     jltype_by_sort,
-    name,
-    [],
-    Expr(:block, generate_function.([funs...,funs2..., funs3...])...);
-    typecheck=false
+    Expr(:curly, name, whereparams...),
+    whereparams,
+    Expr(:block, generate_function.([typecon_funs...,
+                                     termcon_funs..., 
+                                     accessor_funs...
+                                     ])...);
+    typecheck=true, escape=false
   )
 
+  tup_params = Expr(:curly, :Tuple, whereparams...)
+
+  model_expr = Expr(
+    :curly,
+    GlobalRef(Syntax.TheoryInterface, :Model),
+    tup_params
+  )
+
+  # The second whereparams needs to be reordered by the sorts of the DOM theory
   quote
-    struct $(esc(name)) <: $model_expr
-      model :: $(esc(modelname))
+    struct Migrator{$(whereparams...)} <: $model_expr
+      model ::  $(GlobalRef(ModelInterface, :Model)){$tup_params}
+      function Migrator(model:: $(GlobalRef(ModelInterface, :Model)){$tup_params}) where {$(whereparams...)}
+        $(GlobalRef(ModelInterface, :implements))(model, $codom_module) || error("Cannot migrate model $model")
+        new{$(whereparams...)}(model)
+      end
     end
 
-    $instance_code
+    $(instance_code.args...)
   end
 end
 
@@ -725,5 +726,6 @@ function to_call_accessor(t::AlgTerm, x::Symbol, mod::Module)
   Expr(:call, Expr(:ref, :($mod.$(nameof(headof(b)))), :(model.model)), rest)
 end
 
+migrate(theorymap::Module, m::Model) = theorymap.Migrator(m)
 
 end # module
