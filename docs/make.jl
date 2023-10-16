@@ -37,7 +37,8 @@ makedocs(
   pages=Any[
     "GATlab.jl" => "index.md",
     "Concepts" => Any[
-      "concepts/overview.md",
+      "concepts/catlab_differences.md",
+      "concepts/scopes.md",
       "concepts/theories.md",
       "concepts/models.md"
     ],
