@@ -1,6 +1,8 @@
-# For Catlab users
+# Changes from Catlab GATs
 
 GATlab is a refactoring of the core GAT system in Catlab. There are three main differences between the GATlab GAT system and the Catlab GAT system, in addition to a variety of new features enabled by these differences.
+
+However, GATlab has a full backward compatibility layer with the GAT system as used to be used in Catlab; the new features are mostly only opt-in.
 
 ## 1. Models as values
 

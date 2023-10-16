@@ -1,29 +1,42 @@
-# Model families
+# Models and instances
 
-The semantics part of GATlab is the *model family* infrastructure.
+A *model* is any julia value `m` that satisfies `m :: Model`. A model may *implement* one or more theories; to check if a model `m` is implements a theory `Th`, one can run `implements(m, Th)`, which returns `nothing` if `m` does not implement `Th`, and returns an `ImplementationNotes` struct if `m` does implement `Th`.
 
-Given a theory, one can declare a model family for that theory. This consists of the following.
+When a model `m` implements `Th`, the following methods should be defined.
 
-1. A struct `T`. Each value of the struct is a *model* of the theory. The struct subtypes `Model{Th, Tuple{Ts...}}`. `Th` is the theory that the struct is a model family for, and `Ts` specifies types for each of the type constructors in `Theory`.
-2. For each type constructor `i` in `Theory`, an overload of `checkvalidity` of the form
-   
+1. For every type constructor `X` in `Th`
+
    ```julia
-   checkvalidity(m::T, ::TypCon{i}, args..., val) = ...
+   Th.X[m::typeof(m)](x, args...) = ...
    ```
    
-   This checks that `val` is a valid instance of `i` applied to `args...`, assuming that `args...` have been previously checked to be valid.
+   This attempts to coerce `x` into a valid element of the type constructor `X` applied to args `args...`, and throws an error if this is not possible.
+   
+   For instance, `ThCategory.Hom[FinSetC()](xs::Vector{Int}, dom::Int, codom::Int)` returns `xs` if and only if `length(xs) == dom` and `all(1 .<= xs .<= codom)`, and otherwise errors.
+   
+   This is syntactic sugar (via an overload of `Base.getindex(::typeof(ThCategory.Hom), ::Model)`) for calling `ThCategory.Hom(TheoryInterface.WithModel(FinSetC()), xs, dom, codom)`. The reason that we do not simply have `ThCategory.Hom(FinSetC(), xs, dom, codom)` is a long story; essentially it has to do with maintaining compatibility with Catlab. But one advantage of this is that you can define `Hom = ThCategory.Hom[FinSetC()]`, and then use that locally.
 
-   This can then be applied using, for instance
+2. For each argument `a` to a type constructor (i.e. `dom` and `codom` for `Hom`), an overload of
 
    ```julia
-   checkvalidity(m, Category.Hom, x, y, f)
+   Th.a[m::typeof(m)](x) = ...
    ```
 
-   using the singleton structs defined in [Theories](@ref)
-3. For each term constructor `i` in `Theory`, an overload of `ap` of the form
+   This opportunistically attempts to retrieve the type argument for x. For instance, `ThCategory.dom[FinSetC()]([1,2,3]) = 3`. However, this *may* return an error, as for instance `ThCategory.codom[FinSetC()]([1,2,3])` is uncertain; it could be a morphism into any `n >= 3`. This is because morphisms don't have to know their domain and codomain.
+
+3. For each term constructor `f` in `Theory`
 
    ```julia
-   ap(m::T, ::TrmCon{i}, args...) = ...
+   Th.f[m::typeof(m)](args...) = ...
    ```
     
-   Here `args...` is to be interpreted as elements of the full context of the term constructor, not just the direct arguments of the term constructor itself. The reason for this is that the implementation of `ap` might need the data of, say, the domain and codomain of morphisms in order to compose them, and because we have an indexed form of dependent types, this information is not available from the morphism data itself.
+   This applies the term constructor to arguments that are assumed to be a valid type (i.e., they have previously been coerced by the type constructors). For instance,
+
+   ```julia
+   ThCategory.compose[FinSetC()]([1,3,2], [1,3,2]) == [1,2,3]
+   ```
+
+   Term constructors sometimes need to know the values of elements of their context that are not arguments. For instance, `compose(f::Hom(A,B), g::Hom(B,C))` might need access to the values of `A`, `B` or `C`, which might not be able to be inferred from `f` and `g`. In this case, we support passing a named tuple called `context` to provide these additional values, named with their variables names in the theory. So for instance, we would allow `ThCategory.compose[FinSetC()]([1,3,2], [1,3,2]; (;B=3))`. It is rare that this is needed, however.
+
+
+In order to make a model implement a theory, one can either manually implement all of the methods, or use the `@instance` macro. You can see examples of using the `@instance` macro in [`src/stdlib/models`](https://github.com/AlgebraicJulia/GATlab.jl/tree/main/src/stdlib/models).
