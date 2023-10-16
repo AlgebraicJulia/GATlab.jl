@@ -15,10 +15,9 @@ end
 #--------------------------------------
 using .ThMonoid
 
-IM = IntMonoid(IntNatPlus())
-@withmodel IM (e) begin
+@withmodel IntMonoid (e) begin
   @test e() == 0
-  @test (ThMonoid.:(⋅)[IM])(3, 4) == 7
+  @test (ThMonoid.:(⋅)[IntMonoid])(3, 4) == 7
 end
 
 # Integers as preorder
@@ -26,7 +25,7 @@ end
 using .ThPreorder
 
 @withmodel IntPreorder() (Leq, refl, trans) begin
-  @test trans((1,3), (3,5)) == (1,5)
+  @test trans((1,3), (3,5)) == (1,5)  
   @test_throws TypeCheckFail Leq((5,3), 5, 3)
   @test refl(2) == (2,2)
 end
@@ -34,9 +33,8 @@ end
 # Now using category interface
 
 using .ThCategory
-M = IntPreorderCat(IntPreorder())
 
-@withmodel M (Hom, id, compose) begin
+@withmodel IntPreorderCat (Hom, id, compose) begin
   @test compose((1,3), (3,5)) == (1,5)
   @test_throws TypeCheckFail Hom((5,3), 5, 3)
   @test_throws ErrorException compose((1,2), (3,5))

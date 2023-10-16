@@ -402,6 +402,8 @@ macro theorymap(head, body)
   codom = macroexpand(__module__, :($codomname.Meta.@theory))
   tmap = fromexpr(dom, codom, body, TheoryMap)
 
+  mig = migrator(tmap, dommod, codommod, dom, codom)
+
   esc(
     Expr(
       :toplevel,
@@ -411,11 +413,16 @@ macro theorymap(head, body)
           macro map() $tmap end
           macro dom() $dommod end
           macro codom() $codommod end
+
+          $mig
         end
       ),
       :(Core.@__doc__ $(name)),
     )
   )
 end
+
+function migrator end
+
 
 end # module
