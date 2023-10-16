@@ -177,7 +177,11 @@ module FreeCategory
 export Ob, Hom
 using ..__module__
 
-const THEORY_MODULE = ThCategory
+module Meta
+  const theory_module = ThCategory
+  const theory = ThCategory.Meta.theory
+  const theory_type = ThCategory.Meta.T
+end
 
 struct Ob{T} <: __module__.ObExpr{T} # T is :generator or a Symbol
   args::Vector
@@ -267,7 +271,12 @@ macro symbolic_model(decl, theoryname, body)
     export $(nameof.(sorts(theory))...)
     using ..($(nameof(__module__)))
     import ..($(nameof(__module__))): $theoryname
-    const $(esc(:THEORY_MODULE)) = $(esc(theoryname))
+    module $(esc(:Meta))
+      import ..($(name)): $theoryname
+      const $(esc(:theory_module)) = $(esc(theoryname))
+      const $(esc(:theory)) = $(theory)
+      const $(esc(:theory_type)) = $(esc(theoryname)).Meta.T
+    end
 
     $(module_structs...)
     $(generate_function.(module_methods)...)
@@ -491,8 +500,8 @@ end
 ############
 
 function invoke_term(syntax_module::Module, constructor_name::Symbol, args)
-  theory_module = syntax_module.THEORY_MODULE
-  theory = theory_module.Meta.theory
+  theory_module = syntax_module.Meta.theory_module
+  theory = syntax_module.Meta.theory
   syntax_types = Tuple(getfield(syntax_module, nameof(sort)) for sort in sorts(theory))
   invoke_term(theory_module, syntax_types, constructor_name, args)
 end
@@ -568,7 +577,7 @@ function functor(types::Tuple, expr::GATExpr;
   end
 
   # Invoke the constructor in the codomain category!
-  theory_module = syntax_module(expr).THEORY_MODULE
+  theory_module = syntax_module(expr).Meta.theory_module
   invoke_term(theory_module, types, name, term_args)
 end
 
@@ -601,7 +610,7 @@ function parse_json_sexpr(syntax_module::Module, sexpr;
     parse_value::Function = identity,
     symbols::Bool = true,
   )
-  theory_module = syntax_module.THEORY_MODULE
+  theory_module = syntax_module.Meta.theory_module
   theory = theory_module.Meta.theory
   type_lens = Dict(
     nameof(getdecl(getvalue(binding))) => length(getvalue(binding).args)
