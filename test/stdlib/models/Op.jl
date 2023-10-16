@@ -24,8 +24,7 @@ end
 # Theory-morphism Op
 #-------------------
 
-M = OpFinSetC(FinSetC())
-@withmodel M (Ob, Hom, id, compose, dom, codom) begin
+@withmodel OpFinSetC (Ob, Hom, id, compose, dom, codom) begin
   @test Ob(0) == 0
   @test_throws TypeCheckFail Ob(-1)
   @test_throws TypeCheckFail Hom([1,5,2], 4, 3)

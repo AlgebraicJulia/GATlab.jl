@@ -51,6 +51,16 @@ setname(f::JuliaFunction, name) =
   end
 end
 
+"""For comparing JuliaFunctionSigs modulo the where parameters"""
+@struct_hash_equal struct JuliaFunctionSigNoWhere 
+  name::Expr0
+  types::Vector{Expr0}
+end
+JuliaFunctionSigNoWhere(f::JuliaFunctionSig) =
+  JuliaFunctionSigNoWhere(f.name, f.types)
+
+JuliaFunctionSig(f::JuliaFunctionSigNoWhere) = JuliaFunctionSig(f.name, f.types)
+
 # Parsing Julia functions
 #########################
 
@@ -81,12 +91,12 @@ function parse_function(expr::Expr)::JuliaFunction
     Expr(:where, fun_head, whereparams...) => (fun_head, whereparams)
     _ => (fun_expr, Expr0[])
   end
-  (call_expr, return_type, impl, doc) = @match fun_expr begin
+  (call_expr, return_type, impl, doc) = @match fun_head begin
     Expr(:(::), Expr(:call, args...), return_type) =>
       (Expr(:call, args...), return_type, impl, doc)
     Expr(:call, args...) =>
       (Expr(:call, args...), nothing, impl, doc)
-    _ => throw(ParseError("Ill-formed function header $fun_expr"))
+    _ => throw(ParseError("Ill-formed function header $fun_head"))
   end
   (name, args, kwargs) = @match call_expr begin
     Expr(:call, name, Expr(:parameters, kwargs...), args...) => (name, args, kwargs)
@@ -137,14 +147,17 @@ function generate_function(fun::JuliaFunction; rename=n->n)::Expr
     []
   end
   call_expr = Expr(:call, rename(fun.name), kwargsblock..., fun.args...)
-  if !isempty(fun.whereparams)
-    call_expr = Expr(:where, call_expr, fun.whereparams...)
+
+  if !isnothing(fun.return_type)
+    call_expr = Expr(:(::), call_expr, fun.return_type)
   end
-  head = if isnothing(fun.return_type)
+
+  head = if isempty(fun.whereparams)
     call_expr
-  else 
-    Expr(:(::), call_expr, fun.return_type)
+  else
+    Expr(:where, call_expr, fun.whereparams...)
   end
+
   body = if isnothing(fun.impl)
     Expr(:block)
   else
