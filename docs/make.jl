@@ -40,7 +40,8 @@ makedocs(
       "concepts/catlab_differences.md",
       "concepts/scopes.md",
       "concepts/theories.md",
-      "concepts/models.md"
+      "concepts/models.md",
+      "concepts/symbolic_models.md"
     ],
     "Library Reference" => "api.md",
     "Standard Library" => "stdlib.md",
