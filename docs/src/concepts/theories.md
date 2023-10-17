@@ -59,7 +59,7 @@ algebra, thus, providing a perfect opportunity for computer algebra systems.
 
 GATlab implements a version of the GAT formalism on top of Julia's type system,
 taking advantage of Julia macros to provide a pleasant syntax. GATs are defined
-using the [`@theory`](@ref) macro.
+using the `@theory` macro.
 
 For example, the theory of categories could be defined by:
 
