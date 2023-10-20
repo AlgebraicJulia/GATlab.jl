@@ -69,11 +69,6 @@ function fromexpr(p::GATContext, e, ::Type{AlgType})::AlgType
       AlgType(parse_methodapp(p, head, args))
     Expr(:call, :(==), lhs, rhs) =>
       AlgType(p, fromexpr(p, lhs, AlgTerm), fromexpr(p, rhs, AlgTerm))
-    Expr(:ref, f, args...) => begin 
-      fterm = fromexpr(p, f, AlgTerm).body
-      ts = fromexpr(p, Expr(:vec, args...), TypeScope)
-      AlgType(AlgTup(headof(fterm), methodof(fterm), ts))
-    end
     _ => error("could not parse AlgType from $e")
   end
 end

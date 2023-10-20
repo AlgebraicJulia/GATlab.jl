@@ -84,7 +84,6 @@ rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
 retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
 
 abstract type AbstractEq end # needs to be defined after AlgSort
-abstract type AbstractAlgTup end # needs to be defined after TypeScope
 
 """
 `AlgType`
@@ -92,7 +91,7 @@ abstract type AbstractAlgTup end # needs to be defined after TypeScope
 One syntax tree to rule all the types.
 """
 @struct_hash_equal struct AlgType <: AlgAST
-  body::Union{MethodApp{AlgTerm}, AbstractEq, AbstractAlgTup}
+  body::Union{MethodApp{AlgTerm}, AbstractEq}
 end
 
 function AlgType(fun::Ident, method::Ident)
