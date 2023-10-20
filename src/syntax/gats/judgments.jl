@@ -27,27 +27,6 @@ end
 
 
 """
-A type that comes from applying a term constructor (which has a tuple output)
-
-We don't always know what the inputs to that function were. E.g. 
-
-universal(p::pushout[apex::Ob, i1::b->apex, i2::c->apex], ...) 
-  ⊣ [(a,b,c):Ob, ...]
-
-However, because of the possibility of overloading, we need to know what the 
-argument sorts are in order to identify the method.
-"""
-@struct_hash_equal struct AlgTup <: AbstractAlgTup
-  head::Ident
-  method::Ident
-  body::TypeScope
-end
-  
-bodyof(t::AlgTup) = t.body
-methodof(t::AlgTup) = t.method
-headof(t::AlgTup) = t.head
-
-"""
 A GAT is conceptually a bunch of `Judgment`s strung together.
 """
 abstract type Judgment <: HasContext{AlgType} end
