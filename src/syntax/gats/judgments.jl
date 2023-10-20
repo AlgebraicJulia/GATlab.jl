@@ -25,6 +25,28 @@ function Base.show(io::IO, ts::TypeScope)
   print(io, toexpr(EmptyContext{AlgType}(), ts))
 end
 
+
+"""
+A type that comes from applying a term constructor (which has a tuple output)
+
+We don't always know what the inputs to that function were. E.g. 
+
+universal(p::pushout[apex::Ob, i1::b->apex, i2::c->apex], ...) 
+  ⊣ [(a,b,c):Ob, ...]
+
+However, because of the possibility of overloading, we need to know what the 
+argument sorts are in order to identify the method.
+"""
+@struct_hash_equal struct AlgTup <: AbstractAlgTup
+  head::Ident
+  method::Ident
+  body::TypeScope
+end
+  
+bodyof(t::AlgTup) = t.body
+methodof(t::AlgTup) = t.method
+headof(t::AlgTup) = t.head
+
 """
 A GAT is conceptually a bunch of `Judgment`s strung together.
 """
@@ -39,6 +61,8 @@ Scopes.getscope(t::TrmTypConstructor) = t.localcontext
 Base.getindex(tc::TrmTypConstructor, lid::LID) = getindex(tc.localcontext, lid)
 
 Base.getindex(tc::TrmTypConstructor, lids::AbstractVector{LID}) = getindex(tc.localcontext, lids)
+
+getdecl(tc::TrmTypConstructor) = tc.declaration
 
 """
 `AlgDeclaration`
@@ -65,7 +89,7 @@ end
 
 Scopes.getcontext(tc::AlgTypeConstructor) = tc.localcontext
 
-getdecl(tc::AlgTypeConstructor) = tc.declaration
+abstract type AccessorField <: Judgment end
 
 """
 `AlgAccessor`
@@ -77,18 +101,19 @@ I.e., declaring `Hom(dom::Ob, codom::Ob)::TYPE` implicitly overloads a previous
 declaration for `dom` and `codom`, or creates declarations if none previously
 exist.
 """
-@struct_hash_equal struct AlgAccessor <: Judgment
+@struct_hash_equal struct AlgAccessor <: AccessorField
   declaration::Ident
   typecondecl::Ident
   typecon::Ident
   arg::Int
 end
 
-Scopes.getcontext(acc::AlgAccessor) = EmptyContext{AlgType}()
+Scopes.getcontext(::AccessorField) = EmptyContext{AlgType}()
 
-getdecl(acc::AlgAccessor) = acc.declaration
+getdecl(acc::AccessorField) = acc.declaration
 
-sortsignature(acc::AlgAccessor) = [AlgSort(acc.typecondecl, acc.typecon)]
+sortsignature(acc::AccessorField) = [AlgSort(acc.typecondecl, acc.typecon)]
+
 
 """
 `AlgTermConstructor`
@@ -99,14 +124,12 @@ A declaration of a term constructor as a method of an `AlgFunction`.
   declaration::Ident
   localcontext::TypeScope
   args::Vector{LID}
-  type::AlgType
+  type::Union{TypeScope,AlgType}
 end
 
 Scopes.getcontext(tc::AlgTermConstructor) = tc.localcontext
 
-getdecl(tc::AlgTermConstructor) = tc.declaration
-
-sortsignature(tc::Union{AlgTypeConstructor, AlgTermConstructor}) =
+sortsignature(tc::TrmTypConstructor) =
   AlgSort.(getvalue.(argsof(tc)))
 
 """
@@ -129,3 +152,62 @@ A description of the argument sorts for a term constructor, used to disambiguate
 multiple term constructors of the same name.
 """
 const AlgSorts = Vector{AlgSort}
+
+"""
+`AlgStruct`
+
+A declaration which is sugar for an AlgTypeConstructor, an AlgTermConstructor 
+which constructs an element of that type, and projection term constructors. E.g.
+
+    struct Cospan(dom, codom) ⊣ [dom:Ob, codom::Ob]
+      apex::Ob
+      i1::dom->apex
+      i2::codom->apex
+    end
+
+Is sugar for:
+
+    Cospan(dom, codom, apex, i1, i2)::TYPE 
+      ⊣ [(dom, codom, apex)::Ob, i1::dom->apex, i2::codom->apex]
+
+    Cospan(apex, i1, i2)::Cospan(dom, codom, apex, i1, i2) 
+      ⊣ [(dom, codom, apex)::Ob, i1::dom->apex, i2::codom->apex]
+
+    apex(csp::Cospan(d, c, a, i_1, i_2))::Ob             ⊣ [(d,c,a)::Ob, ...]
+    i1(csp  ::Cospan(d, c, a, i_1, i_2))::(d->apex(csp)) ⊣ [(d,c,a)::Ob, ...]
+    i2(csp  ::Cospan(d, c, a, i_1, i_2))::(c->apex(csp)) ⊣ [(d,c,a)::Ob, ...]
+
+    apex(Cospan(a,i_1,i_2)) == a ⊣ [a::Ob,...]
+    i1(Cospan(a,i_1,i_2)) == i_1 ⊣ [a::Ob,...]
+    i2(Cospan(a,i_1,i_2)) == i_2 ⊣ [a::Ob,...]
+
+    c == Cospan(apex(c), i1(c), i2(c)) ⊣ [..., c::Cospan(...)]
+
+"""
+@struct_hash_equal struct AlgStruct <: TrmTypConstructor
+  declaration::Ident
+  localcontext::TypeScope
+  typeargs::Vector{LID}
+  args::Vector{LID}
+end
+
+Base.nameof(t::AlgStruct) = nameof(t.declaration)
+typeargsof(t::AlgStruct) = t[t.typeargs]
+typesortsignature(tc::AlgStruct) =
+  AlgSort.(getvalue.(typeargsof(tc)))
+
+Scopes.getcontext(tc::AlgStruct) = tc.localcontext
+
+"""
+A shorthand for a function, such as "square(x) := x * x".  It is relevant for 
+models but can be ignored by theory maps, as it is fully determined by other 
+judgments in the theory.
+"""
+@struct_hash_equal struct AlgFunction <: TrmTypConstructor
+  declaration::Ident
+  localcontext::TypeScope
+  args::Vector{LID}
+  value::AlgTerm
+end
+
+Scopes.getcontext(tc::AlgFunction) = tc.localcontext

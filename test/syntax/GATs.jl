@@ -2,6 +2,7 @@ module TestGATs
 
 using GATlab, Test
 
+
 # GAT ASTs
 ##########
 
@@ -113,13 +114,21 @@ TG = ThGraph.Meta.theory
 #-------
 toexpr.(Ref(T), T.segments)
 
-# InCtx
-#----------
-# tic = fromexpr(T, :(compose(f,compose(id(b),id(b))) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TermInCtx);
-# tic2 = fromexpr(T,toexpr(T, tic), TermInCtx) # same modulo scope tags
+# @theory
+#########
+@theory ThI2 <: ThCategory begin
+  square(x) := f⋅f ⊣ [x::Ob, f::Hom(x,x)]
+end
+
+@theory ThSpan <: ThCategory begin
+  struct Span(dom::Ob, codom::Ob)
+    apex::Ob
+    left::Hom(apex, dom)
+    right::Hom(apex, codom)
+  end
+  id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
+end
 
 
-# typic = fromexpr(T, :(Hom(a,b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TypeInCtx)
-# typic2 = fromexpr(T,toexpr(T, typic), TypeInCtx) # same modulo scope tags
 
 end # module
