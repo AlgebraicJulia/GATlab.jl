@@ -145,7 +145,18 @@ macro instance(head, model, body)
   theory = macroexpand(__module__, :($theory_module.Meta.@theory))
 
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
-  jltype_by_sort = Dict(zip(sorts(theory), instance_types)) # for type checking
+  i = 0
+  jltype_by_sort = Dict(map(sorts(theory)) do s 
+    sorttype = getvalue(theory[methodof(s)])
+    s => if sorttype isa AlgTypeConstructor 
+      i += 1
+      instance_types[i]
+    elseif sorttype isa AlgStruct
+      nameof(sorttype.declaration)
+    end
+  end)
+  i == length(instance_types) || error("Did not use all types ($i): $instance_types")
+
 
   # Get the model type that we are overloading for, or nothing if this is the
   # default instance for `instance_types`
@@ -176,7 +187,7 @@ function generate_instance(
   # methods for type constructors and type argument accessors if these methods
   # are missing
   typechecked_functions = if typecheck
-    typecheck_instance(theory, functions, ext_functions, jltype_by_sort; oldinstance)
+    typecheck_instance(theory, functions, ext_functions, jltype_by_sort; oldinstance, theory_module)
   else
     [functions..., ext_functions...] # skip typechecking and expand_fail
   end
@@ -187,14 +198,15 @@ function generate_instance(
   # to
   # `ThCategory.Ob(m::WithModel{M}, x; context=nothing) = let model = m.model in blah end`
   qualified_functions =
-    map(fun -> qualify_function(fun, theory_module, model_type, whereparams), typechecked_functions)
+    map(fun -> qualify_function(fun, theory_module, model_type, whereparams, 
+                                Set(nameof.(structs(theory)))), 
+        typechecked_functions)
 
   append!(
     qualified_functions,
-    make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, whereparams, ext_functions)
+    make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, 
+                           whereparams, ext_functions)
   )
-
-  # Add overloads for the alias methods
 
   # Declare that this model implements the theory
 
@@ -302,7 +314,7 @@ function julia_signature(
   args = if oldinstance && isempty(sortsig)
     Expr0[Expr(:curly, :Type, jltype_by_sort[AlgSort(termcon.type)])]
   else
-    Expr0[jltype_by_sort[sort] for sort in sortsignature(termcon)]
+    Expr0[jltype_by_sort[sort] for sort in sortsig if !sort.eq]
   end
   JuliaFunctionSig(
     nameof(getdecl(termcon)),
@@ -330,6 +342,16 @@ function julia_signature(
 )
   jlargtype = jltype_by_sort[AlgSort(acc.typecondecl, acc.typecon)]
   JuliaFunctionSig(nameof(getdecl(acc)), [jlargtype])
+end
+
+
+function julia_signature(str::AlgFunction, jltype_by_sort::Dict{AlgSort}; kw...)
+  sortsig = sortsignature(str)
+  args = Expr0[jltype_by_sort[sort] for sort in sortsig]
+  JuliaFunctionSig(
+    nameof(getdecl(str)),
+    args
+  )
 end
 
 function ExprInterop.toexpr(sig::JuliaFunctionSig)
@@ -364,6 +386,7 @@ function typecheck_instance(
   ext_functions::Vector{Symbol},
   jltype_by_sort::Dict{AlgSort};
   oldinstance=false,
+  theory_module=nothing,
 )::Vector{JuliaFunction}
   typechecked = JuliaFunction[]
 
@@ -378,12 +401,22 @@ function typecheck_instance(
       continue
     end
     for (_, x) in allmethods(resolver)
+      if getvalue(theory[x]) isa AlgStruct 
+        continue 
+      end
       sig = julia_signature(getvalue(theory[x]), jltype_by_sort; oldinstance, X=x) |> JuliaFunctionSigNoWhere
       if haskey(undefined_signatures, sig)
-        error(overload_errormsg)
+        error(overload_errormsg * ": $x vs $(undefined_signatures[sig])")
       end
       undefined_signatures[sig] = (decl, x)
     end
+  end
+
+  for x in getidents(theory)
+    v = getvalue(theory[x])
+    if v isa AlgFunction 
+      push!(typechecked, mk_fun(v, theory, theory_module, jltype_by_sort))
+    end 
   end
 
   expected_signatures = DefaultDict{Ident, Set{Expr0}}(()->Set{Expr0}())
@@ -432,7 +465,7 @@ function typecheck_instance(
   for (sig, (decl, method)) in undefined_signatures
     judgment = getvalue(theory[method])
     if judgment isa AlgTermConstructor
-      error("Failed to implement $(toexpr(sig))")
+      error("Failed to implement $decl: $(toexpr(sig))")
     elseif judgment isa AlgTypeConstructor
       push!(typechecked, default_typecon_impl(method, theory, jltype_by_sort))
     elseif judgment isa AlgAccessor
@@ -464,6 +497,15 @@ function expand_fail(theory::GAT, x::Ident, f::JuliaFunction)
   )
 end
 
+function mk_fun(f::AlgFunction, theory, mod, jltype_by_sort)
+  name = nameof(f.declaration)
+  args = map(zip(f.args, sortsignature(f))) do (i,s)
+    Expr(:(::),nameof(f[i]),jltype_by_sort[s])
+  end
+  impl = to_call_impl(f.value,theory, mod, false)
+  JuliaFunction(;name=name, args, impl)
+end
+
 function make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, whereparams, ext_functions)
   lines = []
   oldinstance = isnothing(model_type)
@@ -471,7 +513,7 @@ function make_alias_definitions(theory, theory_module, jltype_by_sort, model_typ
     for binding in segment
       alias = getvalue(binding)
       name = nameof(binding)
-      if alias isa Alias && name ∉ ext_functions
+      if alias isa Alias && nameof(alias.ref) ∉ ext_functions
         for (argsorts, method) in allmethods(theory.resolvers[alias.ref])
           args = [(gensym(), jltype_by_sort[sort]) for sort in argsorts]
           args = if oldinstance
@@ -504,9 +546,10 @@ end
 """
 Add `WithModel` param first, if this is not an old instance (it shouldn't have it already)
 Qualify method name to be in theory module
+Qualify args to struct types
 Add `context` kwargs if not already present
 """
-function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{Expr0, Nothing}, whereparams)
+function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{Expr0, Nothing}, whereparams, structnames)
   kwargs = filter(fun.kwargs) do kwarg
     @match kwarg begin
       Expr(:kw, :context, _) => false
@@ -517,11 +560,18 @@ function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{E
     end
   end
   kwargs = Expr0[Expr(:kw, :context, nothing); kwargs]
-
   (args, impl) = if !isnothing(model_type)
+    args = map(fun.args) do arg
+      @match arg begin
+        Expr(:(::), argname, ty) => Expr(:(::), argname,
+          ty ∈ structnames ? Expr(:., theory_module, QuoteNode(ty)) : ty )
+        _ => arg
+      end
+    end
+
     m = gensym(:m)
     (
-      [Expr(:(::), m, Expr(:curly, TheoryInterface.WithModel, model_type)), fun.args...],
+      [Expr(:(::), m, Expr(:curly, TheoryInterface.WithModel, model_type)), args...],
       Expr(:let, Expr(:(=), :model, :($m.model)), fun.impl)
     )
   else
@@ -542,9 +592,12 @@ end
 function implements_declaration(model_type, scope, whereparams)
   notes = ImplementationNotes(nothing)
   quote
-    $(GlobalRef(ModelInterface, :implements))(
-      ::$(model_type), ::Type{Val{$(gettag(scope))}}
-    ) where {$(whereparams...)} = $notes
+    if !hasmethod($(GlobalRef(ModelInterface, :implements)), 
+        ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(scope))}}))
+      $(GlobalRef(ModelInterface, :implements))(
+        ::$(model_type), ::Type{Val{$(gettag(scope))}}
+      ) where {$(whereparams...)} = $notes
+    end
   end
 end
 
@@ -643,7 +696,7 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
     
     return_type = first(sig.types)
 
-    impls = to_call_impl.(codom_body.args, Ref(codom_module))
+    impls = to_call_impl.(codom_body.args, Ref(codom_theory), Ref(codom_module), true)
     impl = Expr(:call, Expr(:ref, :($codom_module.$fxname), 
                             :(model.model)), _x, impls...)
 
@@ -659,7 +712,7 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
     name = nameof(termcon.declaration)
     return_type = jltype_by_sort[AlgSort(termcon.type)]
     args = [:($k::$v) for (k, v) in zip(nameof.(argsof(termcon)), sig.types)]
-    impl = to_call_impl(fx.val, codom_module)
+    impl = to_call_impl(fx.val, codom_theory, codom_module, true)
 
     JuliaFunction(;name, args, return_type, impl)
   end
@@ -705,14 +758,21 @@ end
 Compile an AlgTerm into a Julia call Expr where termcons (e.g. `f`) are
 interpreted as `mod.f[model.model](...)`.
 """
-function to_call_impl(t::AlgTerm, mod::Module)
+function to_call_impl(t::AlgTerm, theory::GAT, mod::Union{Symbol,Module}, migrate::Bool)
   b = bodyof(t)
   if GATs.isvariable(t)
     nameof(b)
-  else 
-    args = to_call_impl.(argsof(b), Ref(mod))
+  elseif  GATs.isdot(t)
+    Expr(:., to_call_impl(b.body, theory, mod, migrate), QuoteNode(b.head))
+  else
+    args = to_call_impl.(argsof(b), Ref(theory), Ref(mod), migrate)
     name = nameof(headof(b))
-    Expr(:call, Expr(:ref, :($mod.$name), :(model.model)), args...)
+    newhead = if name ∈ nameof.(structs(theory))
+      Expr(:., :($mod), QuoteNode(name))
+    else 
+      Expr(:ref, :($mod.$name), migrate ? :(model.model) : :model)
+    end
+    Expr(:call, newhead, args...)
   end
 end
 

@@ -26,6 +26,15 @@ function toexpr(c::Context, m::MethodApp)
   Expr(:call, toexpr(c, m.head), toexpr.(Ref(c), m.args)...)
 end
 
+function toexpr(c::Context, m::AlgDot)
+  Expr(:.,  toexpr(c, m.body), QuoteNode(m.head))
+end
+
+function toexpr(c::Context, m::Eq)
+  Expr(:(==),  toexpr.(Ref(c), m.args)...)
+end
+
+
 function fromexpr(c::GATContext, e, ::Type{AlgTerm})
   @match e begin
     s::Symbol => begin
@@ -37,6 +46,11 @@ function fromexpr(c::GATContext, e, ::Type{AlgTerm})
         error("nullary constructors must be explicitly called: $e")
       end
     end
+    Expr(:., body, QuoteNode(head)) => begin 
+      t = fromexpr(c, body, AlgTerm)
+      str = AlgSort(c, t)
+      AlgTerm(AlgDot(head, t, str))
+  end
     Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(c, head, argexprs))
     Expr(:(::), val, type) => AlgTerm(Constant(val, fromexpr(c, type, AlgType)))
     e::Expr => error("could not parse AlgTerm from $e")
@@ -54,7 +68,12 @@ function fromexpr(p::GATContext, e, ::Type{AlgType})::AlgType
     Expr(:call, head, args...) && if head != :(==) end =>
       AlgType(parse_methodapp(p, head, args))
     Expr(:call, :(==), lhs, rhs) =>
-      AlgType(fromexpr(p, lhs, AlgTerm), fromexpr(p, rhs, AlgTerm))
+      AlgType(p, fromexpr(p, lhs, AlgTerm), fromexpr(p, rhs, AlgTerm))
+    Expr(:ref, f, args...) => begin 
+      fterm = fromexpr(p, f, AlgTerm).body
+      ts = fromexpr(p, Expr(:vec, args...), TypeScope)
+      AlgType(AlgTup(headof(fterm), methodof(fterm), ts))
+    end
     _ => error("could not parse AlgType from $e")
   end
 end
@@ -156,12 +175,40 @@ function judgmenthead(theory::GAT, name, judgment::AlgAxiom)
   end
 end
 
+function judgmenthead(theory::GAT, name′, judgment::AlgFunction)
+  isnothing(name′) || error("AlgFunction received name argument $name′")
+  name = nameof(getdecl(judgment))
+  call = Expr(:call, name, nameof.(argsof(judgment))...)
+  val = toexpr(GATContext(theory, judgment.localcontext), judgment.value)
+  Expr(:(:=), call, val)
+end
+
+function toexpr(theory::GAT, judgment::AlgStruct)
+  name = nameof(getdecl(judgment))
+  ctx = GATContext(theory, judgment.localcontext)
+  callargs = [toexpr(ctx, a) for a in typeargsof(judgment)]
+  body = [toexpr(ctx, a) for a in argsof(judgment)]
+  call = Expr(:call, name, callargs...)
+  lc = [b for (i,b) in enumerate(getbindings(judgment.localcontext)) 
+        if LID(i) ∉ judgment.typeargs ∪ judgment.args] |> TypeScope
+  stexpr = Expr(:struct, false, call, Expr(:block, body...))
+  if isempty(lc) 
+    return stexpr 
+  else 
+    return Expr(:call, :⊣, stexpr, toexpr(theory, lc))
+  end
+end
+
+
+
 function toexpr(c::GAT, binding::Binding{Judgment})
   judgment = getvalue(binding)
   name = nameof(binding)
   # FIXME
   if judgment isa Alias
     return nothing
+  elseif judgment isa AlgStruct 
+    return toexpr(c, judgment)
   end
   head = judgmenthead(c, name, judgment)
   if isnothing(head)
@@ -206,7 +253,7 @@ function parse_binding_expr!(c::GATContext, pushbinding!, e)
     Expr(:(::), name, T) => p!(name, T)
     Expr(:call, :(==), lhs, rhs) =>
       pushbinding!(Binding{AlgType}(
-        nothing, AlgType(fromexpr(c, lhs, AlgTerm), fromexpr(c, rhs, AlgTerm))
+        nothing, AlgType(c, fromexpr(c, lhs, AlgTerm), fromexpr(c, rhs, AlgTerm))
       ))
     _ => error("invalid binding expression $e")
   end
@@ -223,17 +270,19 @@ end
 
 function parseargs!(theory::GAT, exprs::AbstractVector, scope::TypeScope)
   c = GATContext(theory, scope)
-  map(exprs) do expr
+  linenumber = nothing
+  Vector{LID}(filter(x->x isa LID, map(exprs) do expr
     binding_expr = @match expr begin
       a::Symbol => getlid(ident(scope; name=a))
+      l::LineNumberNode => begin linenumber = l end
       :($a :: $T) => begin
         binding = fromexpr(c, expr, Binding{AlgType})
-        Scopes.unsafe_pushbinding!(scope.scope, binding)
+        Scopes.unsafe_pushbinding!(scope.scope, setline(binding, linenumber))
         LID(length(scope))
       end
       _ => error("invalid argument expression $expr")
     end
-  end
+  end))
 end
 
 function parseaxiom!(theory::GAT, localcontext, sort_expr, e; name=nothing)
@@ -264,33 +313,24 @@ function parseconstructor!(theory::GAT, localcontext, type_expr, e)
   args = parseargs!(theory, arglist, localcontext)
   @match type_expr begin
     :TYPE => begin
-      decl = if hasname(theory, name)
-        ident(theory; name)
-      else
-        Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration()))
-      end
+      decl = hasname!(theory, name)
       typecon = AlgTypeConstructor(decl, localcontext, args)
       X = Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, typecon))
       for (i, arg) in enumerate(argsof(typecon))
         argname = nameof(arg)
-        argdecl = if hasname(theory, argname)
-          ident(theory; name=argname)
-        else
-          Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(argname, AlgDeclaration()))
-        end
+        argdecl = hasname!(theory, argname)
         Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, AlgAccessor(argdecl, decl, X, i)))
       end
     end
     _ => begin
       c = GATContext(theory, localcontext)
-      type = fromexpr(c, type_expr, AlgType)
-      decl = if hasname(theory, name)
-        ident(theory; name)
-      else
-        Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration()))
-      end
+      type = @match type_expr begin 
+        Expr(:vect, _...) => fromexpr(c, type_expr, TypeScope)
+        _ => fromexpr(c, type_expr, AlgType)
+      end      
+      decl = hasname!(theory, name)
       termcon = AlgTermConstructor(decl, localcontext, args, type)
-      Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, termcon))
+      m = Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, termcon))
     end
   end
 end
@@ -308,6 +348,7 @@ function normalize_judgment(e)
     :(($lhs == $rhs :: $typ) ⊣ $ctx) => :((($lhs == $rhs) :: $typ) ⊣ $ctx)
     :($trmcon :: $typ ⊣ $ctx) => :(($trmcon :: $typ) ⊣ $ctx)
     :($name := $lhs == $rhs ⊣ $ctx) => :((($name := ($lhs == $rhs))) ⊣ $ctx)
+    :($name := $fun ⊣ $ctx) => :(($name := $fun) ⊣ $ctx)
     :($lhs == $rhs ⊣ $ctx) => :(($lhs == $rhs) ⊣ $ctx)
     :($(trmcon::Symbol) ⊣ $ctx) => :(($trmcon :: default) ⊣ $ctx)
     :($f($(args...)) ⊣ $ctx) && if f ∉ [:(==), :(⊣)] end => :(($f($(args...)) :: default) ⊣ $ctx)
@@ -334,11 +375,56 @@ function parse_binding_line!(theory::GAT, e, linenumber)
   end
 
   @match head begin
-    Expr(:(:=), name, equation) => parseaxiom!(theory, localcontext, type_expr, equation; name)
+    Expr(:(:=), name, equation) => @match equation begin 
+      Expr(:call, :(==), _, _) => parseaxiom!(theory, localcontext, type_expr, equation; name)
+      _ => parsefunction!(theory, localcontext, type_expr, name, equation)
+    end
     Expr(:call, :(==), _, _) => parseaxiom!(theory, localcontext, type_expr, head)
     _ => parseconstructor!(theory, localcontext, type_expr, head)
   end
 end
+
+function  parsefunction!(theory::GAT, localcontext, sort_expr, call, e)
+  isnothing(sort_expr) || error("No explicit sort for functions $call :: $sort_expr")
+  name, args′ = @match call begin
+    Expr(:call, name, args...) => (name, args)
+  end
+  args = parseargs!(theory, args′, localcontext)
+  c = GATContext(theory, localcontext)
+  decl = hasname!(theory, name)
+  trm = fromexpr(c, e, AlgTerm)
+  fun = AlgFunction(decl, localcontext, args, trm)
+  Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, fun))
+end
+
+function parse_struct!(theory::GAT, e, linenumber, ctx=nothing)
+  localcontext = isnothing(ctx) ? TypeScope() : fromexpr(theory, ctx, TypeScope)
+  (name, args...) = @match e begin 
+    Expr(:struct, false, Expr(:call, name, lc...), Expr(:block, body...)) => begin
+      typeargs = parseargs!(theory, lc, localcontext)
+      args = parseargs!(theory, body, localcontext)
+      (name, localcontext, typeargs, args)
+    end
+  end
+  decl = hasname!(theory, name)
+  str = AlgStruct(decl, args...)
+  X = Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, str))
+
+  for arg in typeargsof(str)
+    argname = nameof(arg)
+    i = ident(localcontext; name=argname).lid.val
+    argdecl = hasname!(theory, argname)
+    b = Binding{Judgment}(nothing, AlgAccessor(argdecl, decl, X, i))
+    Scopes.unsafe_pushbinding!(theory, b)
+  end
+  # theory.fields[X] = Dict{Symbol, LID}()
+  # for lid in str.args
+  #   n = nameof(ident(localcontext;lid))
+  #   theory.fields[X][n] = lid
+  # end
+end
+
+
 
 # GATs
 ######
@@ -363,6 +449,8 @@ end
 function parse_gat_line!(theory::GAT, e::Expr, linenumber; current_module)
   try
     @match e begin
+      Expr(:struct, _...) => parse_struct!(theory, e, linenumber)
+      Expr(:call, :⊣, Expr(:struct, _...), ctx) => parse_struct!(theory, e.args[2], linenumber, ctx)
       Expr(:macrocall, var"@op", _, aliasexpr) => begin
         lines = @match aliasexpr begin
           Expr(:block, lines...) => lines
@@ -374,11 +462,7 @@ function parse_gat_line!(theory::GAT, e::Expr, linenumber; current_module)
               nothing
             @case :($alias := $name)
               # check if there is already a declaration for name, if not, create declaration
-              decl = if hasname(theory, name)
-                ident(theory; name)
-              else
-                Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration()))
-              end
+              decl = hasname!(theory, name)
               binding = Binding{Judgment}(alias, Alias(decl), linenumber)
               Scopes.unsafe_pushbinding!(theory, binding)
             @case _
