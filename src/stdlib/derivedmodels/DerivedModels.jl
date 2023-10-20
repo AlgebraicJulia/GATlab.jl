@@ -14,4 +14,4 @@ IntMonoid = migrate(NatPlusMonoid, IntNatPlus())
 # Interpret `id` as reflexivity and `compose` as transitivity.
 IntPreorderCat = migrate(PreorderCat, IntPreorder())
 
-end
+end # module

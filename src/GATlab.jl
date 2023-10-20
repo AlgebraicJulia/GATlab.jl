@@ -7,6 +7,7 @@ include("util/module.jl")
 include("syntax/module.jl")
 include("models/module.jl")
 include("stdlib/module.jl")
+include("nonstdlib/module.jl") # don't reexport this
 
 @reexport using .Util
 @reexport using .Syntax
