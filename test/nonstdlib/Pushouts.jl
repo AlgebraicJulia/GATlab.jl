@@ -8,7 +8,6 @@ using .ThPushout
 T = ThPushout.Meta.theory
 @test all(e -> e isa Expr, toexpr.(Ref(T), T.segments))
 
-
 """
 Pushout Input                       Output
    1  <--- a ---> x                   12x
