@@ -45,17 +45,25 @@ seg_expr = quote
     a::Ob, b::Ob, c::Ob, d::Ob,
     f::Hom(a, b), g::Hom(b, c), h::Hom(c, d)
   ]
+  struct Span(dom::Ob, codom::Ob)
+    apex::Ob
+    left::Hom(apex, dom)
+    right::Hom(apex, codom)
+  end
+  id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
 end
+
 
 thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 
-O, H, i, cmp = idents(thcat; name=[:Ob, :Hom, :id, :compose])
+O, H, i = idents(thcat; name=[:Ob, :Hom, :id])
 
 ob_decl = getvalue(thcat[O])
 
 ObT = fromexpr(thcat, :Ob, AlgType)
 ObS = AlgSort(ObT)
 @test toexpr(GATContext(thcat), ObS) == :Ob
+
 
 # Extend seg with a context of (A: Ob)
 sortscope = TypeScope(:A => ObT)
@@ -78,6 +86,9 @@ HomS = AlgSort(HomT)
 @test retag(Dict(gettag(sortscope)=>newscopetag()), HomT) isa AlgType
 
 @test sortcheck(c, AlgTerm(A)) == ObS
+
+x = fromexpr(c, :(id_span(A)), AlgTerm)
+@test sortcheck(c, x) isa AlgSort
 
 # # Good term and bad term
 ida = fromexpr(c, :(id(A)), AlgTerm)
