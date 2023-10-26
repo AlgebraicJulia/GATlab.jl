@@ -15,13 +15,6 @@ function parse_methodapp(c::GATContext, head::Symbol, argexprs)
   MethodApp{AlgTerm}(fun, method, args)
 end
 
-function fromexpr(c::GATContext, e, ::Type{MethodApp{AlgTerm}})
-  @match e begin
-    Expr(:call, head::Symbol, argexprs...) => parse_methodapp(c, head, argexprs)
-    _ => error("expected a call expression")
-  end
-end
-
 function toexpr(c::Context, m::MethodApp)
   Expr(:call, toexpr(c, m.head), toexpr.(Ref(c), m.args)...)
 end
@@ -29,11 +22,6 @@ end
 function toexpr(c::Context, m::AlgDot)
   Expr(:.,  toexpr(c, m.body), QuoteNode(m.head))
 end
-
-function toexpr(c::Context, m::Eq)
-  Expr(:(==),  toexpr.(Ref(c), m.args)...)
-end
-
 
 function fromexpr(c::GATContext, e, ::Type{AlgTerm})
   @match e begin
@@ -80,7 +68,7 @@ function toexpr(c::Context, type::AlgType)
     else
       Expr(:call, toexpr(c, type.body.head), toexpr.(Ref(c), type.body.args)...)
     end
-  else
+  elseif iseq(type)
     Expr(:call, :(==), toexpr.(Ref(c), type.body.equands)...)
   end
 end
@@ -120,12 +108,7 @@ end
 ###########
 
 function toexpr(p::Context, b::Binding{AlgType})
-  val = getvalue(b)
-  if isapp(val)
-    Expr(:(::), nameof(b), toexpr(p, val))
-  elseif iseq(val)
-    Expr(:call, :(==), toexpr.(Ref(p), val.body.equands)...)
-  end
+  Expr(:(::), nameof(b), toexpr(p, getvalue(b)))
 end
 
 function bindingexprs(c::Context, s::HasScope)
