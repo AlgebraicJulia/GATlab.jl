@@ -125,8 +125,6 @@ function toexpr(p::Context, b::Binding{AlgType})
     Expr(:(::), nameof(b), toexpr(p, val))
   elseif iseq(val)
     Expr(:call, :(==), toexpr.(Ref(p), val.body.equands)...)
-  elseif val isa Alias
-    Expr(:(=), nameof(b), toexpr(Ref(p), name.ref))
   end
 end
 

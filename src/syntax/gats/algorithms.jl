@@ -15,6 +15,8 @@ function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
       argsorts = sortcheck.(Ref(ctx), t.body.args)
       argsorts == sortsignature(judgment) || error("Sorts don't match")
       AlgSort(judgment.type)
+    elseif judgment isa AlgStruct
+      AlgSort(headof(bodyof(t)), methodof(bodyof(t)))
     else
       error("Unexpected app $t") 
     end
@@ -23,8 +25,10 @@ function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
     AlgSort(type)
   elseif isdot(t)
     AlgSort(ctx, t)
-  else
+  elseif isconstant(t)
     AlgSort(t.body.type)
+  else
+    error("Make this branch explicit if it's ever used $t")
   end
 end
 
@@ -192,7 +196,7 @@ function substitute_funs(ctx::Context, t::AlgTerm)
   b = bodyof(t)
   if isapp(t)
     m = getvalue(ctx[methodof(b)])
-    if m isa AlgTermConstructor
+    if m isa AlgTermConstructor || m isa AlgStruct
       args = substitute_funs.(Ref(ctx), argsof(b))
       AlgTerm(MethodApp{AlgTerm}(headof(b), methodof(b), args))
     elseif m isa AlgFunction 
