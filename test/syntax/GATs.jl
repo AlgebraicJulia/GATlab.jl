@@ -24,6 +24,8 @@ three = AlgTerm(plus, plusmethod, [one, two])
 
 @test fromexpr(GAT(:Empty), two.body, AlgTerm) == two
 
+@test GATs.substitute_funs(scope, one) == one
+
 @test basicprinted(two) == "AlgTerm(2::number)"
 
 @test_throws Exception AlgSort(scope, three)

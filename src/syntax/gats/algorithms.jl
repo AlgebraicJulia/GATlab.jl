@@ -17,8 +17,6 @@ function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
       AlgSort(judgment.type)
     elseif judgment isa AlgStruct
       AlgSort(headof(bodyof(t)), methodof(bodyof(t)))
-    else
-      error("Unexpected app $t") 
     end
   elseif isvariable(t)
     type = ctx[t.body] |> getvalue
@@ -27,8 +25,6 @@ function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
     AlgSort(ctx, t)
   elseif isconstant(t)
     AlgSort(t.body.type)
-  else
-    error("Make this branch explicit if it's ever used $t")
   end
 end
 
@@ -202,14 +198,10 @@ function substitute_funs(ctx::Context, t::AlgTerm)
     elseif m isa AlgFunction 
       subst = Dict(zip(idents(m.localcontext; lid=m.args), argsof(b)))
       substitute_term(m.value, subst)
-    else 
-      error("Bad app $m")
     end
   elseif isvariable(t) || isconstant(t)
     t 
   elseif isdot(t)
     AlgTerm(AlgDot(headof(b), substitute_funs(ctx, bodyof(b)), b.sort))
-  else 
-    error("Bad term $t")
   end
 end
