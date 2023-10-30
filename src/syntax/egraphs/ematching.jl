@@ -2,8 +2,8 @@
 #
 # Here we follow a strategy similar to egg, but modified somewhat for our uses.
 #
-# We take a pattern, which is a Trm in a Context, and we attempt to find an
-# assignment of an enode to each term in the context.
+# We take a pattern, which is a AlgTerm in a TypeScope, and we attempt to find an
+# assignment of an enode to each variable in the scope.
 #
 # For instance, we might look for the term `(a * b) * c` in the context
 # `[a,b,c::U]` or for the term `f ∘ id(a)` in the context
@@ -27,9 +27,9 @@ end
 Base.:+(r::Reg, i::Int) = Reg(r.idx + i)
 
 struct Machine
-  reg::Vector{Id}
-  lookup::Vector{Id}
-  matches::Vector{Vector{Id}}
+  reg::Vector{EId}
+  lookup::Vector{EId}
+  matches::Vector{Vector{EId}}
   limit::Union{Some{Int}, Nothing}
   function Machine(;limit=nothing)
     new(Id[], Id[], Vector{Id}[], limit)
@@ -57,7 +57,7 @@ end
   #
   # For each term, assign the registers past `out` to the arguments of that term,
   # and run the rest of the instructions.
-  Bind(trmcon::Lvl, i::Reg, out::Reg)
+  Bind(trmcon::Ident, i::Reg, out::Reg)
 
   # Check if the eclass bound to `i` is the same as the eclass bound to `j`
   Compare(i::Reg, j::Reg)
@@ -66,11 +66,12 @@ end
   # refer to earlier elements of `term`. Fill out a lookup vector of ids the same
   # length as `term` by:
   # - For each Reg, just look up the id in the EGraph
-  # - For each ETrm, look up its arguments in the lookup vector, and then lookup
+  # - For each ETerm, look up its arguments in the lookup vector (the arguments
+  # to the ETerm are indices into the lookup vector, not eids), and then look up
   # the completed ETrm in the EGraph
   #
   # At the end, put the last id in the lookup vector into `reg`.
-  Lookup(term::Vector{Union{Reg, ETrm}}, reg::Reg)
+  Lookup(term::Vector{Union{Reg, ETerm}}, reg::Reg)
 
   # Iterate through every eclass in the egraph.
   #

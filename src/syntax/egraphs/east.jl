@@ -29,7 +29,7 @@ EType(a::Ident,b::Ident,c::Vector{EId}) = EType(MethodApp(a,b,c))
 end
 
 """
-ETerms in are interpreted in a Presentation. In the case of a MethodApp, the 
+ETerms in are interpreted in a GATContext. In the case of a MethodApp, the 
 head/method refer to term constructors or accessors of the theory.
 """
 @struct_hash_equal struct ETerm
@@ -61,21 +61,21 @@ end
 
 """
 Stores a congruent partial equivalence relation on terms in the context of
-`presentation`
+`context`
 """
 struct EGraph
-  presentation::Presentation
+  context::GATContext
   eqrel::IntDisjointSets{EId}
   eclasses::Dict{EId, EClass}
   hashcons::Dict{ETerm, EId}
   worklist::Vector{EId}
   isclean::Ref{Bool}
-  function EGraph(pres::Presentation)
+  function EGraph(pres::GATContext)
     new(pres, IntDisjointSets{EId}(0), Dict{EId, EClass}(), Dict{ETerm, EId}(), EId[], Ref(true))
   end
 end
 
-EGraph(T::GAT) = EGraph(Presentation(T)) # Theory without any further context
+EGraph(T::GAT) = EGraph(GATContext(T)) # Theory without any further context
 
 """
 Update e-term to refer to canonical e-ids
@@ -119,7 +119,7 @@ weaken(n, x)::Term(n) ⊣ [n::Nat, x::Term(S(n))]
 ```
 """
 function econtext(eg::EGraph, m::MethodApp{EId})
-  termcon = getvalue(eg.presentation[m.method])
+  termcon = getvalue(eg.context[m.method])
   typeof(termcon) == AlgTermConstructor ||
     error("head of $etrm is not a term constructor")
   length(m.args) == length(termcon.args) ||
@@ -158,13 +158,13 @@ end
 function compute_etype(eg::EGraph, eterm::ETerm)::EType
   @match eterm.body begin
     x::Ident => begin
-      algtype = getvalue(eg.presentation[x]).body
+      algtype = getvalue(eg.context[x]).body
       EType(algtype.head, algtype.method, add!.(Ref(eg), argsof(algtype)))
     end
     c::EConstant => c.type
     m::MethodApp{EId} => begin
       ectx = econtext(eg, m)
-      termcon = getvalue(eg.presentation[m.method])
+      termcon = getvalue(eg.context[m.method])
       type_body = termcon.type.body
       EType(
         type_body.head,
@@ -228,7 +228,7 @@ function add!(eg::EGraph, term::AlgTerm)
 end
 
 function add!(eg::EGraph, term::Union{Expr, Symbol})
-  add!(eg, fromexpr(eg.presentation, term, AlgTerm))
+  add!(eg, fromexpr(eg.context, term, AlgTerm))
 end
 
 find!(eg::EGraph, i::EId) = find_root!(eg.eqrel, i)

@@ -4,7 +4,7 @@ using Test
 
 using GATlab
 
-@present P(ThMonoid) begin
+@gatcontext P(ThMonoid) begin
   (a,b,c)
 end
 
@@ -19,7 +19,7 @@ i4 = add!(eg, :(c ⋅ (a ⋅ b)))
 
 @test i3 == i4
 
-@present C(ThCategory) begin
+@gatcontext C(ThCategory) begin
   (x,y,z) :: Ob
   f :: Hom(x,y)
   g :: Hom(y,z)
@@ -39,8 +39,8 @@ merge!(eg, add!(eg, :x), add!(eg, :z))
 
 i2 = add!(eg, :(g ⋅ f))
 
-# # E Matching
-# ############
+# E-Matching
+############
 
 # @theory C <: ThCategory begin
 #   x::Ob
