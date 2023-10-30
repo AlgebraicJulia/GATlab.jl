@@ -1,7 +1,7 @@
 module ModelInterface
 
 export Model, implements, TypeCheckFail, SignatureMismatchError, 
-       @model, @instance, @withmodel, @fail, @migrate
+       @model, @instance, @withmodel, @fail, @migrate_theory
 
 using ...Syntax
 using ...Util.MetaUtils
@@ -585,7 +585,7 @@ E.g. given NatIsMonoid: ThMonoid->ThNatPlus and IntPlus <: Model{Tuple{Int}}
 and IntPlus implements ThNatPlus:
 
 ```
-@migrate IntPlusMonoid = NatIsMonoid(IntPlus){Int}
+@migrate_theory IntPlusMonoid = NatIsMonoid(IntPlus){Int}
 ```
 
 Yields:
@@ -601,7 +601,7 @@ end
 Future work: There is some subtlety in how accessor functions should be handled.
 TODO: The new instance methods do not yet handle the `context` keyword argument.
 """
-macro migrate(head)
+macro migrate_theory(head)
   # Parse
   (name, mapname, modelname) = @match head begin
     Expr(:(=), name, Expr(:call, mapname, modelname)) =>
