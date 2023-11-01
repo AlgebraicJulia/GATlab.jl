@@ -130,7 +130,7 @@ Scopes.getcontext(t::AlgAxiom) = t.localcontext
 A description of the argument sorts for a term constructor, used to disambiguate
 multiple term constructors of the same name.
 """
-const AlgSorts = Vector{AlgSort}
+const AlgSorts = Vector{<:AbstractAlgSort}
 
 """
 `AlgStruct`
@@ -144,24 +144,23 @@ which constructs an element of that type, and projection term constructors. E.g.
       i2::codom->apex
     end
 
-Is sugar for:
+Is tantamount to (in a vanilla GAT):
 
-    Cospan(dom, codom, apex, i1, i2)::TYPE 
+    Cospan(dom::Ob, codom::Ob)::TYPE 
+
+    cospan(apex, i1, i2)::Cospan(dom, codom) 
       ⊣ [(dom, codom, apex)::Ob, i1::dom->apex, i2::codom->apex]
 
-    Cospan(apex, i1, i2)::Cospan(dom, codom, apex, i1, i2) 
-      ⊣ [(dom, codom, apex)::Ob, i1::dom->apex, i2::codom->apex]
+    apex(csp::Cospan(d::Ob, c::Ob))::Ob            
+    i1(csp::Cospan(d::Ob, c::Ob))::(d->apex(csp))
+    i2(csp::Cospan(d::Ob, c::Ob))::(c->apex(csp))
 
-    apex(csp::Cospan(d, c, a, i_1, i_2))::Ob             ⊣ [(d,c,a)::Ob, ...]
-    i1(csp  ::Cospan(d, c, a, i_1, i_2))::(d->apex(csp)) ⊣ [(d,c,a)::Ob, ...]
-    i2(csp  ::Cospan(d, c, a, i_1, i_2))::(c->apex(csp)) ⊣ [(d,c,a)::Ob, ...]
-
-    apex(Cospan(a,i_1,i_2)) == a ⊣ [a::Ob,...]
-    i1(Cospan(a,i_1,i_2)) == i_1 ⊣ [a::Ob,...]
-    i2(Cospan(a,i_1,i_2)) == i_2 ⊣ [a::Ob,...]
-
-    c == Cospan(apex(c), i1(c), i2(c)) ⊣ [..., c::Cospan(...)]
-
+    apex(cospan(a, i_1, i_2)) == a  
+      ⊣ [(dom, codom, apex)::Ob, i_1::dom->apex, i_2::codom->apex]
+    i1(cospan(a, i_1, i_2)) == i_1 
+      ⊣ [(dom, codom, apex)::Ob, i_1::dom->apex, i_2::codom->apex]
+    i2(cospan(a, i_1, i_2)) == i_2
+      ⊣ [(dom, codom, apex)::Ob, i_1::dom->apex, i_2::codom->apex]
 """
 @struct_hash_equal struct AlgStruct <: TrmTypConstructor
   declaration::Ident
