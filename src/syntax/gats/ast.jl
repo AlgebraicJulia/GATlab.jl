@@ -1,6 +1,35 @@
 # GAT ASTs
 ##########
 
+
+# AlgSorts
+#---------
+abstract type AbstractAlgSort end
+
+"""
+`AlgSort`
+
+A *sort*, which is essentially a type constructor without arguments
+"""
+@struct_hash_equal struct AlgSort <: AbstractAlgSort
+  head::Ident
+  method::Ident
+end
+
+@struct_hash_equal struct AlgEqSort <: AbstractAlgSort
+  head::Ident
+  method::Ident
+end
+
+iseq(::AlgEqSort) = true
+iseq(::AlgSort) = false
+headof(a::AbstractAlgSort) = a.head
+methodof(a::AbstractAlgSort) = a.method
+
+Base.nameof(sort::AbstractAlgSort) = nameof(sort.head)
+
+getdecl(s::AbstractAlgSort) = s.head
+
 """
 We need this to resolve a mutual reference loop; the only subtype is Constant
 """
@@ -83,7 +112,39 @@ rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
 
 retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
 
-abstract type AbstractEq end # needs to be defined after AlgSort
+function AlgSort(c::Context, t::AlgTerm)
+  t_sub = substitute_funs(c, t)
+  if t_sub != t 
+    return AlgSort(c, t_sub)
+  end
+  if isconstant(t)
+    AlgSort(t.body.type)
+  elseif isapp(t)
+    binding = c[t.body.method]
+    value = getvalue(binding)
+    AlgSort(value.type)
+  elseif isdot(t)
+    AlgSort(resolvefield(c, t.body.sort.method, t.body.head))
+  else # variable
+    binding = c[t.body]
+    AlgSort(getvalue(binding))
+  end
+end
+
+"""
+`Eq`
+
+The type of equality judgments.
+"""
+@struct_hash_equal struct Eq
+  equands::Tuple{AlgTerm, AlgTerm}
+  sort::AlgSort
+end
+
+retag(reps::Dict{ScopeTag, ScopeTag}, eq::Eq) = Eq(retag.(Ref(reps), eq.equands))
+
+rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, eq::Eq) =
+  Eq(retag.(Ref(tag), Ref(reps), eq.equands))
 
 """
 `AlgType`
@@ -91,7 +152,7 @@ abstract type AbstractEq end # needs to be defined after AlgSort
 One syntax tree to rule all the types.
 """
 @struct_hash_equal struct AlgType <: AlgAST
-  body::Union{MethodApp{AlgTerm}, AbstractEq}
+  body::Union{MethodApp{AlgTerm}, Eq}
 end
 
 function AlgType(fun::Ident, method::Ident)
@@ -120,6 +181,13 @@ retag(reps::Dict{ScopeTag,ScopeTag}, t::AlgType) =
 rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::AlgType) =
   AlgType(rename(tag, reps, t.body))
 
+AlgSort(t::AlgType) = if iseq(t)
+  AlgEqSort(t.body.sort.head, t.body.sort.method)
+else 
+  AlgSort(t.body.head, t.body.method)
+end
+  
+
 """
 Common methods for AlgType and AlgTerm
 """
@@ -138,71 +206,6 @@ A Julia value in an algebraic context. Type checked elsewhere.
   value::Any
   type::AlgType
 end
-
-
-# AlgSorts
-##########
-
-"""
-`AlgSort`
-
-A *sort*, which is essentially a type constructor without arguments
-"""
-@struct_hash_equal struct AlgSort
-  head::Ident
-  method::Ident
-  eq::Bool
-  AlgSort(h::Ident,m::Ident,eq::Bool=false) = new(h,m,eq)
-end
-
-AlgSort(t::AlgType) = if iseq(t)
-  AlgSort(t.body.sort.head, t.body.sort.method, true)
-else 
-  AlgSort(t.body.head, t.body.method)
-end
-
-iseq(s::AlgSort) = s.eq
-headof(a::AlgSort) = a.head
-methodof(a::AlgSort) = a.method
-
-function AlgSort(c::Context, t::AlgTerm)
-  t_sub = substitute_funs(c, t)
-  if t_sub != t 
-    return AlgSort(c, t_sub)
-  end
-  if isconstant(t)
-    AlgSort(t.body.type)
-  elseif isapp(t)
-    binding = c[t.body.method]
-    value = getvalue(binding)
-    AlgSort(value.type)
-  elseif isdot(t)
-    AlgSort(resolvefield(c, t.body.sort.method, t.body.head))
-  else # variable
-    binding = c[t.body]
-    AlgSort(getvalue(binding))
-  end
-end
-
-Base.nameof(sort::AlgSort) = nameof(sort.head)
-
-getdecl(s::AlgSort) = s.head
-
-
-"""
-`Eq`
-
-The type of equality judgments.
-"""
-@struct_hash_equal struct Eq <: AbstractEq
-  equands::Tuple{AlgTerm, AlgTerm}
-  sort::AlgSort
-end
-
-retag(reps::Dict{ScopeTag, ScopeTag}, eq::Eq) = Eq(retag.(Ref(reps), eq.equands))
-
-rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, eq::Eq) =
-  Eq(retag.(Ref(tag), Ref(reps), eq.equands))
 
 
 """
