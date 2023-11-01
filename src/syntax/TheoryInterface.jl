@@ -170,8 +170,8 @@ end
 
 """
 function mk_struct(s::AlgStruct, mod)
-  fields = map(s.args) do i
-    Expr(:(::), nameof(s[i]), nameof(AlgSort(getvalue(s[i]))))
+  fields = map(argsof(s)) do b
+    Expr(:(::), nameof(b), nameof(AlgSort(getvalue(b))))
   end 
   sorts = unique([f.args[2] for f in fields])
   she = Expr(:macrocall, GlobalRef(StructEquality, Symbol("@struct_hash_equal")), mod, nameof(s))
