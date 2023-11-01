@@ -234,7 +234,7 @@ end
 """Get type associated with a field of a struct"""
 function resolvefield(t::Context, method::Ident, field::Symbol)
   str = getvalue(t[method])
-  str[ident(str; name=field)] |> getvalue
+  str.fields[ident(str.fields; name=field)] |> getvalue
 end
 
 """Get all structs in a theory"""

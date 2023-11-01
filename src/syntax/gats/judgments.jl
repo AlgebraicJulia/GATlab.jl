@@ -166,13 +166,14 @@ Is tantamount to (in a vanilla GAT):
   declaration::Ident
   localcontext::TypeScope
   typeargs::Vector{LID}
-  args::Vector{LID}
+  fields::TypeScope
 end
 
 Base.nameof(t::AlgStruct) = nameof(t.declaration)
 typeargsof(t::AlgStruct) = t[t.typeargs]
 typesortsignature(tc::AlgStruct) =
   AlgSort.(getvalue.(typeargsof(tc)))
+argsof(t::AlgStruct) = getbindings(t.fields)
 
 Scopes.getcontext(tc::AlgStruct) = tc.localcontext
 
