@@ -166,7 +166,7 @@ function toexpr(theory::GAT, judgment::AlgStruct)
   body = [toexpr(ctx, a) for a in argsof(judgment)]
   call = Expr(:call, name, callargs...)
   lc = [b for (i,b) in enumerate(getbindings(judgment.localcontext)) 
-        if LID(i) ∉ judgment.typeargs ∪ judgment.args] |> TypeScope
+        if LID(i) ∉ judgment.typeargs ∪ judgment.fields] |> TypeScope
   stexpr = Expr(:struct, false, call, Expr(:block, body...))
   if isempty(lc) 
     return stexpr 
@@ -378,7 +378,7 @@ function parse_struct!(theory::GAT, e, linenumber, ctx=nothing)
   (name, args...) = @match e begin 
     Expr(:struct, false, Expr(:call, name, lc...), Expr(:block, body...)) => begin
       typeargs = parseargs!(theory, lc, localcontext)
-      args = parseargs!(theory, body, localcontext)
+      args = fromexpr(GATContext(theory, localcontext),Expr(:vect,body...),TypeScope)  
       (name, localcontext, typeargs, args)
     end
   end
@@ -393,11 +393,6 @@ function parse_struct!(theory::GAT, e, linenumber, ctx=nothing)
     b = Binding{Judgment}(nothing, AlgAccessor(argdecl, decl, X, i))
     Scopes.unsafe_pushbinding!(theory, b)
   end
-  # theory.fields[X] = Dict{Symbol, LID}()
-  # for lid in str.args
-  #   n = nameof(ident(localcontext;lid))
-  #   theory.fields[X][n] = lid
-  # end
 end
 
 
