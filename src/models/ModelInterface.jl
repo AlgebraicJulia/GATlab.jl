@@ -273,7 +273,7 @@ function parse_instance_body(expr::Expr, theory::GAT)
   return (funs, ext_funs)
 end
 
-function args_from_sorts(sorts::Vector{AlgSort}, jltype_by_sort::Dict{AlgSort})
+function args_from_sorts(sorts::AlgSorts, jltype_by_sort::Dict{AlgSort})
   Expr0[Expr(:(::), gensym(), jltype_by_sort[s]) for s in sorts]
 end
 
@@ -314,7 +314,7 @@ function julia_signature(
   args = if oldinstance && isempty(sortsig)
     Expr0[Expr(:curly, :Type, jltype_by_sort[AlgSort(termcon.type)])]
   else
-    Expr0[jltype_by_sort[sort] for sort in sortsig if !sort.eq]
+    Expr0[jltype_by_sort[sort] for sort in sortsig if !GATs.iseq(sort)]
   end
   JuliaFunctionSig(
     nameof(getdecl(termcon)),

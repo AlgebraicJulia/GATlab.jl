@@ -1,7 +1,7 @@
 module GATs
 export Constant, AlgTerm, AlgType, AlgAST,
   TypeScope, TypeCtx, AlgSort, AlgSorts,
-  AlgDeclaration, AlgTermConstructor, 
+  AlgDeclaration, AlgTermConstructor, AbstractAlgSort,
   AlgTypeConstructor, AlgAccessor, AlgAxiom, AlgStruct, AlgDot, AlgFunction,
   typesortsignature, sortsignature, getdecl,
   GATSegment, GAT, GATContext, gettheory, gettypecontext, allmethods, 
