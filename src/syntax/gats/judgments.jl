@@ -66,7 +66,7 @@ A declaration of a type constructor.
   args::Vector{LID}
 end
 
-Scopes.getcontext(tc::AlgTypeConstructor) = tc.localcontext
+Scopes.getcontext(tc::TrmTypConstructor) = tc.localcontext
 
 abstract type AccessorField <: Judgment end
 
@@ -87,7 +87,6 @@ exist.
   arg::Int
 end
 
-Scopes.getcontext(::AccessorField) = EmptyContext{AlgType}()
 
 getdecl(acc::AccessorField) = acc.declaration
 
@@ -106,7 +105,6 @@ A declaration of a term constructor as a method of an `AlgFunction`.
   type::Union{TypeScope,AlgType}
 end
 
-Scopes.getcontext(tc::AlgTermConstructor) = tc.localcontext
 
 sortsignature(tc::TrmTypConstructor) =
   AlgSort.(getvalue.(argsof(tc)))
@@ -122,7 +120,6 @@ A declaration of an axiom
   equands::Vector{AlgTerm}
 end
 
-Scopes.getcontext(t::AlgAxiom) = t.localcontext
 
 """
 `AlgSorts`
@@ -175,8 +172,6 @@ typesortsignature(tc::AlgStruct) =
   AlgSort.(getvalue.(typeargsof(tc)))
 argsof(t::AlgStruct) = getbindings(t.fields)
 
-Scopes.getcontext(tc::AlgStruct) = tc.localcontext
-
 """
 A shorthand for a function, such as "square(x) := x * x".  It is relevant for 
 models but can be ignored by theory maps, as it is fully determined by other 
@@ -188,5 +183,3 @@ judgments in the theory.
   args::Vector{LID}
   value::AlgTerm
 end
-
-Scopes.getcontext(tc::AlgFunction) = tc.localcontext

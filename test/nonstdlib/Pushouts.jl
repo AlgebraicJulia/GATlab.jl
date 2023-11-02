@@ -28,4 +28,5 @@ Universal input:                    Output
   @test cospan(res) == Cospan(4, [1,1,2,3], [1,2,4])
   @test ι₁(res) == [1,1,2,3]
   @test universal(res, Cospan(4, [3,3,2,2],[3,2,1])) == [3,2,2,1]
+  @test_throws ErrorException universal(PushoutInt(4, [1,1,2,3],[1,2,3]), Cospan(4, [3,3,2,2],[3,2,1]))
 end

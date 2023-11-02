@@ -163,6 +163,12 @@ function allnames(theory::GAT; aliases=false)
 end
 
 sorts(theory::GAT) = theory.sorts
+primitive_sorts(theory::GAT) = 
+  filter(s->getvalue(theory[methodof(s)]) isa AlgTypeConstructor, sorts(theory))
+
+# NOTE: AlgStruct is the only derived sort this returns.
+struct_sorts(theory::GAT) = 
+  filter(s->getvalue(theory[methodof(s)]) isa AlgStruct, sorts(theory))
 
 function termcons(theory::GAT)
   xs = Tuple{Ident, Ident}[]
@@ -231,20 +237,5 @@ else
   Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration()))
 end
 
-"""Get type associated with a field of a struct"""
-function resolvefield(t::Context, method::Ident, field::Symbol)
-  str = getvalue(t[method])
-  str.fields[ident(str.fields; name=field)] |> getvalue
-end
-
 """Get all structs in a theory"""
-function structs(t::GAT)
-  res = AlgStruct[]
-  for s in sorts(t)
-    v = getvalue(t[methodof(s)])
-    if v isa AlgStruct 
-      push!(res, v)
-    end
-  end
-  res
-end
+structs(t::GAT) = AlgStruct[getvalue(t[methodof(s)]) for s in struct_sorts(t)]
