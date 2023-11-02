@@ -145,18 +145,10 @@ macro instance(head, model, body)
   theory = macroexpand(__module__, :($theory_module.Meta.@theory))
 
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
-  i = 0
-  jltype_by_sort = Dict(map(sorts(theory)) do s 
-    sorttype = getvalue(theory[methodof(s)])
-    s => if sorttype isa AlgTypeConstructor 
-      i += 1
-      instance_types[i]
-    elseif sorttype isa AlgStruct
-      nameof(sorttype.declaration)
-    end
-  end)
-  i == length(instance_types) || error("Did not use all types ($i): $instance_types")
-
+  jltype_by_sort = Dict{AlgSort,Expr0}([
+    zip(primitive_sorts(theory), instance_types)..., 
+    [s => nameof(headof(s)) for s in struct_sorts(theory)]...
+  ]) 
 
   # Get the model type that we are overloading for, or nothing if this is the
   # default instance for `instance_types`
