@@ -183,7 +183,7 @@ function substitute_term(ma::MethodApp{AlgTerm}, subst::Dict{Ident, AlgTerm})
 end
 
 function substitute_term(ad::AlgDot, subst::Dict{Ident, AlgTerm})
-  AlgDot(ad.head, substitute_term(ad.body, subst), ad.sort)
+  AlgDot(ad.head, substitute_term(ad.body, subst))
 end
 
 
@@ -202,6 +202,6 @@ function substitute_funs(ctx::Context, t::AlgTerm)
   elseif isvariable(t) || isconstant(t)
     t 
   elseif isdot(t)
-    AlgTerm(AlgDot(headof(b), substitute_funs(ctx, bodyof(b)), b.sort))
+    AlgTerm(AlgDot(headof(b), substitute_funs(ctx, bodyof(b))))
   end
 end
