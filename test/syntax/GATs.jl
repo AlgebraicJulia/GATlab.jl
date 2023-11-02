@@ -64,6 +64,7 @@ ob_decl = getvalue(thcat[O])
 
 ObT = fromexpr(thcat, :Ob, AlgType)
 ObS = AlgSort(ObT)
+@test headof(ObS) == O
 @test toexpr(GATContext(thcat), ObS) == :Ob
 
 
