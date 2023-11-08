@@ -1,7 +1,7 @@
 module ModelInterface
 
 export Model, implements, TypeCheckFail, SignatureMismatchError, 
-       @model, @instance, @withmodel, @fail, migrate_theory
+       @model, @instance, @withmodel, @fail, migrate_model
 
 using ...Syntax
 using ...Util.MetaUtils
@@ -780,6 +780,6 @@ function to_call_accessor(t::AlgTerm, x::Symbol, mod::Module)
   Expr(:call, Expr(:ref, :($mod.$(nameof(headof(b)))), :(model.model)), rest)
 end
 
-migrate_theory(theorymap::Module, m::Model) = theorymap.Migrator(m)
+migrate_model(theorymap::Module, m::Model) = theorymap.Migrator(m)
 
 end # module
