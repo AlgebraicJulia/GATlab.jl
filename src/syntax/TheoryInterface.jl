@@ -60,6 +60,61 @@ function fqmn(mod::Module)
   reverse(names)
 end
 
+function usetheory!(theory::GAT, other::GAT, renames::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
+  retagging = Dict{ScopeTag, ScopeTag}()
+  renamings = Vector{Tuple{ScopeTag, Dict{Symbol, Symbol}}}()
+  for segment in othertheory.segments.scopes
+    makenew = false
+    current_renames = Dict{Symbol, Symbol}()
+    newbindings = map(getbindings(segment)) do binding
+      name = nameof(binding)
+      retagged = retag(retagging, getvalue(binding))
+      renamed = fold((b, (tag, r)) -> rename(tag, r, b), renamings; init=retagged)
+      newbinding = if haskey(renames, name)
+        makenew = true
+        current_renames[name] = renames[name]
+        return Binding(renames[name], renamed, getline(binding))
+      else
+        Binding(name, renamed, getline(binding))
+      end
+      if newbinding != binding
+        makenew = true
+      end
+      newbinding
+    end
+    if makenew
+      tag′ = newscopetag()
+      retagging[tag] = tag′
+      push!(renamings, (tag′, current_renames))
+      newbindings = map(newbindings) do binding
+        retag(Dict(tag => tag′), rename(tag, current_renames, binding))
+      end
+      segment = GATSegment(Scope(newbindings; tag=tag′))
+    end
+    if !hastag(theory, gettag(segment))
+      GATs.unsafe_pushsegment!(theory, segment)
+    end
+  end
+end
+
+function expand_theory(parentname, body, __module__)
+  theory = if !isnothing(parentname)
+    copy(macroexpand(__module__, :($parentname.Meta.@theory)))
+  else
+    GAT(:_EMPTY)
+  end
+  for line in body.args
+    @match line begin
+      Expr(:using, Expr(:(.), other)) => begin
+        othertheory = macroexpand(__module__, :($other.Meta.@theory))
+        usetheory!(theory, othertheory)
+      end
+      _ => nothing
+    end
+  end
+  theory
+end
+
 function theory_impl(head, body, __module__)
   (name, parentname) = @match head begin
     (name::Symbol) => (name, nothing)
@@ -67,11 +122,7 @@ function theory_impl(head, body, __module__)
     _ => error("could not parse head of @theory: $head")
   end
 
-  parent = if !isnothing(parentname)
-    macroexpand(__module__, :($parentname.Meta.@theory))
-  else
-    GAT(:_EMPTY)
-  end
+  parent = expand_theory(parentname, body, __module__)
 
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
   newsegment = theory.segments.scopes[end]

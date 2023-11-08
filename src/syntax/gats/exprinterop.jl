@@ -386,6 +386,8 @@ function parse_gat_line!(theory::GAT, e::Expr, linenumber; current_module)
           end
         end
       end
+      # already handled earlier
+      Expr(:using, _) => nothing
       _ => begin
         parse_binding_line!(theory, e, linenumber)
       end

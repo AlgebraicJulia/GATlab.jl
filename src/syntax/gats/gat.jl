@@ -125,6 +125,14 @@ function Scopes.unsafe_pushbinding!(theory::GAT, binding::Binding{Judgment})
   x
 end
 
+function unsafe_pushsegment!(theory::GAT, segment::GATSegment)
+  Scopes.unsafe_pushscope!(theory.segments, segment)
+  for (x, judgment) in identvalues(segment)
+    unsafe_updatecache!(theory, x, judgment)
+  end
+  segment
+end
+
 # Pretty-printing
 
 function Base.show(io::IO, theory::GAT)

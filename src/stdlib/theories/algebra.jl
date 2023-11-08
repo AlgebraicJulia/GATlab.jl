@@ -32,10 +32,10 @@ end
   a ⋅ b == b ⋅ a ⊣ [a, b]
 end
 
-# @theory ThAb <: ThMonoid begin
-#   using ThGroup
-#   using ThCMonoid
-# end
+@theory ThAb <: ThMonoid begin
+  using ThGroup
+  using ThCMonoid
+end
 
 # @theory ThRing <: ThSet begin
 #   using ThAb: ⋅ as +, i as -, e as zero
