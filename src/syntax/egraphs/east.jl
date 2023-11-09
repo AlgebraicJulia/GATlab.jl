@@ -21,12 +21,16 @@ to. For each parameter there is an e-term.
   body::MethodApp{EId}
 end
 
+@as_record EType
+
 EType(a::Ident,b::Ident,c::Vector{EId}) = EType(MethodApp(a,b,c))
 
 @struct_hash_equal struct EConstant 
   value::Any
   type::EType
 end
+
+@as_record EConstant
 
 """
 ETerms in are interpreted in a GATContext. In the case of a MethodApp, the 
@@ -35,6 +39,8 @@ head/method refer to term constructors or accessors of the theory.
 @struct_hash_equal struct ETerm
   body::Union{Ident, MethodApp{EId}, EConstant}
 end
+
+@as_record ETerm
 
 ETerm(a::Ident,b::Ident,c::Vector{EId}) = ETerm(MethodApp(a,b,c))
 

@@ -31,7 +31,8 @@ i1 = add!(eg, :(f ⋅ g))
 
 EGraphs.etypeof(eg, i1)
 
-EGraphs.extract(eg, EGraphs.etypeof(eg, i1); chooser=first)
+type_fg = EGraphs.extract(eg, EGraphs.etypeof(eg, i1); chooser=first)
+@test type_fg == fromexpr(C, :(Hom(x,z)), AlgType)
 
 @test_throws Exception add!(eg, :(g ⋅ f))
 
@@ -42,29 +43,29 @@ i2 = add!(eg, :(g ⋅ f))
 # E-Matching
 ############
 
-# @theory C <: ThCategory begin
-#   x::Ob
-#   y::Ob
-#   z::Ob
-#   f::Hom(x,y)
-#   g::Hom(x,x)
-#   h::Hom(y,y)
-# end
+@gatcontext C(ThCategory) begin
+  x::Ob
+  y::Ob
+  z::Ob
+  f::Hom(x,y)
+  g::Hom(x,x)
+  h::Hom(y,y)
+end
 
-# eg = EGraph(C.T)
+eg = EGraph(C)
 
-# id = add!(eg, @term C (f ⋅ id(y)))
+id = add!(eg, :(f ⋅ id(y)))
 
-# compose_lvl = (@term C (f ⋅ h)).head
-# id_lvl = (@term C id(x)).head
+compose_method = fromexpr(C, :(f ⋅ h), AlgTerm).body.method
+id_method = fromexpr(C, :(id(x)), AlgTerm).body.method
 
-# instructions = [Scan(Reg(1)), Bind(compose_lvl, Reg(1), Reg(2)), Bind(id_lvl, Reg(3), Reg(4))]
+instructions = [Scan(Reg(1)), Bind(compose_method, Reg(1), Reg(2)), Bind(id_method, Reg(3), Reg(4))]
 
-# m = Machine()
+m = Machine()
 
-# run!(m, eg, instructions, [Reg(4), Reg(2)])
+run!(m, eg, instructions, [Reg(4), Reg(2)])
 
-# @test m.matches[1] == [add!(eg, @term C y), add!(eg, @term C f)]
+@test m.matches[1] == [add!(eg, :y), add!(eg, :f)]
 
 # Γ = @context ThCategory [a::Ob, b::Ob, α::Hom(a,b)]
 # t = @term ThCategory Γ (α ⋅ id(b))
