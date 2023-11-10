@@ -158,6 +158,10 @@ Is tantamount to (in a vanilla GAT):
       ⊣ [(dom, codom, apex)::Ob, i_1::dom->apex, i_2::codom->apex]
     i2(cospan(a, i_1, i_2)) == i_2
       ⊣ [(dom, codom, apex)::Ob, i_1::dom->apex, i_2::codom->apex]
+
+    cospan(apex(csp), i1(csp), i2(csp)) == csp
+      ⊣ [(dom, codom)::Ob, csp::Cospan(dom, codom)]
+
 """
 @struct_hash_equal struct AlgStruct <: TrmTypConstructor
   declaration::Ident

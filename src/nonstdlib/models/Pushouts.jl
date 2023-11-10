@@ -23,19 +23,19 @@ using .ThPushout
     rootindex = sort(collect(Set(values(roots))))
     toindex = [findfirst(==(r),rootindex) for r in roots]
     PushoutInt(DataStructures.num_groups(d), 
-     [toindex[roots[b]] for b in 1:B], 
+     [toindex[roots[b]] for b in 1:B],
      [toindex[roots[c+B]] for c in 1:C]
     )
   end
   cospan(p::PushoutInt) = Cospan(p.ob, p.i1, p.i2)
-  function universal(p::PushoutInt, csp::Cospan; context)
+  function universal(p::PushoutInt, csp::Cospan)
     map(1:p.ob) do i
       for (proj, csp_map) in [(p.i1, csp.left), (p.i2, csp.right)]
         for (j, i′) in enumerate(proj)
           if i′ == i return csp_map[j] end
         end
       end
-      error("Pushout is jointly surjective")
+      error("Pushout $p is not jointly surjective")
     end
   end
 end
