@@ -16,6 +16,11 @@ A *sort*, which is essentially a type constructor without arguments
   method::Ident
 end
 
+"""
+`AlgSort`
+
+A sort for equality judgments of terms for a particular sort
+"""
 @struct_hash_equal struct AlgEqSort <: AbstractAlgSort
   head::Ident
   method::Ident
@@ -213,9 +218,8 @@ end
 Accessing a name from a term of tuple type
 """
 @struct_hash_equal struct AlgDot <: AbstractDot
-  head::Ident #Symbol
+  head::Ident
   body::AlgTerm
-  # sort::AlgSort
 end
 headof(a::AlgDot) = a.head 
 bodyof(a::AlgDot) = a.body
