@@ -15,3 +15,8 @@ end
 @testset "stdlib" begin
   include("stdlib/tests.jl")
 end
+
+@testset "nonstdlib" begin
+  include("nonstdlib/tests.jl")
+end
+

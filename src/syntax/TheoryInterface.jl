@@ -3,11 +3,11 @@ export @theory, @signature, Model, invoke_term
 
 using ..Scopes, ..GATs, ..ExprInterop
 
-using MLStyle
+using MLStyle, StructEquality
 
 abstract type Model{Tup <: Tuple} end
 
-struct WithModel{M <: Model}
+@struct_hash_equal struct WithModel{M <: Model}
   model::M
 end
 
@@ -78,13 +78,16 @@ function theory_impl(head, body, __module__)
 
   lines = Any[]
   newnames = Symbol[]
-
+  structlines = Expr[]
+  structnames = Set([nameof(s.declaration) for s in structs(theory)])
   for binding in newsegment
     judgment = getvalue(binding)
     bname = nameof(binding)
-    if judgment isa Union{AlgDeclaration, Alias}
+    if judgment isa Union{AlgDeclaration, Alias} && bname ∉ structnames
       push!(lines, juliadeclaration(bname))
       push!(newnames, bname)
+    elseif judgment isa AlgStruct 
+      push!(structlines, mk_struct(judgment, fqmn(__module__)))
     end
   end
 
@@ -123,6 +126,7 @@ function theory_impl(head, body, __module__)
       :(
         module $name
         $(modulelines...)
+        $(structlines...)
         end
       ),
       :(Core.@__doc__ $(name)),
@@ -161,4 +165,22 @@ function invoke_term(theory_module, types, name, args; model=nothing)
   end
 end
 
+
+"""
+
+"""
+function mk_struct(s::AlgStruct, mod)
+  fields = map(argsof(s)) do b
+    Expr(:(::), nameof(b), nameof(AlgSort(getvalue(b))))
+  end 
+  sorts = unique([f.args[2] for f in fields])
+  she = Expr(:macrocall, GlobalRef(StructEquality, Symbol("@struct_hash_equal")), mod, nameof(s))
+  quote
+    struct $(nameof(s)){$(sorts...)}
+      $(fields...)
+    end
+
+    $she
+  end
+end
 end

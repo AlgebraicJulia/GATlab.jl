@@ -70,7 +70,7 @@ function Base.copy(theory::GAT; name=theory.name)
     deepcopy(theory.resolvers),
     copy(theory.sorts),
     deepcopy(theory.accessors),
-    copy(theory.axioms)
+    copy(theory.axioms),
   )
 end
 
@@ -81,7 +81,7 @@ function GAT(name::Symbol)
     Dict{Ident, MethodResolver}(),
     AlgSort[],
     Dict{Ident, Dict{Int, Ident}}(),
-    Ident[]
+    Ident[],
   )
 end
 
@@ -106,6 +106,18 @@ function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgTypeConstructor
   theory.accessors[x] = Dict{Int, Ident}()
 end
 
+function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgFunction)
+  addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
+end
+
+function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgStruct)
+  addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
+  addmethod!(theory.resolvers[getdecl(judgment)], typesortsignature(judgment), x) # Collision?
+  push!(theory.sorts, AlgSort(getdecl(judgment), x))
+  theory.accessors[x] = Dict{Int, Ident}()
+end
+
+
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgAccessor)
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
   theory.accessors[judgment.typecon][judgment.arg] = x
@@ -124,6 +136,7 @@ function Scopes.unsafe_pushbinding!(theory::GAT, binding::Binding{Judgment})
   unsafe_updatecache!(theory, x, getvalue(binding))
   x
 end
+
 
 # Pretty-printing
 
@@ -150,6 +163,12 @@ function allnames(theory::GAT; aliases=false)
 end
 
 sorts(theory::GAT) = theory.sorts
+primitive_sorts(theory::GAT) = 
+  filter(s->getvalue(theory[methodof(s)]) isa AlgTypeConstructor, sorts(theory))
+
+# NOTE: AlgStruct is the only derived sort this returns.
+struct_sorts(theory::GAT) = 
+  filter(s->getvalue(theory[methodof(s)]) isa AlgStruct, sorts(theory))
 
 function termcons(theory::GAT)
   xs = Tuple{Ident, Ident}[]
@@ -211,3 +230,12 @@ function methodlookup(c::GATContext, x::Ident, sig::AlgSorts)
     error("no method of $x found with signature $(getdecl.(sig))")
   end
 end
+
+hasname!(theory::GAT, name::Symbol) = if hasname(theory, name)
+  ident(theory; name)
+else
+  Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration()))
+end
+
+"""Get all structs in a theory"""
+structs(t::GAT) = AlgStruct[getvalue(t[methodof(s)]) for s in struct_sorts(t)]

@@ -14,4 +14,4 @@ using ...StdModels
 # Interpret `id` as reflexivity and `compose` as transitivity.
 @migrate_model IntPreorderCat = PreorderCat(IntPreorder)
 
-end
+end # module

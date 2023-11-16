@@ -1,10 +1,49 @@
 # GAT ASTs
 ##########
 
+
+# AlgSorts
+#---------
+abstract type AbstractAlgSort end
+
+"""
+`AlgSort`
+
+A *sort*, which is essentially a type constructor without arguments
+"""
+@struct_hash_equal struct AlgSort <: AbstractAlgSort
+  head::Ident
+  method::Ident
+end
+
+"""
+`AlgSort`
+
+A sort for equality judgments of terms for a particular sort
+"""
+@struct_hash_equal struct AlgEqSort <: AbstractAlgSort
+  head::Ident
+  method::Ident
+end
+
+iseq(::AlgEqSort) = true
+iseq(::AlgSort) = false
+headof(a::AbstractAlgSort) = a.head
+methodof(a::AbstractAlgSort) = a.method
+
+Base.nameof(sort::AbstractAlgSort) = nameof(sort.head)
+
+getdecl(s::AbstractAlgSort) = s.head
+
 """
 We need this to resolve a mutual reference loop; the only subtype is Constant
 """
 abstract type AbstractConstant end
+
+"""
+We need this to resolve a mutual reference loop; the only subtype is Dot
+"""
+abstract type AbstractDot end
 
 """
 `MethodApp`
@@ -44,16 +83,14 @@ abstract type AlgAST end
 
 bodyof(t::AlgAST) = t.body
 
+
 """
 `AlgTerm`
 
 One syntax tree to rule all the terms.
 """
 @struct_hash_equal struct AlgTerm <: AlgAST
-  body::Union{Ident, MethodApp{AlgTerm}, AbstractConstant}
-  function AlgTerm(body::Union{Ident, MethodApp{AlgTerm}, AbstractConstant})
-    new(body)
-  end
+  body::Union{Ident, MethodApp{AlgTerm}, AbstractConstant, AbstractDot}
 end
 
 
@@ -71,12 +108,34 @@ isvariable(t::AlgTerm) = t.body isa Ident
 
 isapp(t::AlgTerm) = t.body isa MethodApp
 
+isdot(t::AlgAST) = t.body isa AlgDot
+
 isconstant(t::AlgTerm) = t.body isa AbstractConstant
 
 rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
   AlgTerm(rename(tag, reps, t.body))
 
 retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
+
+function AlgSort(c::Context, t::AlgTerm)
+  t_sub = substitute_funs(c, t)
+  if t_sub != t 
+    return AlgSort(c, t_sub)
+  end
+  if isconstant(t)
+    AlgSort(t.body.type)
+  elseif isapp(t)
+    binding = c[t.body.method]
+    value = getvalue(binding)
+    AlgSort(value.type)
+  elseif isdot(t)
+    algstruct = c[AlgSort(c, bodyof(bodyof(t))).method] |> getvalue
+    AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
+  else # variable
+    binding = c[t.body]
+    AlgSort(getvalue(binding))
+  end
+end
 
 """
 `Eq`
@@ -85,6 +144,7 @@ The type of equality judgments.
 """
 @struct_hash_equal struct Eq
   equands::Tuple{AlgTerm, AlgTerm}
+  sort::AlgSort
 end
 
 retag(reps::Dict{ScopeTag, ScopeTag}, eq::Eq) = Eq(retag.(Ref(reps), eq.equands))
@@ -118,14 +178,21 @@ isconstant(t::AlgType) = false
 AlgType(head::Ident, method::Ident, args::Vector{AlgTerm}) =
   AlgType(MethodApp{AlgTerm}(head, method, args))
 
-AlgType(lhs::AlgTerm, rhs::AlgTerm) =
-  AlgType(Eq((lhs, rhs)))
+AlgType(c::Context, lhs::AlgTerm, rhs::AlgTerm) =
+  AlgType(Eq((lhs, rhs), AlgSort(c, lhs)))
 
 retag(reps::Dict{ScopeTag,ScopeTag}, t::AlgType) =
   AlgType(retag(reps, t.body))
 
 rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::AlgType) =
   AlgType(rename(tag, reps, t.body))
+
+AlgSort(t::AlgType) = if iseq(t)
+  AlgEqSort(t.body.sort.head, t.body.sort.method)
+else 
+  AlgSort(t.body.head, t.body.method)
+end
+  
 
 """
 Common methods for AlgType and AlgTerm
@@ -146,41 +213,16 @@ A Julia value in an algebraic context. Type checked elsewhere.
   type::AlgType
 end
 
-# AlgSorts
-##########
 
 """
-`AlgSort`
-
-A *sort*, which is essentially a type constructor without arguments
+Accessing a name from a term of tuple type
 """
-@struct_hash_equal struct AlgSort
+@struct_hash_equal struct AlgDot <: AbstractDot
   head::Ident
-  method::Ident
+  body::AlgTerm
 end
-
-AlgSort(t::AlgType) = AlgSort(t.body.head, t.body.method)
-
-headof(a::AlgSort) = a.head
-methodof(a::AlgSort) = a.method
-
-function AlgSort(c::Context, t::AlgTerm)
-  if isconstant(t)
-    AlgSort(t.body.type)
-  elseif isapp(t)
-    binding = c[t.body.method]
-    value = getvalue(binding)
-    AlgSort(value.type)
-  else # variable
-    binding = c[t.body]
-    AlgSort(getvalue(binding))
-  end
-end
-
-Base.nameof(sort::AlgSort) = nameof(sort.head)
-
-getdecl(s::AlgSort) = s.head
-
+headof(a::AlgDot) = a.head 
+bodyof(a::AlgDot) = a.body
 # Type Contexts
 ###############
 
