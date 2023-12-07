@@ -14,7 +14,7 @@ end
 using .ThPushout 
 
 @instance ThPushout{Int, Vector{Int}, PushoutInt} [model::FinSetC] begin
-  @import Ob, Hom, id, compose, dom, codom
+  @import Ob, Hom, id, compose, dom, codom, →, ⋅
   function pushout(sp::Span; context)
     B, C = context[:d], context[:c]
     d = DataStructures.IntDisjointSets(B+C)
