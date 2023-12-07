@@ -505,7 +505,7 @@ function make_alias_definitions(theory, theory_module, jltype_by_sort, model_typ
     for binding in segment
       alias = getvalue(binding)
       name = nameof(binding)
-      if alias isa Alias && nameof(alias.ref) ∉ ext_functions
+      if alias isa Alias && name ∉ ext_functions
         for (argsorts, method) in allmethods(theory.resolvers[alias.ref])
           args = [(gensym(), jltype_by_sort[sort]) for sort in argsorts]
           args = if oldinstance
