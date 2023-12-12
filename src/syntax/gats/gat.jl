@@ -78,9 +78,9 @@ function GAT(name::Symbol)
   GAT(
     name,
     ScopeList{Judgment}(),
-    Dict{Ident, MethodResolver}(),
+    OrderedDict{Ident, MethodResolver}(),
     AlgSort[],
-    Dict{Ident, Dict{Int, Ident}}(),
+    OrderedDict{Ident, Dict{Int, Ident}}(),
     Ident[],
   )
 end
