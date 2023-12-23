@@ -2,7 +2,8 @@ module TestCombinatorial
 
 using GATlab
 using Test
-using GATlab.Combinatorial.DataStructs: shape, subterms, validate, NMI, Nest, ScopedNMs
+using GATlab.Combinatorial.DataStructs: shape, subterms, validate, NMI, Nest, 
+                                        ScopedNMs, const_nm
 using GATlab.Combinatorial.CModels: enum,random_cardinalities
 using GATlab.Combinatorial.Visualization: renderstr
 using GATlab.NonStdlib.NonStdTheories: Th2Cat, ThTwoCat
@@ -23,7 +24,11 @@ d = ScopedNMs(T, Dict(os => NMI(2),
 
 @test sprint(show, MIME"text/plain"(), d[hs]) isa String # render as a table
 @test renderstr(d[h2s]) isa String
-# render(d[h2s]) # to visualize a nested matrix in html on a Mac
+# render(d[h2s]) # to visualize a nested matrix in HTML on a Mac
+
+
+@test_throws ErrorException NMI(Nest([m3 m2; m1 getvalue(d[hs])])) # not all same depth
+@test const_nm(d[hs], :a) isa ScopedNM{Symbol}
 
 # Generate one automatically, fixing the Ob and Hom sets
 gen_ds = random_cardinalities(T; init=Dict(os => NMI(2), hs => NMI(Nest([m2 m0; m1 m1]))))
@@ -34,7 +39,10 @@ m = CombinatorialModel(T; card_range=1:1) # terminal
 @test validate(m)
 m.sets[os] = ScopedNM(NMI(2), getcontext(T,os))
 @test !validate(m)
-
+@test all(x -> x isa String, [renderstr(m[s]) for s in funsorts(T)])
+@test sprint(show, MIME"text/plain"(), m) isa String
+@test_throws KeyError m[only(sorts(ThGroup.Meta.theory))]
+@test_throws KeyError m[only(sorts(ThGroup.Meta.theory))] = NMI(3)
 # Modifying models
 #-----------------
 ntos = NestedType(os)
@@ -46,6 +54,8 @@ add_part!(m, h11)
 
 h2_h12 = NestedType(h2s, [CartesianIndex(1,2), CartesianIndex(3,2)])
 @test getvalue.(subterms(T, h2_h12))==[1,2,3,2]
+
+@test string(NestedTerm(3, h11)) == "Hom[(1, 1)]#3"
 
 #########
 # TWOCAT #

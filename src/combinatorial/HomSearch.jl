@@ -61,14 +61,6 @@ end
 
 gettheory(b::BacktrackingState) = b.dom.theory
 
-function Base.show(io::IO, m::MIME"text/plain", s::BacktrackingState)
-  for (k, v) in s.assignment
-    println(io, k)
-    show(io, m, v)
-  end
-end
-Base.string(n::BacktrackingState) = sprint(show, MIME"text/plain"(), n)
-
 """
 Allow opt-in constraints via `monic`/`epic`/`iso` kwargs. By default these are 
 on the basis of each dependent set, so an iso constraint on Hom would mean that 

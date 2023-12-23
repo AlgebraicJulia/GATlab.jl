@@ -4,8 +4,8 @@ using ..DataStructs
 using ..CModels
 using ...Syntax
 
-initial(T::GAT) = CombinatorialModel(T; card_range=0:0)
-terminal(T::GAT) = CombinatorialModel(T; card_range=1:1)
+# initial(T::GAT) = CombinatorialModel(T; card_range=0:0)
+# terminal(T::GAT) = CombinatorialModel(T; card_range=1:1)
 
 """
 Pushout a span B <-f- A -g-> C. This is a stub for a function that will be written.
@@ -28,13 +28,8 @@ function pushout(f::CombinatorialModelMorphism, g::CombinatorialModelMorphism)
       error("NotImplementedYet $s: $idx")
     end
   end
-
-  for s in funsorts(s)
-    error("NotImplementedYet $s")
-    init[s] = NestedMatrix()
-  end
-  apex = CombinatorialModel(T; init)
-  (apex, Morphism(ι1, B, apex), Morphism(ι2, C, apex))
+  # apex = CombinatorialModel(T; init)
+  # (apex, Morphism(ι1, B, apex), Morphism(ι2, C, apex))
 end
 
 # TODO Implement ThPushout

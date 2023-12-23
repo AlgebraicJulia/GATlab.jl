@@ -50,7 +50,6 @@ end
 subscope(t::TypeScope, i::LID)::TypeScope = 
   subscope(t, LID[sort(collect(vars(t, i)); by=getvalue); i])
 
-relid(t::Dict{LID, LID}, x) = error("HERE $t $x $(typeof(x))") 
 relid(t::Dict{LID, LID}, x::Binding) = setvalue(x, relid(t, getvalue(x))) 
 relid(t::Dict{LID, LID}, x::T) where T<:AlgAST = T(relid(t, bodyof(x))) 
 relid(t::Dict{LID, LID}, x::GATs.MethodApp{AlgTerm}) =

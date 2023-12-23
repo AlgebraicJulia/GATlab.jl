@@ -28,16 +28,11 @@ Base.string(n::Nested) = sprint(show, MIME"text/plain"(), n)
 
 # NestedMatrix 
 ##############
-"""Visualize NestedMatrix using HTML"""
+""" Visualize NestedMatrix using HTML """ # (only tested on Macbook)
 function render(nm::ScopedNM)
-  str = renderstr(nm)
   f = tempname()*".html"
-  write(f, str)
-  cmd = "open -a \"Google Chrome\" $f"
-  run(`bash -c $cmd`)
+  write(f, renderstr(nm)); run(`bash -c $("open -a \"Google Chrome\" $f")`)
 end
-
-render(nm::NestedMatrix, ts::HasContext{AlgType}) = render(nm, getscope(ts))
 
 function renderstr(nm::ScopedNM)
   """<!DOCTYPE html>

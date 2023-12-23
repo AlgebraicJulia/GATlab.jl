@@ -41,6 +41,7 @@ test_homs(homomorphisms(G_12, G_12_12; initial=nmi), 1)
 G_21 = create_graph(2, [(2,1)])
 for (a,b) in Iterators.product([G_21,G_12],[G_21,G_12])
   test_homs(homomorphisms(a,b), 1)
+  test_homs(homomorphisms(a,b; iso=true), 1)
   test_homs(homomorphisms(a, G_11), 1)
 end
 
@@ -49,7 +50,7 @@ test_homs(homomorphisms(G_12_21,G_12_21), 2)
 G_cyc3 = create_graph(3, [(1,2),(2,3),(3,1)])
 G_cyc6 = create_graph(6, [(1,2),(2,3),(3,4),(4,5),(5,6),(6,1)])
 test_homs(homomorphisms(G_cyc6,G_cyc3), 3)
-
+isempty(homomorphisms(G_cyc3, G_cyc6; iso=true))
 # ThCategory 
 ############
 
@@ -70,6 +71,8 @@ end
 h1 = homomorphism(walking_arrow, parallel_paths)
 h2 = homomorphism(parallel_paths, m_123)
 h12′ = homomorphism(walking_arrow, m_123)
+
+@test h1[hs] isa ScopedNM{Vector{Int}}
 
 using .ThCategory
 

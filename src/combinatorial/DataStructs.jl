@@ -132,10 +132,6 @@ function map_nm(fun, ret_type::Type, nm::NM; index=false, curr=Idx[])
   end
 end
 
-Base.eltype(::Type{NestedMatrix{T}}) where T = Pair{Vector{<:Idx}, T}
-
-Base.IteratorSize(::Type{<:NestedMatrix}) = Base.SizeUnknown()
-
 """
 Get all the leaves of a NestedMatrix along with their coordinate indices.
 
@@ -290,8 +286,6 @@ Base.getindex(nm::NestedMatrix, idx::NestedType) = nm[getvalue(idx)]
 Base.setindex!(nm::NestedMatrix, data::NestedMatrix, idx::NestedType) = 
   setindex!(nm, data, getvalue(idx))
   
-Base.length(n::NestedType) = length(n.lookup)
-
 function Base.getindex(typ::NestedType, i::Int)  
   (x, y) = typ.lookup[i]
   getvalue(typ)[x][y]
@@ -342,8 +336,6 @@ function sub_indices(theory::GAT, lc::TypeScope)::Vector{Vector{Int}}
     end
   end
 end
-
-sub_indices(theory::GAT, s::AlgSort) = sub_indices(theory, getcontext(theory, s))
 
 """
 A nested term like Hom2[1,3,2,1]#3 (i.e. the third Hom2 between 
@@ -402,8 +394,6 @@ function Base.setindex!(m::Comb, n::NMI, s::AlgSort)
     m.sets[s] = val
   elseif haskey(m.funs, s)
     m.funs[s] = val
-  else 
-    throw(KeyError(s))
   end
 end
 
