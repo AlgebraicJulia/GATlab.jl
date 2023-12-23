@@ -58,7 +58,7 @@ end
 @test implements(FinSetC(), ThCategory)
 
 # Todo: get things working where Ob and Hom are the same type (i.e. binding dict not monic)
-struct TypedFinSetC <: Model{Tuple{Vector{Int}, Vector{Int}}}
+@struct_hash_equal struct TypedFinSetC <: Model{Tuple{Vector{Int}, Vector{Int}}}
   ntypes::Int
 end
 

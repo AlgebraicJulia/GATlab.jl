@@ -6,7 +6,7 @@ disambiguated by argument sorts.
 
 This is a struct rather than just a type alias so that we can customize the show method.
 """
-struct GATSegment <: HasScope{Judgment}
+@struct_hash_equal struct GATSegment <: HasScope{Judgment}
   scope::Scope{Judgment}
 end
 
@@ -54,7 +54,7 @@ type constructors, and axioms so that they can be iterated through faster.
 
 GATs allow overloading but not shadowing.
 """
-struct GAT <: HasScopeList{Judgment}
+@struct_hash_equal struct GAT <: HasScopeList{Judgment}
   name::Symbol
   segments::ScopeList{Judgment}
   resolvers::OrderedDict{Ident, MethodResolver}
@@ -163,6 +163,12 @@ function allnames(theory::GAT; aliases=false)
 end
 
 sorts(theory::GAT) = theory.sorts
+funsorts(theory::GAT) = [AlgSort(x...) for x in termcons(theory)]
+allsorts(theory::GAT) = sorts(theory) ∪ funsorts(theory)
+
+AlgSort(theory::GAT, s::Symbol) = only([x for x in allsorts(theory)
+                                        if nameof(headof(x)) == s])
+
 primitive_sorts(theory::GAT) = 
   filter(s->getvalue(theory[methodof(s)]) isa AlgTypeConstructor, sorts(theory))
 
@@ -194,9 +200,10 @@ function typecons(theory::GAT)
   xs
 end
 
-
 Base.issubset(t1::GAT, t2::GAT) =
   all(s->hastag(t2, s), gettag.(Scopes.getscopelist(t1).scopes))
+
+Scopes.getcontext(theory::GAT, s::AlgSort) = getcontext(getvalue(theory[methodof(s)]))
 
 """
 `GATContext`
