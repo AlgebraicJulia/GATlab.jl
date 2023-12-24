@@ -1,6 +1,7 @@
 module DataStructs 
 export NestedMatrix, CombinatorialModel, CombinatorialModelMorphism, 
-       NestedType, NestedTerm, CombinatorialModelC, is_natural, getsort
+       NestedType, NestedTerm, CombinatorialModelC, is_natural, getsort,
+       TermIterator, TypeIterator
 
 using StructEquality
 
@@ -109,8 +110,8 @@ the data on the leaves.
 shape(nm::NM)::NM{Nothing} = const_nm(nm, nothing)
 
 """ Replace all leaves with a constant value. Optionally deepcopy that value """
-function const_nm(nm::NM, v::T; copy=false)::NM{T} where T
-  map_nm(_ -> (copy ? deepcopy : identity)(v), T, nm)
+function const_nm(nm::NM, v::T; copy=false, type=nothing) where T
+  map_nm(_ -> (copy ? deepcopy : identity)(v), isnothing(type) ? T : type, nm)
 end
 
 """
@@ -170,21 +171,29 @@ function Base.iterate(nm::NestedMatrix{T}, state=(true => Idx[])) where T
   end 
 end
 
-Base.sum(nm::NestedMatrix) = sum(getvalue.(nm.data)) # total sum of leaves
-
+Base.sum(nm::NestedMatrix{<:Number}) = if nm.depth == 0 
+  nm.data 
+else 
+  sum(getvalue.(nm.data)) # total sum of leaves
+end
 
 """A NestedMatrix with a TypeScope to make sense of the indexing"""
 @struct_hash_equal struct ScopedNM{T}
   val::NM{T}
+  sort::AlgSort
   ts::TypeScope
   partition::Vector{Vector{LID}}
-  function ScopedNM(val::NM{T}, ts::TypeScope) where T
-    new{T}(val, ts, partition(ts))
+  function ScopedNM(val::NM{T}, theory::GAT, s::AlgSort) where T
+    ts = getcontext(theory, s)
+    new{T}(val, s, ts, partition(ts))
+  end
+  function ScopedNM(val::NM{T}, scope::TypeScope, s::AlgSort) where T
+    new{T}(val, s, scope, partition(scope))
   end
 end
 
 getvalue(s::ScopedNM) = s.val
-
+getsort(s::ScopedNM) = s.sort
 getcontext(s::ScopedNM) = s.ts
 
 shape(s::ScopedNM) = shape(getvalue(s))
@@ -201,11 +210,11 @@ Base.getindex(n::ScopedNM{T}, i) where T = getindex(getvalue(n), i)
 
 Base.setindex!(n::ScopedNM{T}, i, k) where T = setindex!(getvalue(n), i, k)
 
-map_nm(fun, ret_type, nm::ScopedNM; kw...) = 
-  ScopedNM(map_nm(fun, ret_type, getvalue(nm); kw...), getcontext(nm))
+map_nm(fun, ret_type, n::ScopedNM; kw...) = 
+  ScopedNM(map_nm(fun, ret_type, getvalue(n); kw...), getcontext(n), getsort(n))
 
 const_nm(n::ScopedNM, v; copy=false) = 
-  ScopedNM(const_nm(getvalue(n), v; copy), getcontext(n))
+  ScopedNM(const_nm(getvalue(n), v; copy), getcontext(n), getsort(n))
 
 const AlgDict{T} = Dict{AlgSort, NM{T}}
 
@@ -214,7 +223,7 @@ const AlgDict{T} = Dict{AlgSort, NM{T}}
 end
 
 function ScopedNMs(theory::GAT, xs::AlgDict{T}) where T 
-  ScopedNMs{T}(Dict(k=>ScopedNM(v, getcontext(theory, k)) for (k,v) in pairs(xs)))
+  ScopedNMs{T}(Dict(k=>ScopedNM(v, theory, k) for (k,v) in pairs(xs)))
 end
 
 function ScopedNMs{T}() where T 
@@ -238,6 +247,8 @@ Base.iterate(s::ScopedNMs{T}, i) where T = iterate(getvalue(s), i)
 Base.haskey(s::ScopedNMs{T}, k::AlgSort) where T = haskey(getvalue(s), k)
 
 Base.get(s::ScopedNMs{T}, k, v) where T = get(getvalue(s), k, v)
+
+Base.values(s::ScopedNMs{T}) where T = values(getvalue(s))
 
 const NMI = NM{Int}
 
@@ -312,7 +323,7 @@ getsort(n::NestedTerm)::AlgSort = getsort(argsof(n))
 Base.getindex(nm::NestedMatrix{Vector{T}}, idx::NestedTerm) where T = 
   getvalue(nm[argsof(idx)])[getvalue(idx)]
 
-function Base.setindex!(nm::NMVI, data::Int, idx::NestedTerm)
+function Base.setindex!(nm::NM{Vector{T}}, data::T, idx::NestedTerm) where T
   getvalue(nm[argsof(idx)])[getvalue(idx)] = data
 end
 
@@ -357,6 +368,53 @@ function subterms(theory::GAT, trm::Nested)::Vector{NestedTerm}
   end
 end
 
+"""
+Enumerate a NestedMatrix, yielding expressions like `compose[1,2,3,1,4]`
+
+This ignores the leaf values of the NestedMatrix.
+"""
+struct TypeIterator
+  s::ScopedNM{Int}
+end
+Base.length(s::TypeIterator) = length(s.s)
+Base.eltype(::Type{TypeIterator}) = NestedType
+Base.iterate(s::TypeIterator) = iterate(s, Iterators.Stateful(s.s))
+Base.iterate(s::TypeIterator, it) = 
+  isempty(it) ? nothing : (NestedType(getsort(s.s), popfirst!(it)[1]), it)
+  
+"""
+Enumerate a typecon matrix, yielding expressions like `Hom[1,2]#1`, `Hom[1,2]#2`
+"""
+struct TermIterator
+  s::ScopedNM{Int}
+end
+
+Base.length(s::TermIterator) = sum(s.s)
+
+Base.eltype(::Type{TermIterator}) = NestedTerm
+
+Base.iterate(s::TermIterator) = 
+  iterate(s, (Iterators.Stateful(s.s), nothing, Int[]))
+
+function Base.iterate(s::TermIterator, state)
+  (it, idx, queue) = state
+  if isempty(queue)
+    if isempty(it)
+      nothing
+    else 
+      idx, val = popfirst!(it)
+      iterate(s, (it, idx, collect(1:val)))
+    end 
+  else
+    nxt = popfirst!(queue)
+    NestedTerm(nxt, NestedType(getsort(s.s), idx)), (it, idx, queue)
+  end
+end
+
+
+# Base.iterate(s::ScopedNM{T}, i) where T = iterate(getvalue(s), i)
+
+
 # Models 
 ########
 
@@ -370,15 +428,19 @@ One might be tempted to call this a GATset.
   theory::GAT
   sets::NMIs
   funs::NMIs
-  function CombinatorialModel(t, s=NMIs(), f=NMIs())
+  function CombinatorialModel(t, s=NMIs(), f=NMIs(); check=true)
     s, f = [sf isa NMIs ? sf : ScopedNMs(t, sf) for sf in [s,f]]
-    Set(keys(s)) == Set(sorts(t)) || error("Bad sort keys $s")
-    Set(keys(f)) == Set(funsorts(t)) || error("Bad fun keys $s")
+    if check 
+      Set(keys(s)) == Set(sorts(t)) || error("Bad sort keys $s")
+      Set(keys(f)) == Set(funsorts(t)) || error("Bad fun keys $s")
+    end
     new(t, s, f)
   end
 end
 const Comb = CombinatorialModel
 gettheory(c::Comb) = c.theory
+
+Base.getindex(m::Comb, s::Symbol) = m[AlgSort(gettheory(m), s)]
 
 Base.getindex(m::Comb, s::AlgSort) = if haskey(m.sets,s)
   m.sets[s]
@@ -389,7 +451,7 @@ else
 end
 
 function Base.setindex!(m::Comb, n::NMI, s::AlgSort) 
-  val = ScopedNM(n, getcontext(m.theory, s))
+  val = ScopedNM(n, m.theory, s)
   if haskey(m.sets,s)
     m.sets[s] = val
   elseif haskey(m.funs, s)
@@ -447,7 +509,8 @@ end
 
 const Morphism = CombinatorialModelMorphism
 
-Base.getindex(c::Morphism, k) = components(c)[k]
+Base.getindex(c::Morphism, k::AlgSort) = components(c)[k]
+Base.getindex(c::Morphism, k::Symbol) = components(c)[AlgSort(gettheory(c), k)]
 
 gettheory(c::Morphism) = gettheory(c.dom)
 

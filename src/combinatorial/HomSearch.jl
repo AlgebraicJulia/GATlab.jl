@@ -5,8 +5,8 @@ using StructEquality
 
 using ..TypeScopes: partition, repartition
 using ..DataStructs
-using ..DataStructs: map_nm, sub_indices, subterms, getsort, Comb,
-                     NM, NMI, NMIs, NMVI, NMVIs, const_nm, ScopedNMs
+using ..DataStructs: map_nm, sub_indices, subterms, getsort, Comb, AlgDict,
+                     NM, NMI, NMIs, NMVI, NMVIs, Idx, const_nm, ScopedNMs
 using ...Syntax
 using ..Visualization
 import ...Syntax: gettheory, argsof
@@ -48,9 +48,14 @@ Assignment of attribute variables maintains both the assignment as well as the
 number of times that variable has been bound. We can only *freely* assign the 
 variable to match any AttrVar or concrete attribute value if it has not yet 
 been bound.
+
+Assignment must store an entire NestedTerm per domain set element because one 
+might unassign the dom of a Hom before unassigning the Hom. So if we used a 
+NestedMatrix{Int}, it would no longer be clear what element taht Hom is mapping 
+to.
 """
 @struct_hash_equal struct BacktrackingState
-  assignment::NMVIs
+  assignment::ScopedNMs{Vector{Maybe{NestedTerm}}}
   assignment_depth::NMVIs
   inv_assignment::ScopedNMs{NMVI}
   refcounts::ScopedNMs{NMVI}
@@ -103,12 +108,11 @@ getinitial(::Comb, ::Comb, ::Nothing) = Pair{NestedTerm, NestedTerm}[]
 function getinitial(X::Comb, Y::Comb, xys::NMVIs)
   m = CombinatorialModelMorphism(xys, X, Y)
   res = Pair{NestedTerm, NestedTerm}[]
-  for s in sorts(gettheory(X))
-    for (idx, vals) in get(xys, s, [])
-      xtype = NestedType(s, idx)
-      for xᵢ in 1:length(vals)
-        x = NestedTerm(xᵢ, xtype)
-        push!(res, x => m(x))
+  for s in filter(s->haskey(xys,s), sorts(gettheory(X)))
+    for x in TermIterator(X[s])
+      y = m(x)
+      if getvalue(y) > 0
+        push!(res, x => y)
       end
     end
   end
@@ -127,14 +131,16 @@ function backtracking_search(f, X::Comb, Y::Comb; monic=false, epic=false,
   # sort_monic, sort_epic = normalize_monic_epic_iso(monic′, epic′, iso′, T)  
 
   # Initialize state variables for search.
-  assignment = NMVIs(Dict(c=>map_nm(i->zeros(Int,i), Vector{Int}, X.sets[c])   
-                    for c in sorts(T)))
-  assignment_depth = deepcopy(assignment)
+  assignment = ScopedNMs{Vector{Maybe{NestedTerm}}}(Dict(map(sorts(T)) do c 
+    c => map_nm(i->fill(nothing,i), Vector{Maybe{NestedTerm}}, X.sets[c])
+  end))
+  assignment_depth = NMVIs(Dict(c=>map_nm(i->zeros(Int,i), Vector{Int}, X.sets[c])   
+                                for c in sorts(T)))
 
   nmvis(c) =  const_nm(getvalue(X.sets[c]), map_nm(i->zeros(Int, i), Vector{Int}, 
                                                    getvalue(Y.sets[c])); copy=true)
-  inv_assgn = ScopedNMs(T, Dict{AlgSort,NM{NMVI}}(c => nmvis(c) for c in monic))
-  refcounts = ScopedNMs(T, Dict{AlgSort,NM{NMVI}}(c => nmvis(c) for c in epic))
+  inv_assgn = ScopedNMs(T, AlgDict{NMVI}(c => nmvis(c) for c in monic))
+  refcounts = ScopedNMs(T, AlgDict{NMVI}(c => nmvis(c) for c in epic))
 
   unassigned = NMIs(Dict(c => deepcopy(X.sets[c]) for c in epic))
 
@@ -154,7 +160,10 @@ function backtracking_search(f, state::BacktrackingState, depth::Int)
   mrv, x = find_mrv_elem(state, depth)
   if isnothing(x)
     # No unassigned elements remain, so we have a complete assignment.
-    return f(CombinatorialModelMorphism(state.assignment, state.dom, state.codom))
+    asgn = Dict(map(collect(state.assignment)) do (k, v)
+      k => map_nm(xs->getvalue.(xs), Vector{Int}, getvalue(v))
+    end)
+    return f(CombinatorialModelMorphism(asgn, state.dom, state.codom))
   elseif isempty(mrv)
     # An element has no allowable assignment, so we must backtrack.
     return false
@@ -176,16 +185,13 @@ function find_mrv_elem(state::BacktrackingState, depth::Int)
   mrv, remaining_values, mrv_elem = Inf, NestedTerm[], nothing
   Y = state.codom
   for c in sorts(T), (depsₓ, depset) in state.assignment[c]
-    for (xval, y) in enumerate(depset)
-      y == 0 || continue
+    for (xval, yval) in enumerate(depset)
+      isnothing(yval) || continue
       x = NestedTerm(xval, NestedType(c, depsₓ))
       success = []
-      for (depsᵧ, yvals) in Y.sets[c]
-        for yval in 1:yvals 
-          y = NestedTerm(yval, NestedType(c, depsᵧ))
-          if can_assign_elem(state, depth, x, y)
-            push!(success, y)
-          end
+      for y in TermIterator(Y.sets[c])
+        if can_assign_elem(state, depth, x, y)
+          push!(success, y)
         end
       end
       if length(success) < mrv
@@ -208,12 +214,7 @@ function can_assign_elem(state::BacktrackingState, depth::Int, x::NestedTerm, y:
   save_state′ = deepcopy(state)
   ok = assign_elem!(state, depth, x, y)
   unassign_elem!(state, depth, x)
-  for f in fieldnames(Comb)
-    fa, fb = getfield.([save_state′.dom,state.dom], Ref(f))
-    fa == fb || error("$f: \n$fa \n!= \n$fb")
-  end
   save_state′ == state || error("Unassign x$(string(x))↦y$(string(y)) doesn't undo assign \n$(string(save_state′))\n\n$(string(state))")
-
   return ok
 end
 
@@ -227,13 +228,7 @@ function assign_elem!(state::BacktrackingState, depth::Int, x::NestedTerm, y::Ne
   c = getsort(x)
   c == getsort(y) || error("Mismatched sorts $c $(getsort(y))")
   y′ = state.assignment[x]
-  sts = subterms(gettheory(state), x)
-  ysts = [state.assignment[getsort(st)][st] for st in sts]
-  ctx = getcontext(gettheory(state), c)
-  yidxs = [CartesianIndex(i...) for i in repartition(ctx, ysts)]
-  y′term = NestedTerm(y′, NestedType(c, yidxs))
-  y′term == y && return true  # If x is already assigned to y, return immediately.
-  y′ == 0 || return false # Otherwise, x must be unassigned.
+  isnothing(y′) || return y′ == y  # If x is already assigned to y, return immediately.
   if haskey(state.inv_assignment, c) 
     if getvalue(state.inv_assignment[argsof(x)])[y] != 0
       return false # Also, y must unassigned in the inverse assignment.
@@ -258,7 +253,7 @@ function assign_elem!(state::BacktrackingState, depth::Int, x::NestedTerm, y::Ne
   end
 
   # Make the assignment and recursively assign subparts.
-  state.assignment[x] = getvalue(y)
+  state.assignment[x] = y
   state.assignment_depth[x] = depth
   if haskey(state.inv_assignment, c)
     inv = getvalue(state.inv_assignment[argsof(x)])
@@ -273,14 +268,13 @@ function assign_elem!(state::BacktrackingState, depth::Int, x::NestedTerm, y::Ne
   
   # Set other values based on term constructor naturality constraints
   for (funsort, fun_data) in state.dom.funs
-    for (dom_deps, _) in fun_data  # check, for each combination of args:
-      valX_expr = NestedType(funsort, dom_deps)
+    for valX_expr in TypeIterator(fun_data) # check, for each combination of args:
       valX = state.dom(valX_expr)
       sts = subterms(gettheory(state), valX_expr)
       any(==(x), sts) || continue # only if the term we just set is an arg
       ysts = [state.assignment[getsort(st)][st] for st in sts]
-      any(==(0), ysts) && continue  # only if all args of this f(...) are defined
-      yidxs = [CartesianIndex(i...) for i in repartition(length.(dom_deps), ysts)]
+      any(isnothing, ysts) && continue  # only if all args of this f(...) are defined
+      yidxs = [Idx(i...) for i in repartition(length.(getvalue(valX_expr)), getvalue.(ysts))]
       valY = state.codom(NestedType(funsort, yidxs))
       assign_elem!(state, depth, valX, valY) || return false
     end
@@ -288,25 +282,16 @@ function assign_elem!(state::BacktrackingState, depth::Int, x::NestedTerm, y::Ne
   return true
 end
 
-function (state::BacktrackingState)(x::NestedTerm)
-  sts = subterms(gettheory(state), x)
-  (y, ysts...) = ys = [state.assignment[getsort(st)][st] for st in [x, sts...]]
-  any(==(0), ys) && return nothing  # only if all args are defined
-  lens = length.(partition(getcontext(gettheory(state), getsort(x))))
-  yidxs = [CartesianIndex(i...) for i in repartition(lens, ysts)]
-  NestedTerm(y, NestedType(getsort(x), yidxs))
-end
-
 """ Unassign the element (c,deps,x) in the current assignment.
 """
 function unassign_elem!(state::BacktrackingState, depth::Int, x::NestedTerm)
   c = getsort(x)
-  y = state(x)
+  y = state.assignment[x]
 
   for sub in subterms(gettheory(state), x)
     unassign_elem!(state, depth, sub)
   end
-  state.assignment[x] == 0 && return
+  isnothing(y) && return
 
   assign_depth = state.assignment_depth[x]
   @assert assign_depth <= depth
@@ -322,12 +307,11 @@ function unassign_elem!(state::BacktrackingState, depth::Int, x::NestedTerm)
     xunassgn.data = xunassgn.data + 1
   end
 
-  state.assignment[x] = 0
+  state.assignment[x] = nothing
   state.assignment_depth[x] = 0
 
-  for (funsort, fun_data) in state.dom.funs
-    for (deps, _) in fun_data
-      fx = NestedType(funsort, deps)
+  for fun_data in values(state.dom.funs)
+    for fx in TypeIterator(fun_data)
       if x ∈ subterms(gettheory(state), fx)
         fx_val = state.dom(fx)
         unassign_elem!(state, depth, fx_val)

@@ -34,8 +34,9 @@ test_homs(homomorphisms(G_12_21, G_11; monic=[:Hom]), 1)
 x = NestedTerm(1, NestedType(hs, [[1,2]]))
 y = NestedTerm(1, NestedType(hs, [[2,1]]))
 test_homs(homomorphisms(G_12, G_12_12; initial=[x=>y]), 1)
+
 e = NMVI(Int[])
-nmi = ScopedNMs(T, Dict(os => NMVI([2,1]), hs=>NMVI(Nest([e NMVI([1]) ;e e ]))))
+nmi = ScopedNMs(T, Dict(os => NMVI([2,1]), hs=>NMVI(Nest([e NMVI([1]); e e ]))))
 test_homs(homomorphisms(G_12, G_12_12; initial=nmi), 1)
 
 G_21 = create_graph(2, [(2,1)])
@@ -51,6 +52,7 @@ G_cyc3 = create_graph(3, [(1,2),(2,3),(3,1)])
 G_cyc6 = create_graph(6, [(1,2),(2,3),(3,4),(4,5),(5,6),(6,1)])
 test_homs(homomorphisms(G_cyc6,G_cyc3), 3)
 isempty(homomorphisms(G_cyc3, G_cyc6; iso=true))
+
 # ThCategory 
 ############
 
@@ -63,16 +65,15 @@ m_123 = create_category([:a,:b,:c], (f=(:a=>:b),g=(:b=>:c), i=(:a=>:c)))
 parallel_paths = create_category([:a,:b], (f=(:a=>:b),g=(:a=>:b)))
 
 # Maps out of parallel_paths are pairs of parallel arrows
-
 for x in [m_123, walking_arrow, parallel_paths]
-  test_homs(homomorphisms(parallel_paths, x), sum(map_nm(x->x^2, Int, x[hs])))
+  test_homs(homomorphisms(parallel_paths, x), sum(map_nm(x->x^2, Int, x[:Hom])))
 end
 
 h1 = homomorphism(walking_arrow, parallel_paths)
 h2 = homomorphism(parallel_paths, m_123)
 h12′ = homomorphism(walking_arrow, m_123)
 
-@test h1[hs] isa ScopedNM{Vector{Int}}
+@test h1[:Hom] isa ScopedNM{Vector{Int}}
 
 using .ThCategory
 

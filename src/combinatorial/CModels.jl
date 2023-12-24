@@ -62,7 +62,7 @@ function random_cardinalities(theory::GAT, card_range=nothing;
   card_range = isnothing(card_range) ? (0:3) : card_range
   for sort in setdiff(sorts(theory), keys(res))
     ctx = getcontext(theory, sort)
-    res[sort] = ScopedNM(rand_nm(res, theory, ctx, Int[], card_range), ctx)
+    res[sort] = ScopedNM(rand_nm(res, theory, ctx, Int[], card_range), ctx, sort)
   end
   res
 end
@@ -72,7 +72,7 @@ function random_functions(cards::NMIs, theory::GAT; init=nothing)::NMIs
   res = isnothing(init) ? NMIs() : (init isa Dict ? ScopedNMs(theory, init) : init)
   for s in funsorts(theory)
     haskey(res, s) && continue 
-    res[s] = ScopedNM(random_function(cards, theory, s), getcontext(theory, s))
+    res[s] = ScopedNM(random_function(cards, theory, s), theory, s)
   end
   res
 end
@@ -199,8 +199,7 @@ the function is 0.
 This implementation creates modified NestedMatrices and then replaces the ones 
 in the CombinatorialModel. A more sophisticated algorithm would do this in place.
 """
-function add_part!(m::CombinatorialModel,
-                   type::NestedType=NestedType())::NestedTerm
+function add_part!(m::CombinatorialModel, type::NestedType)::NestedTerm
   T = gettheory(m)
   enums = Dict(s => collect(m[s]) for s in sorts(T)) # store for later
   new_cardinality = getvalue(m[type]) + 1
@@ -239,8 +238,7 @@ function rem_part!(m::CombinatorialModel, term::NestedTerm)
   for s in sorts(T)
     getsort(type) ∈ sortsignature(getvalue(T, methodof(s))) || continue
     new_nm = rand_nm(m.sets, T, getcontext(T, s), Int[], [0]) # all empty sets
-    for (e, _) in new_nm
-      e = NestedType(s, e)
+    for e in TypeIterator(ScopedNM(new_nm, T, s))
       new_e = deepcopy(e)
       for (i, subterm) in enumerate(subterms(T, e))
         if subterm == term
@@ -253,8 +251,7 @@ function rem_part!(m::CombinatorialModel, term::NestedTerm)
   end
   for s in funsorts(T)
     new_fun = random_function(m.sets, T, s)
-    for (e, _) in new_fun # copy over old data
-      e = NestedType(s, e)
+    for e in TypeIterator(ScopedNM(new_fun, T, s)) # copy over old data
       new_e = deepcopy(e)
       for (i, subterm) in enumerate(subterms(T, e))
         if subterm == term

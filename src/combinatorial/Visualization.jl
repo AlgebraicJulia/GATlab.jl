@@ -130,7 +130,9 @@ Print as a table.
 """
 function Base.show(io::IO, ::MIME"text/plain", nm::ScopedNM)
   table = permutedims(hcat(mk_table(getvalue(nm))...))
-  pretty_table(io, table; header=[nameof.(getidents(nm.ts)); :val])
+  if !isempty(table) 
+    pretty_table(io, table; header=[nameof.(getidents(nm.ts)); :val])
+  end
 end
 
 function mk_table(nm::NestedMatrix{T}, curr = nothing) where T

@@ -37,12 +37,13 @@ gen_ds = random_cardinalities(T; init=Dict(os => NMI(2), hs => NMI(Nest([m2 m0; 
 
 m = CombinatorialModel(T; card_range=1:1) # terminal
 @test validate(m)
-m.sets[os] = ScopedNM(NMI(2), getcontext(T,os))
+m.sets[os] = ScopedNM(NMI(2), T, os)
 @test !validate(m)
 @test all(x -> x isa String, [renderstr(m[s]) for s in funsorts(T)])
 @test sprint(show, MIME"text/plain"(), m) isa String
 @test_throws KeyError m[only(sorts(ThGroup.Meta.theory))]
 @test_throws KeyError m[only(sorts(ThGroup.Meta.theory))] = NMI(3)
+
 # Modifying models
 #-----------------
 ntos = NestedType(os)
