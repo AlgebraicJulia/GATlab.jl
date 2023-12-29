@@ -34,7 +34,7 @@ function partition(t::TypeScope)::Vector{Vector{LID}}
   res 
 end
 
-"""Get all idents"""
+"""Get all idents which appear, explicitly or implcitly (in types)"""
 vars(ts::TypeScope, t::AlgAST)::Set{LID} = vars(ts, t.body)
 vars(ts::TypeScope, t::GATs.MethodApp)::Set{LID} = 
   union(Set{LID}(),vars.(Ref(ts), t.args)...)

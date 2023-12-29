@@ -1,13 +1,22 @@
+"""
+Currently just colimits.
+
+Rather than a whole reimplementation of the generic (co)limit and diagram 
+infrastructure of Catlab, we opt for specific implementations of initial, 
+coproduct, and pushout. This could form the starting point for a generic
+implementation down the line. 
+"""
 module Limits
-export pushout, initial, terminal
+export pushout, initial, terminal, coproduct, oplus, copair
 
 using ..DataStructs
-using ..DataStructs: Idx, NMI, NMIs, NMVIs, ScopedNM, Morphism, Comb, map_nm
+using ..DataStructs: Idx, NMI, NMIs, NMVI, NMVIs, ScopedNM, ScopedNMs,Morphism, 
+                     Comb, map_nm, apply_morphism, const_nm
 using ..CModels
-using ..CModels: rand_nm, random_function
+using ..CModels: empty_function # rand_nm, 
 using ...Syntax
 using ...Stdlib
-using ...Models
+using ...Models: @withmodel
 using .ThCategory
 
 using DataStructures: IntDisjointSets, find_root!
@@ -37,7 +46,7 @@ function pushout(f::Morphism, g::Morphism)
     
     # Populate cardinality data of apex and populate maps ι₁, ι₂
     for s in sorts(T)
-      apex.sets[s] = ScopedNM(rand_nm(apex.sets, T, getcontext(T, s), Int[],[0]), T, s) # apex w/ zeros
+      apex.sets[s] = ScopedNM(empty_function(apex.sets, T, s), T,s)  # apex w/ zeros
       (Bs, Bs⁻¹), (Cs, Cs⁻¹) = map([B=>false,C=>true]) do (X, offset) 
         Xs = collect(TermIterator(X[s]))
         Xs => Dict([v => (i + (offset ? sum(B[s]) : 0)) for (i, v) in enumerate(Xs)])
@@ -73,20 +82,101 @@ function pushout(f::Morphism, g::Morphism)
     end
     # Populate function data
     for s in funsorts(T)
-      apex.funs[s] = ScopedNM(rand_nm(apex.sets, T, getcontext(T, s), Int[], [0]), T, s)
+      apex.funs[s] = ScopedNM(empty_function(apex.sets, T, s), T, s)
       for bargs in TypeIterator(B[s])
         fbargs = ι₁(bargs)
-        apex.funs[s][fbargs] = NMI(getvalue(ι₁(B(bargs))))
+        bval = B(bargs)
+        getvalue(bval) > 0 || continue
+        apex.funs[s][fbargs] = NMI(getvalue(ι₁(bval)))
       end
       for cargs in TypeIterator(C[s])
         gcargs = ι₂(cargs)
         apex.funs[s][gcargs] = NMI(getvalue(ι₂(C(cargs))))
       end
     end
+    ι₁.dom == B || error("Bad i1")
+    ι₂.dom == C || error("Bad i2")
     return (apex, ι₁, ι₂)
   end
 end
 
-# TODO Implement ThPushout
+"""
+Coproduct of (non-empty) list of models.
+"""
+function coproduct(Xs::Vector{Comb})
+  M = first(Xs)
+  T = gettheory(M)
+  res = initial(T)
+  comps = [ScopedNMs(T, Dict{AlgSort, NMVI}()) => X for X in Xs]
+  for s in sorts(T)
+    res[s] = empty_function(res.sets, T, s)
+    for (comp, X) in comps
+      function fun(idx::Vector{<:Idx}, v::Int)::Vector{Int}
+        nm = res[s][apply_morphism(T, comp, NestedType(s,idx))]
+        vec = (1:v) .+ getvalue(nm)
+        nm.data = getvalue(nm) + v
+        collect(vec)
+      end
+      comp[s] = map_nm(fun, Vector{Int}, X[s]; index=true)
+    end
+  end
+  for s in funsorts(T)
+    res[s] = empty_function(res.sets, T, s)
+    for (comp, X) in comps
+      for args in TypeIterator(X[s])
+        res[apply_morphism(T, comp, args)] = NMI(getvalue(apply_morphism(T, comp, X(args))))
+      end
+    end
+  end
+  [Morphism(comp, X, res) for (comp, X)  in comps]
+end
+
+
+"""
+Take a nonempty collection of maps Aᵢ → B and make a single map ΣA → B
+"""
+function copair(vs::Vector{Morphism})
+  ι = coproduct([v.dom for v in vs])
+  all([v.codom == first(vs).codom for v in vs]) || error("Cannot copair")
+  dom, codom = [first(x).codom for x in [ι, vs]]
+  comps = Dict(map(sorts(gettheory(dom))) do s 
+    res = const_nm(getvalue(dom[s]), Int[]; copy=true, type=Vector{Int})
+    for (i,v) in zip(ι, vs)
+      for (idx, mapping) in v[s]
+        append!(getvalue(res[i(NestedType(s, idx))]), mapping)
+      end
+    end
+    s => res
+  end)
+  res = Morphism(comps, dom, codom)
+  is_natural(res) || error("unnatural")
+  res
+end
+
+"""
+Take a nonempty collection of maps Aᵢ → Bᵢ and make a single map ΣA → ΣB
+"""
+function oplus(vs::Vector{Morphism})
+  Aι  = coproduct([v.dom for v in vs])
+  Bι = coproduct([v.codom for v in vs])
+  dom, codom = [first(x).codom for x in [Aι, Bι]]
+  comps = Dict(map(sorts(gettheory(dom))) do s 
+    res = const_nm(getvalue(dom[s]), Int[]; copy=true, type=Vector{Int})
+    for (Ai, v, Bi) in zip(Aι, vs, Bι)
+      for (idx, mapping) in v[s]
+        A_args = NestedType(s, idx)
+        mapping′ = Bi.(v.(NestedTerm.(1:length(mapping), Ref(A_args))))
+        append!(getvalue(res[Ai(A_args)]), getvalue.(mapping′))
+      end
+    end
+    s => res
+  end)
+  res = Morphism(comps, dom, codom)
+  is_natural(res) || error("unnatural")
+  res
+end
+
+
+# TODO Implement ThPushout for CombinatorialModelC
 
 end # module

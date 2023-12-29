@@ -10,7 +10,7 @@ import ...Syntax: GATContext, AlgSort, headof, argsof
 using ...Syntax.TheoryMaps: infer_type, bind_localctx
 
 using ..DataStructs 
-using ..DataStructs: NMIs, NMI, getsort, subterms, ScopedNMs, ScopedNM, Nest
+using ..DataStructs: NM, NMIs, NMI, getsort, subterms, ScopedNMs, ScopedNM, Nest
 using ..TypeScopes: partition, subscope, vars, repartition, repartition_idx
 import ..DataStructs: CombinatorialModel, random_cardinalities
 
@@ -103,6 +103,8 @@ function random_function(cards::NMIs, theory::GAT, s::AlgSort)
   rand_nm(cards, theory, lc, Int[], r, Int)
 end
 
+empty_function(cards::NMIs, theory::GAT, s::AlgSort) =
+  rand_nm(cards, theory, getcontext(theory, s), Int[], [0])
 
 """ Random matrix for some typescope with uniform sampling of `vals`. """
 function rand_nm(d::NMIs,t::GAT,lc::TypeScope, choices::Vector{Int}, 
@@ -123,14 +125,14 @@ function rand_nm(d::NMIs, theory::GAT, lc::TypeScope,
   # Choices has decided values for some number of the partitions
   i = findfirst(==(length(choices)), plens)
   if i == length(p) + 1 # we have fully determined the whole context
-    NMI(f(choices)) # pick an element to go in the leaf cell
+    NM{T}(f(choices)) # pick an element to go in the leaf cell
   else 
-    lens = map(LID.(ranges[i])) do idx 
+    lens = map(LID.(ranges[i])) do idx
       vs = sort(getvalue.(collect(vars(lc, idx))))
       idx_choices = choices[vs]
       Base.OneTo(length(enum(d, theory, subscope(lc,idx), idx_choices)))
     end
-    NMI(Nest(Array{NestedMatrix{T}}(map(Iterators.product(lens...)) do idx
+    NM{T}(Nest(Array{NestedMatrix{T}}(map(Iterators.product(lens...)) do idx
       rand_nm(d, theory, lc, [choices...,idx...], f, T)
     end)); depth = length(p) - i + 1)
   end
@@ -206,15 +208,14 @@ function add_part!(m::CombinatorialModel, type::NestedType)::NestedTerm
   m[type] = NMI(new_cardinality)
   for s in sorts(T)
     getsort(type) ∈ sortsignature(getvalue(T, methodof(s))) || continue
-    tc = getcontext(T, s)
-    new_nm = rand_nm(m.sets, T, tc, Int[], [0]) # all empty sets
+    new_nm = empty_function(m.sets, T, s)
     for (e, val) in enums[s] # copy over old data
       new_nm[e] = NMI(val)
     end
     m[s] = new_nm
   end
   for s in funsorts(T)
-    new_fun = random_function(m.sets, T, s)
+    new_fun = empty_function(m.sets, T, s)
     for (e, v) in m[s] # copy over old data
       new_fun[e] = NMI(v) 
     end
@@ -227,6 +228,10 @@ end
 Remove an element of a dependent set, specified by a NestedTerm. This has an 
 effect on any sets dependent on that element. Removal involves pop-and-swap.
 
+Rather than recursively delete parts, when a function output refers to the 
+deleted term, the value is replaced with "-1" (as "0" has a semantics of being a 
+free value).
+
 This implementation creates modified NestedMatrices and then replaces the ones 
 in the CombinatorialModel. A more sophisticated algorithm would do this inplace.
 """
@@ -234,10 +239,11 @@ function rem_part!(m::CombinatorialModel, term::NestedTerm)
   T = gettheory(m)
   type = argsof(term)
   swapped_index = getvalue(m[type])
+  swapterm = NestedTerm(swapped_index, type)
   m[type] = NMI(swapped_index - 1)
   for s in sorts(T)
     getsort(type) ∈ sortsignature(getvalue(T, methodof(s))) || continue
-    new_nm = rand_nm(m.sets, T, getcontext(T, s), Int[], [0]) # all empty sets
+    new_nm = empty_function(m.sets, T, s)
     for e in TypeIterator(ScopedNM(new_nm, T, s))
       new_e = deepcopy(e)
       for (i, subterm) in enumerate(subterms(T, e))
@@ -250,7 +256,7 @@ function rem_part!(m::CombinatorialModel, term::NestedTerm)
     m[s] = new_nm
   end
   for s in funsorts(T)
-    new_fun = random_function(m.sets, T, s)
+    new_fun = empty_function(m.sets, T, s)
     for e in TypeIterator(ScopedNM(new_fun, T, s)) # copy over old data
       new_e = deepcopy(e)
       for (i, subterm) in enumerate(subterms(T, e))
@@ -259,7 +265,13 @@ function rem_part!(m::CombinatorialModel, term::NestedTerm)
         end
       end
       val = m(new_e)
-      new_fun[e] = (val == term ? swapped_index : getvalue(val)) |> NMI
+      new_fun[e] = (if val == term 
+                      -1 # sentinel value representing an undefined element
+                    elseif val == swapterm 
+                        getvalue(term)
+                    else
+                          getvalue(val)
+                    end) |> NMI
     end
     m[s] = new_fun
   end
@@ -276,38 +288,11 @@ function (m::CombinatorialModel)(term::NestedType)::NestedTerm
   rtype = getvalue(T[methodof(srt)]).type
   rsort = AlgSort(rtype)
   lc = bind_localctx(GATContext(T, getcontext(T, srt)), rtype)
-  flat_idxs = map(sort(collect(pairs(lc)); by=x->getvalue(x[1].lid))) do (_,b)
+  flat_idxs = map(sort(collect(pairs(lc)); by=x->getvalue(x[1].lid))) do (_, b)
     GATs.isvariable(b) ? term[getvalue(b.body.lid)] : error("Bad ret type $b")
   end
   idxs = repartition_idx(T, rsort, flat_idxs)
   NestedTerm(getvalue(m[term]), NestedType(rsort, idxs))
 end
-
-# Enforce equations
-###################
-
-"""Merely enforce equalities implied by equations of GAT via chase"""
-function eq_saturate!(m::CombinatorialModel)
-  error("NOT IMPLEMENTED YET") 
-end
-
-"""
-Enforce equalities implied by equations of GAT via chase as well as create new 
-elements of dependent sets for every undefined function output. This process 
-can potentially not terminate.
-
-Returns a boolean indicating whether or not the process terminated and an 
-integer describing how many steps it took.
-"""
-function saturate!(m::CombinatorialModel; steps::Int=100)
-  for step in 1:steps 
-    eq_saturate!(m)
-    error("NOT IMPLEMENTED YET")
-    # ... && return (true, step) 
-  end
-  false, steps
-end
-
-is_saturated(m::CombinatorialModel) = last(saturate!(m)) == 0
 
 end # module 

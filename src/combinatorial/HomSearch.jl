@@ -16,6 +16,9 @@ import ...Syntax: gettheory, argsof
 Returns `nothing` if no homomorphism exists. The
 homomorphism problem is NP-complete and thus this procedure generally
 runs in exponential time. It works best when the domain object is small.
+
+NOTE: E-graphs are needed to handle cases where dom/codom have free elements.
+
 """
 function homomorphism(X::Comb, Y::Comb; kw...)
   result = nothing

@@ -8,6 +8,7 @@ using GATlab.Combinatorial.CModels: enum,random_cardinalities
 using GATlab.Combinatorial.Visualization: renderstr
 using GATlab.NonStdlib.NonStdTheories: Th2Cat, ThTwoCat
 using GATlab.Syntax.TheoryMaps: bind_localctx
+using ..Constructor 
 
 # Unpack theory
 T = Th2Cat.Meta.theory;
@@ -79,5 +80,13 @@ m = CombinatorialModel(T; init=deepcopy(d));
 add_part!(m, ntos)
 rem_part!(m, NestedTerm(1,ntos))
 @test last.(collect(m[idsort])) == [0, 1]
+
+
+# ThCategory
+############
+is = AlgSort(T, :id)
+X = create_category([:A,:B],(f=(:A=>:B),g=(:A=>:A)), [[Symbol[],[:g,:g]]])
+rem_part!(X, NestedTerm(1, NestedType(hs, [[1,1]])))
+@test getvalue(X[NestedType(is,[[1]])]) == -1
 
 end # module

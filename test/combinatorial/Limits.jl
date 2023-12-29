@@ -36,11 +36,16 @@ apex, ι₁, ι₂ = pushout(f, g);
 
 
 # ThCategory
+############
+
 walking_arrow = create_category([:a,:b], (f=(:a=>:b),))
 c2 = create_category([:a,:b], (;))
 
 f, g = homomorphisms(c2, walking_arrow; monic=true)
 apex, ι₁, ι₂ = pushout(f,g);
+
+@test is_natural(copair([f,g]))
+@test is_natural(oplus([f,g]))
 
 # The two non-identity compositions are left undefined: 
 @test count(==(0),last.(collect(apex[:compose]))) == 2

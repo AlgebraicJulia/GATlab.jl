@@ -76,6 +76,8 @@ function getvalue(n::Nest{T})::Array{NM{T}} where T
   n.val
 end
 
+Base.zero(::Type{NM{T}}) where T = NM{T}(zero(T))
+
 Base.length(nm::NM)::Int = 
   (nm.depth == 0) ? 1 : sum(length.(getvalue(getvalue(nm))); init=0)
 
@@ -213,8 +215,8 @@ Base.setindex!(n::ScopedNM{T}, i, k) where T = setindex!(getvalue(n), i, k)
 map_nm(fun, ret_type, n::ScopedNM; kw...) = 
   ScopedNM(map_nm(fun, ret_type, getvalue(n); kw...), getcontext(n), getsort(n))
 
-const_nm(n::ScopedNM, v; copy=false) = 
-  ScopedNM(const_nm(getvalue(n), v; copy), getcontext(n), getsort(n))
+const_nm(n::ScopedNM, v; copy=false, type=nothing) = 
+  ScopedNM(const_nm(getvalue(n), v; copy, type), getcontext(n), getsort(n))
 
 const AlgDict{T} = Dict{AlgSort, NM{T}}
 
@@ -376,9 +378,13 @@ This ignores the leaf values of the NestedMatrix.
 struct TypeIterator
   s::ScopedNM{Int}
 end
+
 Base.length(s::TypeIterator) = length(s.s)
+
 Base.eltype(::Type{TypeIterator}) = NestedType
+
 Base.iterate(s::TypeIterator) = iterate(s, Iterators.Stateful(s.s))
+
 Base.iterate(s::TypeIterator, it) = 
   isempty(it) ? nothing : (NestedType(getsort(s.s), popfirst!(it)[1]), it)
   
@@ -410,10 +416,6 @@ function Base.iterate(s::TermIterator, state)
     NestedTerm(nxt, NestedType(getsort(s.s), idx)), (it, idx, queue)
   end
 end
-
-
-# Base.iterate(s::ScopedNM{T}, i) where T = iterate(getvalue(s), i)
-
 
 # Models 
 ########
@@ -467,8 +469,10 @@ function Base.setindex!(m::ScopedNMs, val, t::Nested)
   m[getsort(t)][t] = val
 end
 
-Base.setindex!(m::Comb, data::NMI, t::NestedType) =
-  m.sets[getsort(t)][getvalue(t)] = data
+function Base.setindex!(m::Comb, data::NMI, t::NestedType)
+  sort = getsort(t)
+  (haskey(m.sets, sort) ? m.sets : m.funs)[sort][getvalue(t)] = data
+end
 
 function random_cardinalities end # defined in CModels 
 
@@ -510,38 +514,50 @@ end
 const Morphism = CombinatorialModelMorphism
 
 Base.getindex(c::Morphism, k::AlgSort) = components(c)[k]
+
 Base.getindex(c::Morphism, k::Symbol) = components(c)[AlgSort(gettheory(c), k)]
+
+Base.getindex(c::Morphism, n::Nested) = components(c)[getsort(n)][n]
 
 gettheory(c::Morphism) = gettheory(c.dom)
 
 components(c::Morphism) = c.components
 
-function (f::Morphism)(t::NestedType)::NestedType
-  T, srt = gettheory(f), getsort(t)
-  NestedType(srt, repartition_idx(T, srt, Int[getvalue.(f.(subterms(T, t)))...]))
+(f::Morphism)(t::NestedTerm)::NestedTerm = 
+  apply_morphism(gettheory(f), components(f), t)
+
+(f::Morphism)(t::NestedType)::NestedType = 
+  apply_morphism(gettheory(f), components(f), t)
+
+function apply_morphism(T::GAT, comps::NMVIs, t::NestedTerm)::NestedTerm
+  val = getvalue(t) == 0 ? 0 : comps[t]
+  NestedTerm(val, apply_morphism(T, comps, argsof(t)))
 end
 
-function (f::Morphism)(t::NestedTerm)::NestedTerm
-  NestedTerm(components(f)[getsort(t)][t], f(argsof(t)))
+function apply_morphism(T::GAT, comps::NMVIs, t::NestedType)::NestedType
+  srt = getsort(t)
+  NestedType(srt, repartition_idx(T, srt, Int[getvalue.(apply_morphism.(Ref(T), Ref(comps), subterms(T, t)))...]))
 end
 
-function is_natural(m::Morphism)
-  T = gettheory(m)
+"""E-graphs are needed to handle cases where dom/codom have free elements"""
+function naturality_failures(m::Morphism)
+  T, res = gettheory(m), []
   for (funsort, nestedmatrix) in m.dom.funs
-    for (idx, _) in collect(nestedmatrix)
+    for dom_funapp in TypeIterator(nestedmatrix)
       # apply operation, then map over morphism
-      dom_funapp = NestedType(funsort, idx)
       dom_funres = m.dom(dom_funapp)
       op_f = m(dom_funres)
       # map arguments to operation over morphism, then apply operation
       cod_idxs = getvalue.(m.(subterms(T, dom_funapp)))
       cod_funapp = NestedType(funsort, repartition_idx(T, funsort, cod_idxs))
       f_op = m.codom(cod_funapp)
-      op_f == f_op || return false
+      op_f == f_op || push!(res, (funsort, dom_funapp, cod_funapp, op_f, f_op))
     end
   end
-  true
+  res
 end
+
+is_natural(m::Morphism) = isempty(naturality_failures(m))
 
 # Category instance 
 ###################
