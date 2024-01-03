@@ -12,6 +12,10 @@ end
 @struct_hash_equal struct SliceC{ObT, HomT, C<:Model{Tuple{ObT, HomT}}} <: Model{Tuple{SliceOb{ObT, HomT}, HomT}}
   cat::C
   over::ObT
+  # function SliceC(cat, over)
+  #   implements(cat, ThCategory)
+  #   new(cat, Ob[cat](over))
+  # end
 end
 
 using .ThCategory
