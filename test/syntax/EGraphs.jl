@@ -43,7 +43,7 @@ i2 = add!(eg, :(g ⋅ f))
 # E-Matching
 ############
 
-@gatcontext C(ThCategory) begin
+@gatcontext D(ThCategory) begin
   x::Ob
   y::Ob
   z::Ob
@@ -52,12 +52,12 @@ i2 = add!(eg, :(g ⋅ f))
   h::Hom(y,y)
 end
 
-eg = EGraph(C)
+eg = EGraph(D)
 
 id = add!(eg, :(f ⋅ id(y)))
 
-compose_method = fromexpr(C, :(f ⋅ h), AlgTerm).body.method
-id_method = fromexpr(C, :(id(x)), AlgTerm).body.method
+compose_method = fromexpr(D, :(f ⋅ h), AlgTerm).body.method
+id_method = fromexpr(D, :(id(x)), AlgTerm).body.method
 
 instructions = [Scan(Reg(1)), Bind(compose_method, Reg(1), Reg(2)), Bind(id_method, Reg(3), Reg(4))]
 
@@ -67,10 +67,8 @@ run!(m, eg, instructions, [Reg(4), Reg(2)])
 
 @test m.matches[1] == [add!(eg, :y), add!(eg, :f)]
 
-# Γ = @context ThCategory [a::Ob, b::Ob, α::Hom(a,b)]
-# t = @term ThCategory Γ (α ⋅ id(b))
-# pat = Pattern(t, Γ)
-# prog = compile(ThCategory.T, pat)
+pat = Pattern(D, :(f ⋅ id(y)))
+prog = compile(pat)
 
 # m = Machine()
 

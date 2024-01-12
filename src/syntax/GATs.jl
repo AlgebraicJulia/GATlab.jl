@@ -1,5 +1,5 @@
 module GATs
-export Constant, AlgTerm, AlgType, AlgAST,
+export Constant, AlgTerm, AlgType, AlgAST, MethodApp,
   TypeScope, TypeCtx, AlgSort, AlgSorts,
   AlgDeclaration, AlgTermConstructor, AbstractAlgSort,
   AlgTypeConstructor, AlgAccessor, AlgAxiom, AlgStruct, AlgDot, AlgFunction,

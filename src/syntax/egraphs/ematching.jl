@@ -12,7 +12,8 @@
 # Note that not all variables in the context are referenced directly in the
 # term; i.e. `b` is never referenced. Thus, ematching must take into account both
 # terms and types.
-export Reg, Scan, Bind, Compare, Lookup, Machine, run!
+export Reg, Scan, Bind, Compare, Lookup, Machine, run!,
+  Pattern
 
 using ..EGraphs
 using ...Syntax
@@ -164,8 +165,8 @@ struct Compiler
 end
 
 struct Pattern
+  ctx::GATContext
   trm::AlgTerm
-  ctx::Context
 end
 
 function trm_to_vec!(trm::AlgTerm, vec::Vector{ETerm})
@@ -318,7 +319,6 @@ function compile(mod::Module, pat::Pattern)
     end
   end
 
-  # for testing, return the compiler
   Program(
     c.instructions,
     Reg[r for (v,r) in sort([c.v2r...]; by=vr -> index(vr[1]))]
