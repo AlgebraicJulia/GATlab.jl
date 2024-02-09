@@ -36,7 +36,7 @@ function fromexpr(c::GATContext, e, ::Type{AlgTerm})
     end
     Expr(:., body, QuoteNode(head)) => begin 
       t = fromexpr(c, body, AlgTerm)
-      algstruct = c[AlgSort(c, t).method] |> getvalue
+      algstruct = c[methodof(AlgSort(c, t))] |> getvalue
       AlgTerm(AlgDot(ident(algstruct.fields; name=head), t))# , str))
   end
     Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(c, head, argexprs))

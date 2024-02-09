@@ -1,6 +1,9 @@
 # GAT ASTs
 ##########
 
+@struct_hash_equal struct AlgNamedTuple{T}
+  fields::OrderedDict{Symbol, T}
+end
 
 # AlgSorts
 #---------
@@ -12,9 +15,10 @@ abstract type AbstractAlgSort end
 A *sort*, which is essentially a type constructor without arguments
 """
 @struct_hash_equal struct AlgSort <: AbstractAlgSort
-  head::Ident
-  method::Ident
+  body::Union{Tuple{Ident, Ident}, AlgNamedTuple{AlgSort}}
 end
+
+AlgSort(head::Ident, method::Ident) = AlgSort((head, method))
 
 """
 `AlgSort`
@@ -28,12 +32,12 @@ end
 
 iseq(::AlgEqSort) = true
 iseq(::AlgSort) = false
-headof(a::AbstractAlgSort) = a.head
-methodof(a::AbstractAlgSort) = a.method
+headof(a::AbstractAlgSort) = a.body[1]
+methodof(a::AbstractAlgSort) = a.body[2]
 
-Base.nameof(sort::AbstractAlgSort) = nameof(sort.head)
+Base.nameof(sort::AbstractAlgSort) = nameof(headof(sort))
 
-getdecl(s::AbstractAlgSort) = s.head
+getdecl(s::AbstractAlgSort) = headof(s)
 
 """
 We need this to resolve a mutual reference loop; the only subtype is Constant
@@ -90,7 +94,13 @@ bodyof(t::AlgAST) = t.body
 One syntax tree to rule all the terms.
 """
 @struct_hash_equal struct AlgTerm <: AlgAST
-  body::Union{Ident, MethodApp{AlgTerm}, AbstractConstant, AbstractDot}
+  body::Union{
+    Ident,
+    MethodApp{AlgTerm},
+    AbstractConstant,
+    AbstractDot,
+    AlgNamedTuple{AlgTerm}
+  }
 end
 
 
@@ -129,7 +139,7 @@ function AlgSort(c::Context, t::AlgTerm)
     value = getvalue(binding)
     AlgSort(value.type)
   elseif isdot(t)
-    algstruct = c[AlgSort(c, bodyof(bodyof(t))).method] |> getvalue
+    algstruct = c[methodof(AlgSort(c, bodyof(bodyof(t))))] |> getvalue
     AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
   else # variable
     binding = c[t.body]
@@ -158,7 +168,7 @@ rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, eq::Eq) =
 One syntax tree to rule all the types.
 """
 @struct_hash_equal struct AlgType <: AlgAST
-  body::Union{MethodApp{AlgTerm}, Eq}
+  body::Union{MethodApp{AlgTerm}, Eq, AlgNamedTuple{AlgType}}
 end
 
 function AlgType(fun::Ident, method::Ident)
@@ -188,9 +198,9 @@ rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::AlgType) =
   AlgType(rename(tag, reps, t.body))
 
 AlgSort(t::AlgType) = if iseq(t)
-  AlgEqSort(t.body.sort.head, t.body.sort.method)
+  AlgEqSort(headof(t.body.sort), methodof(t.body.sort))
 else 
-  AlgSort(t.body.head, t.body.method)
+  AlgSort(headof(t.body), methodof(t.body))
 end
   
 

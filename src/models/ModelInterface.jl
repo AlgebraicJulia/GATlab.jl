@@ -640,12 +640,12 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
   _x = gensym("val")
 
   # Map CODOM sorts to whereparam symbols
-  whereparamdict = OrderedDict(s=>gensym(s.head.name) for s in sorts(codom_theory))
+  whereparamdict = OrderedDict(s=>gensym(headof(s).name) for s in sorts(codom_theory))
   # New model is parameterized by these types
   whereparams = collect(values(whereparamdict))
   # Julia types of domain sorts determined by theorymap 
   jltype_by_sort = Dict(map(sorts(dom_theory)) do v
-    v => whereparamdict[AlgSort(tmap(v.method).val)]
+    v => whereparamdict[AlgSort(tmap(methodof(v)).val)]
   end)
 
   # Create input for instance_code
