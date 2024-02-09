@@ -726,6 +726,7 @@ end
 
 Base.getindex(c::Context, x::Ident) = getbinding(getscope(c, x), x)
 
+getvalue(c::Context, lid::LID) = getvalue(c[lid])
 getvalue(c::Context, x::Ident) = getvalue(c[x])
 getvalue(c::Context, name::Symbol) = getvalue(c[ident(c; name)])
 
