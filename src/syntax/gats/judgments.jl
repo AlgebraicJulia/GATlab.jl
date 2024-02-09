@@ -7,7 +7,7 @@
 A scope where variables are assigned to `AlgType`s. We use a wrapper
 here so that it pretty prints as `[a::B]` instead of `{a => AlgType(B)}`
 """
-struct TypeScope <: HasScope{AlgType}
+@struct_hash_equal struct TypeScope <: HasScope{AlgType}
   scope::Scope{AlgType}
 end
 

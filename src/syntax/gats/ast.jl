@@ -137,6 +137,11 @@ function AlgSort(c::Context, t::AlgTerm)
   end
 end
 
+getvariables(t::AlgTerm)::Set{Ident} = getvariables(bodyof(t))
+getvariables(t::MethodApp)::Set{Ident} = 
+  union(Set{Ident}(), getvariables.(argsof(t))...)
+getvariables(i::Ident)::Set{Ident} = Set([i])
+
 """
 `Eq`
 

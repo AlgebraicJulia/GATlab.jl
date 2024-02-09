@@ -174,31 +174,65 @@ This function is mutually recursive with `infer_type`.
 bind_localctx(ctx::GATContext, t::InCtx) = 
   bind_localctx(GATContext(ctx.theory, AppendContext(ctx.context, t.ctx)), t.val)
 
+# function bind_localctx(ctx::GATContext, t::AlgAST)
+#   m = methodof(t.body)
+#   tc = getvalue(ctx[m])
+#   eqs = equations(ctx.theory, m)
+#   typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
+#   for (i,a) in zip(tc.args, t.body.args)
+#     tt = (a => infer_type(ctx, a))
+#     typed_terms[ident(tc, lid=i, level=1)] = tt 
+#   end
+
+#   for lc_arg in reverse(getidents(getcontext(tc)))
+#     if getlid(lc_arg) ∈ tc.args 
+#       continue 
+#     end 
+#     # one way of determining lc_arg's value
+#     app = bodyof(first(filter(GATs.isapp, eqs[lc_arg])))
+#     to = bodyof(only(argsof(app)))
+#     m = methodof(app)
+#     inferred_term = typed_terms[to][2].body.args[getvalue(ctx.theory[m]).arg]
+#     inferred_type = infer_type(ctx, inferred_term)
+#     typed_terms[lc_arg] = inferred_term => inferred_type
+#   end
+
+#   Dict([k=>v[1] for (k,v) in pairs(typed_terms)])
+# end
+
 function bind_localctx(ctx::GATContext, t::AlgAST)
   m = methodof(t.body)
   tc = getvalue(ctx[m])
   eqs = equations(ctx.theory, m)
-  typed_terms = Dict{Ident, Pair{AlgTerm,AlgType}}()
-  for (i,a) in zip(tc.args, t.body.args)
+  typed_terms = Dict{AlgTerm, Pair{AlgTerm,AlgType}}()
+  res = Dict{Ident, AlgTerm}()
+  for (i, a) in zip(tc.args, t.body.args)
+    x = ident(tc, lid=i, level=1)
     tt = (a => infer_type(ctx, a))
-    typed_terms[ident(tc, lid=i, level=1)] = tt 
+    res[x] = a 
+    for eq in eqs[x]
+      typed_terms[eq] = tt
+    end
   end
-
   for lc_arg in reverse(getidents(getcontext(tc)))
-    if getlid(lc_arg) ∈ tc.args 
-      continue 
-    end 
+    if getlid(lc_arg) ∈ tc.args
+      continue
+    end
     # one way of determining lc_arg's value
     app = bodyof(first(filter(GATs.isapp, eqs[lc_arg])))
-    to = bodyof(only(argsof(app)))
-    m = methodof(app)
-    inferred_term = typed_terms[to][2].body.args[getvalue(ctx.theory[m]).arg]
+    to = only(argsof(app))
+    arg = getvalue(ctx.theory[methodof(app)]).arg
+    inferred_term = typed_terms[to][2].body.args[arg]
     inferred_type = infer_type(ctx, inferred_term)
-    typed_terms[lc_arg] = inferred_term => inferred_type
+    res[lc_arg] = inferred_term
+    for x in eqs[lc_arg]
+      typed_terms[x] = (inferred_term => inferred_type)
+    end
   end
 
-  Dict([k=>v[1] for (k,v) in pairs(typed_terms)])
+  res
 end
+
 
 # ID 
 #---

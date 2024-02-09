@@ -16,6 +16,10 @@ end
   include("stdlib/tests.jl")
 end
 
+@testset "Combinatorial" begin
+  include("combinatorial/tests.jl")
+end
+
 @testset "nonstdlib" begin
   include("nonstdlib/tests.jl")
 end

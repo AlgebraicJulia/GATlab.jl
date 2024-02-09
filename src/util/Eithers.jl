@@ -1,11 +1,12 @@
 module Eithers
 export Either, Left, Right, isleft, isright
+using StructEquality
 
-struct Left{T}
+@struct_hash_equal struct Left{T}
   val::T
 end
 
-struct Right{S}
+@struct_hash_equal struct Right{S}
   val::S
 end
 

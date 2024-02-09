@@ -79,7 +79,7 @@ rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x) = x
 
 An error to throw when an identifier has an unexpected scope tag
 """
-struct ScopeTagError <: Exception
+@struct_hash_equal struct ScopeTagError <: Exception
   expectedcontext::Any
   thing::Any
 end
@@ -679,7 +679,7 @@ Must implement:
 """
 abstract type HasScopeList{T} <: Context{T} end
 
-struct ScopeList{T} <: HasScopeList{T}
+@struct_hash_equal struct ScopeList{T} <: HasScopeList{T}
   scopes::Vector{HasScope{T}}
   taglookup::Dict{ScopeTag, Int}
   namelookup::Dict{Symbol, Int}
@@ -771,7 +771,7 @@ alltags(hsl::HasScopeList) = Set(gettag.(getscopelist(hsl).scopes))
 # AppendContext
 ###############
 
-struct AppendContext{T₁, T₂} <: Context{Union{T₁,T₂}}
+@struct_hash_equal struct AppendContext{T₁, T₂} <: Context{Union{T₁,T₂}}
   ctx1::Context{T₁}
   ctx2::Context{T₂}
   function AppendContext(ctx1::Context{T₁}, ctx2::Context{T₂}) where {T₁, T₂}
@@ -818,7 +818,7 @@ alltags(c::AppendContext) = union(alltags(c.ctx1), alltags(c.ctx2))
 # EmptyContext
 ##############
 
-struct EmptyContext{T} <: Context{T}
+@struct_hash_equal struct EmptyContext{T} <: Context{T}
 end
 
 getscope(c::EmptyContext, level::Int) = throw(BoundsError(c, level))
