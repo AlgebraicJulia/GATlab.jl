@@ -183,6 +183,8 @@ isapp(t::AlgType) = t.body isa MethodApp
 
 iseq(t::AlgType) = t.body isa Eq
 
+istuple(t::AlgType) = t.body isa AlgNamedTuple
+
 isconstant(t::AlgType) = false
 
 AlgType(head::Ident, method::Ident, args::Vector{AlgTerm}) =
@@ -201,6 +203,14 @@ AlgSort(t::AlgType) = if iseq(t)
   AlgEqSort(headof(t.body.sort), methodof(t.body.sort))
 else 
   AlgSort(headof(t.body), methodof(t.body))
+end
+
+function tcompose(t::Trie{AlgType})
+  if Tries.isnode(t)
+    AlgType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (t,v) in AbstractTrees.children(t))))
+  else
+    t[]
+  end
 end
   
 

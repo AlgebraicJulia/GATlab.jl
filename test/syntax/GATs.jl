@@ -144,8 +144,6 @@ end
 
 # Tries
 
-mdefault = ident(ThMonoid.Meta.theory; name=:default)
-
-# s = TypeScope(:x => Tries.node(:a => Tries.leaf(AlgType()), :b =>))
+tuplescope = fromexpr(ThMonoid.Meta.theory, :([x::(a::(s,t),b)]), TypeScope)
 
 end # module

@@ -5,7 +5,7 @@ using AbstractTrees
 export Trie, PACKAGE_ROOT, ■, TrieVar
 
 struct TrieNode{X}
-  values::Dict{Symbol, X}
+  values::OrderedDict{Symbol, X}
 end
 
 struct TrieLeaf{A}
@@ -20,8 +20,8 @@ content(p::Trie) = getfield(p, :content)
 isleaf(p::Trie) = content(p) isa TrieLeaf
 leaf(x::A) where {A} = Trie{A}(TrieLeaf{A}(x))
 isnode(p::Trie) = content(p) isa TrieNode
-node(d::Dict{Symbol, Trie{A}}) where {A} = Trie{A}(TrieNode{Trie{A}}(d))
-node(ps::Pair{Symbol, Trie{A}}...) where {A} = node(Dict{Symbol, Trie{A}}(ps...))
+node(d::OrderedDict{Symbol, Trie{A}}) where {A} = Trie{A}(TrieNode{Trie{A}}(d))
+node(ps::Pair{Symbol, Trie{A}}...) where {A} = node(OrderedDict{Symbol, Trie{A}}(ps...))
 
 struct TrieIndexError <: Exception
   package::Trie
@@ -80,7 +80,7 @@ function Base.map(f, p::Trie)::Trie
   if isleaf(p)
     leaf(f(p[]))
   else
-    d′ = Dict(map(pairs(content(p).values)) do (n, p′)
+    d′ = OrderedDict(map(pairs(content(p).values)) do (n, p′)
       (n, map(f, p′))
     end)
     B = valtype(valtype(d′))

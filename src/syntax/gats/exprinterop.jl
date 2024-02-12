@@ -57,6 +57,13 @@ function fromexpr(p::GATContext, e, ::Type{AlgType})::AlgType
       AlgType(parse_methodapp(p, head, args))
     Expr(:call, :(==), lhs, rhs) =>
       AlgType(p, fromexpr(p, lhs, AlgTerm), fromexpr(p, rhs, AlgTerm))
+    Expr(:tuple, args...) => begin
+      fields = OrderedDict{Symbol, AlgType}()
+      for arg in args
+        parse_binding_expr!(p, b -> (fields[nameof(b)] = getvalue(b)), arg)
+      end
+      AlgType(AlgNamedTuple{AlgType}(fields))
+    end
     _ => error("could not parse AlgType from $e")
   end
 end
@@ -70,6 +77,8 @@ function toexpr(c::Context, type::AlgType)
     end
   elseif iseq(type)
     Expr(:call, :(==), toexpr.(Ref(c), type.body.equands)...)
+  elseif istuple(type)
+    Expr(:tuple, [Expr(:(::), k, toexpr(c, v)) for (k, v) in type.body.fields]...)
   end
 end
 
