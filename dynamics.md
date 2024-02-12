@@ -5,7 +5,7 @@
     Data type:
 
     ```julia
-    struct SymbolicFunction
+    struct AlgebraicFunction
         theory::GAT
         args::TypeScope
         ret::AlgType
@@ -15,7 +15,9 @@
 
     Affordances:
     - DSL for writing down functions, composing, etc.
-    - A function `Trie{SymbolicFunction} -> SymbolicFunction`, implementing the Trie-algebra structure on morphisms
+    - A function `tcompose(t::Trie{AlgebraicFunction})::AlgebraicFunction`, implementing the Trie-algebra structure on morphisms
+    - Interpret/compile a symbolic function into a real function
+    - Serialize symbolic functions
 - [ ] Arenas
     Sketch:
     ```julia
@@ -26,7 +28,7 @@
     ```
 
     Affordances:
-    - A function `Trie{Arena} -> Arena`, implementing the Trie-algebra structure on objects
+    - A function `tcompose(arena::Trie{Arena})::Arena`, implementing the Trie-algebra structure on objects
 - [ ] Multilenses
     Sketch:
     ```julia
@@ -36,15 +38,15 @@
         # used for namespacing `params` in composition, must not overlap with `inner_boxes`
         name::Symbol 
         params::AlgType
-        # (params, inner_boxes[...].out) -> outer_box.out
-        output::SymbolicFunction
-        # (params, inner_boxes[...].out, outer_box.in) -> inner_boxes[...].in
-        update::SymbolicFunction
+        # (params, tcompose(inner_boxes[...].out)) -> outer_box.out
+        output::AlgebraicFunction
+        # (params, tcompose(inner_boxes[...].out), outer_box.in) -> tcompose(inner_boxes[...].in)
+        update::AlgebraicFunction
     end
     ```
 
     Affordances:
-    - A function `ocompose(l::MultiLens, args::Trie{MultiLens})` implementing the Trie-multicategory structure
+    - A function `ocompose(l::MultiLens, args::Trie{MultiLens})::MultiLens` implementing the Trie-multicategory structure
 - [ ] Systems
     Sketch:
     ```julia
@@ -53,12 +55,12 @@
         state::AlgType
         params::AlgType
         # (params, state) -> interface.out
-        output::SymbolicFunction
+        output::AlgebraicFunction
         # (params, state, interface.in) -> state
-        input::SymbolicFunction
+        input::AlgebraicFunction
     end
     ```
 
     Affordances:
-    - A function `oapply(l::MultiLens, args::Trie{System})` implementing the action of the Trie-multicategory of multilenses on systems.
+    - A function `oapply(l::MultiLens, args::Trie{System})::System` implementing the action of the Trie-multicategory of multilenses on systems.
 - [ ] Compilation
