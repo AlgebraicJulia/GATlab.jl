@@ -1,5 +1,7 @@
 # The Road to Dynamical Systems
 
+## Basic steps
+
 - [x] Tuple types
 - [ ] Symbolic functions
     Data type:
@@ -18,6 +20,11 @@
     - A function `tcompose(t::Trie{AlgebraicFunction})::AlgebraicFunction`, implementing the Trie-algebra structure on morphisms
     - Interpret/compile a symbolic function into a real function
     - Serialize symbolic functions
+- [ ] Compilation
+- [ ] Serialization
+
+## Lens-based dynamical systems
+
 - [ ] Arenas
     Sketch:
     ```julia
@@ -63,4 +70,42 @@
 
     Affordances:
     - A function `oapply(l::MultiLens, args::Trie{System})::System` implementing the action of the Trie-multicategory of multilenses on systems.
-- [ ] Compilation
+
+## Resource sharers
+
+- [ ] Interfaces = AlgType
+- [ ] Rhizomes (epi-mono uwds)
+    ```julia
+    struct VariableType
+        type::AlgType
+        exposed::Bool
+    end
+
+    struct Rhizome
+        boxes::Trie{Interface}
+        junctions::Trie{VariableType}
+        mapping::Dict{TrieVar, TrieVar}
+    end
+    ```
+
+    Affordances:
+    - `ocompose(r::Rhizome, rs::Trie{Rhizome})::Rhizome`
+
+    In `ocompose`, the names of the junctions in the top-level rhizome dominate.
+- [ ] Systems
+    ```julia
+    struct ResourceSharer
+        variables::Trie{VariableType}
+        params::AlgType
+        output::AlgType
+        # (params, state) -> state
+        update::AlgebraicFunction
+        # (params, state) -> output
+        readout::AlgebraicFunction
+    end
+    ```
+
+    Affordances:
+    - `oapply(r::Rhizome, sharers::Trie{ResourceSharer})::ResourceSharer`
+
+    In `oapply`, variables get renamed to the junctions that they are attached to.
