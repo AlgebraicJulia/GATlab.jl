@@ -141,8 +141,8 @@ macro algebraic(theorymodule, fn)
         ),
         Expr(
           :block,
-          :($add_method!(__f, __m)
-          )
+          :($add_method!(__f, __m)),
+          :__f
         )
       )
     )
