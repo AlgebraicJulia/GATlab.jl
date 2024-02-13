@@ -5,6 +5,9 @@ Throw an error if a the head of an AlgTerm (which refers to a term constructor)
 has arguments of the wrong sort. Returns the sort of the term.
 """
 function sortcheck(ctx::Context, t::AlgTerm)::AbstractAlgSort
+  if isconstant(t) || isannot(t)
+    return AlgSort(t.body.type)
+  end
   t_sub = substitute_funs(ctx, t)
   if t_sub != t 
     return sortcheck(ctx, t_sub)
@@ -22,9 +25,8 @@ function sortcheck(ctx::Context, t::AlgTerm)::AbstractAlgSort
     type = ctx[t.body] |> getvalue
     AlgSort(type)
   elseif isdot(t)
+    # This looks like it will infinitely recur...
     AlgSort(ctx, t)
-  elseif isconstant(t)
-    AlgSort(t.body.type)
   end
 end
 
@@ -203,5 +205,7 @@ function substitute_funs(ctx::Context, t::AlgTerm)
     t 
   elseif isdot(t)
     AlgTerm(AlgDot(headof(b), substitute_funs(ctx, bodyof(b))))
+  elseif isannot(t)
+    AlgTerm(AlgAnnot(substitute_funs(ctx, t.body.term), t.body.type))
   end
 end

@@ -96,6 +96,11 @@ end
 toexpr(c::Context, constant::Constant; kw...) =
   Expr(:(::), constant.value, toexpr(c, constant.type; kw...))
 
+# toexpr(c::Context, annot::AlgAnnot; kw...) =
+#   Expr(:(::), toexpr(c, annot.term; kw...), toexpr(c, annot.type; kw...))
+
+toexpr(c::Context, annot::AlgAnnot; kw...) = toexpr(c, annot.term; kw...)
+
 function fromexpr(c::GATContext, e, ::Type{InCtx{T}}; kw...) where T
   (termexpr, localcontext) = @match e begin
     Expr(:call, :(⊣), binding, tscope) => (binding, fromexpr(c, tscope, TypeScope))

@@ -80,7 +80,7 @@ end
 
 """ Parse Julia function definition into standardized form.
 """
-function parse_function(expr::Expr)::JuliaFunction
+function parse_function(expr::Expr, default_type=:Any)::JuliaFunction
   doc, expr = parse_docstring(expr)
   fun_expr, impl = @match expr begin
     Expr(:(=), args...) => args
@@ -106,7 +106,7 @@ function parse_function(expr::Expr)::JuliaFunction
   args = map(args) do arg
     @match arg begin
       Expr(:(::), x, T) => arg
-      x::Symbol => :($x::Any)
+      x::Symbol => :($x::$(default_type))
       Expr(:(::), T) => Expr(:(::), gensym(), T)
       _ => throw(ParseError("Ill-formed argument expression $arg"))
     end

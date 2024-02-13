@@ -1,8 +1,8 @@
 module Tries
+export Trie, PACKAGE_ROOT, ■, TrieVar
 
 using AbstractTrees
-
-export Trie, PACKAGE_ROOT, ■, TrieVar
+using OrderedCollections
 
 struct TrieNode{X}
   values::OrderedDict{Symbol, X}

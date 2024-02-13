@@ -87,6 +87,7 @@ abstract type AlgAST end
 
 bodyof(t::AlgAST) = t.body
 
+abstract type AbstractAlgAnnot end
 
 """
 `AlgTerm`
@@ -99,6 +100,7 @@ One syntax tree to rule all the terms.
     MethodApp{AlgTerm},
     AbstractConstant,
     AbstractDot,
+    AbstractAlgAnnot,
     AlgNamedTuple{AlgTerm}
   }
 end
@@ -233,6 +235,15 @@ A Julia value in an algebraic context. Type checked elsewhere.
   type::AlgType
 end
 
+"""
+An explicitly type-annotated value.
+"""
+@struct_hash_equal struct AlgAnnot <: AbstractAlgAnnot
+  term::AlgTerm
+  type::AlgType
+end
+
+isannot(t::AlgTerm) = t.body isa AbstractAlgAnnot
 
 """
 Accessing a name from a term of tuple type
