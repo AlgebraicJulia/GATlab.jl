@@ -3,7 +3,7 @@
 ## Basic steps
 
 - [x] Tuple types
-- [ ] Symbolic functions
+- [-] Symbolic functions
     Data type:
 
     ```julia
@@ -16,10 +16,10 @@
     ```
 
     Affordances:
-    - DSL for writing down functions, composing, etc.
-    - A function `tcompose(t::Trie{AlgebraicFunction})::AlgebraicFunction`, implementing the Trie-algebra structure on morphisms
-    - Interpret/compile a symbolic function into a real function
-    - Serialize symbolic functions
+    - [x] DSL for writing down functions, composing, etc.
+    - [ ] A function `tcompose(t::Trie{AlgebraicFunction})::AlgebraicFunction`, implementing the Trie-algebra structure on morphisms
+    - [ ] Interpret/compile a symbolic function into a real function
+    - [ ] Serialize symbolic functions
 - [ ] Compilation
 - [ ] Serialization
 
@@ -73,7 +73,7 @@
 
 ## Resource sharers
 
-- [ ] Interfaces = AlgType
+- [ ] Interfaces
 - [ ] Rhizomes (epi-mono uwds)
     ```julia
     struct VariableType

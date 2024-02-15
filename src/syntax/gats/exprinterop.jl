@@ -20,7 +20,7 @@ function toexpr(c::Context, m::MethodApp)
 end
 
 function toexpr(c::Context, m::AlgDot)
-  Expr(:.,  toexpr(c, m.body), QuoteNode(m.head))
+  Expr(:., toexpr(c, m.body), QuoteNode(m.head))
 end
 
 function fromexpr(c::GATContext, e, ::Type{AlgTerm})
@@ -36,8 +36,7 @@ function fromexpr(c::GATContext, e, ::Type{AlgTerm})
     end
     Expr(:., body, QuoteNode(head)) => begin 
       t = fromexpr(c, body, AlgTerm)
-      algstruct = c[methodof(AlgSort(c, t))] |> getvalue
-      AlgTerm(AlgDot(ident(algstruct.fields; name=head), t))# , str))
+      AlgTerm(AlgDot(head, t))
   end
     Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(c, head, argexprs))
     Expr(:(::), val, type) => AlgTerm(Constant(val, fromexpr(c, type, AlgType)))
@@ -100,6 +99,9 @@ toexpr(c::Context, constant::Constant; kw...) =
 #   Expr(:(::), toexpr(c, annot.term; kw...), toexpr(c, annot.type; kw...))
 
 toexpr(c::Context, annot::AlgAnnot; kw...) = toexpr(c, annot.term; kw...)
+
+toexpr(c::Context, t::AlgNamedTuple{AlgTerm}; kw...) =
+  Expr(:tuple, [Expr(:(=), k, toexpr(c, v; kw...)) for (k, v) in t.fields]...)
 
 function fromexpr(c::GATContext, e, ::Type{InCtx{T}}; kw...) where T
   (termexpr, localcontext) = @match e begin

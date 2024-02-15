@@ -201,15 +201,19 @@ retag(reps::Dict{ScopeTag,ScopeTag}, t::AlgType) =
 rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::AlgType) =
   AlgType(rename(tag, reps, t.body))
 
-AlgSort(t::AlgType) = if iseq(t)
-  AlgEqSort(headof(t.body.sort), methodof(t.body.sort))
-else 
-  AlgSort(headof(t.body), methodof(t.body))
+function AlgSort(t::AlgType)
+  if iseq(t)
+    AlgEqSort(headof(t.body.sort), methodof(t.body.sort))
+  elseif istuple(t)
+    AlgSort(AlgNamedTuple{AlgSort}(OrderedDict{Symbol, AlgSort}(k => AlgSort(v) for (k, v) in t.body.fields)))
+  else 
+    AlgSort(headof(t.body), methodof(t.body))
+  end
 end
 
 function tcompose(t::Trie{AlgType})
   if Tries.isnode(t)
-    AlgType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (t,v) in AbstractTrees.children(t))))
+    AlgType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (k,v) in AbstractTrees.children(t))))
   else
     t[]
   end
@@ -249,11 +253,21 @@ isannot(t::AlgTerm) = t.body isa AbstractAlgAnnot
 Accessing a name from a term of tuple type
 """
 @struct_hash_equal struct AlgDot <: AbstractDot
-  head::Ident
+  head::Symbol
   body::AlgTerm
 end
 headof(a::AlgDot) = a.head 
 bodyof(a::AlgDot) = a.body
+
+function Base.getindex(a::AlgTerm, v::TrieVar)
+  if Tries.isroot(v)
+    a
+  else
+    (n, v′) = Tries.content(v)
+    getindex(AlgTerm(AlgDot(n, a)), v′)
+  end
+end
+
 # Type Contexts
 ###############
 

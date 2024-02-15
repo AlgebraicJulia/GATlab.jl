@@ -188,6 +188,10 @@ function substitute_term(ad::AlgDot, subst::Dict{Ident, AlgTerm})
   AlgDot(ad.head, substitute_term(ad.body, subst))
 end
 
+function substitute_term(annot::AlgAnnot, subst::Dict{Ident, AlgTerm})
+  AlgAnnot(substitute_term(annot.term, subst), substitute_term(annot.type, subst)) 
+end
+
 
 """Replace all functions with their desugared expressions"""
 function substitute_funs(ctx::Context, t::AlgTerm)

@@ -3,7 +3,7 @@ export AlgMethod, AlgClosure, add_method!, @algebraic
 using ...Util.MetaUtils
 
 """
-A method of an AlgClosure
+A method of an AlgClosure. Can also be used standalone.
 """
 struct AlgMethod
   context::TypeScope
@@ -20,6 +20,63 @@ struct AlgMethod
   )
     new(context, body, docstring, args, ret)
   end
+end
+
+"""
+Currently does not do any sort/typechecking. AlgClosure does sort checking,
+so when called via AlgClosure this works as normal.
+"""
+function (m::AlgMethod)(argvals::Any...)
+  substitution = Dict{Ident, AlgTerm}(map(zip(getidents(m.context), [argvals...])) do (arg, val)
+    if val isa AlgTerm
+      arg => val
+    else
+      arg => AlgTerm(Constant(val, getvalue(m.context, arg)))
+    end
+  end)
+  substitute_term(m.body, substitution)
+end
+
+function tcompose(ms::Trie{AlgMethod}, argnames::Vector{Symbol})
+  # First check that all methods have argument contexts of the same
+  # length/variable names
+  # argnames = ...
+  # For now pass in argnames
+
+  # Then create a new typescope with the same variable names, but with types
+  # given by tcompose of the argument types of the ms
+  contexts = map(m -> m.context, ms)
+  context = TypeScope(
+    Scope([x => tcompose(map(ctx -> getvalue(ctx, LID(i)), contexts)) for (i,x) in enumerate(argnames)]...)
+  )
+
+  # Then for each method, create a new body by applying it to the variables
+  # in the new scope with the appropriate AlgDots added
+  bodies = mapwithkey(ms) do k, m
+    m([AlgTerm(x)[k] for x in getidents(context)]...)
+  end
+
+  # Finally, compose all of the bodies into an expression creating an
+  # AlgNamedTuple
+  body = Tries.fold(
+    x -> x,
+    d -> AlgTerm(AlgNamedTuple{AlgTerm}(d)),
+    bodies
+  )
+
+  ret = try
+    tcompose(map(m -> m.ret, ms))
+  catch _
+    nothing
+  end
+
+  AlgMethod(
+    context,
+    body,
+    "",
+    LID.(eachindex(argnames)),
+    ret
+  )
 end
 
 """
@@ -44,6 +101,14 @@ function add_method!(f::AlgClosure, m::AlgMethod)
   f.methods[sorts] = m
 end
 
+function tcompose(fs::Trie{AlgClosure}, argnames::Vector{Symbol})
+  ms = map(f -> only(values(f.methods)), fs)
+  m = tcompose(ms, argnames)
+  f = AlgClosure(first(fs).theory)
+  add_method!(f, m)
+  f
+end
+
 function (f::AlgClosure)(argvals::Any...)
   if length(f.methods) > 1 && any(!(x isa AlgTerm) for x in argvals)
     error("cannot infer type of non-AlgTerm value $x")
@@ -56,14 +121,14 @@ function (f::AlgClosure)(argvals::Any...)
   if m.args != LID.(1:length(m.context))
     error("context inference not yet supported")
   end
-  substitution = Dict{Ident, AlgTerm}(map(zip(getidents(m.context), [argvals...])) do (arg, val)
-    if arg isa AlgTerm
-      arg => val
-    else
-      arg => AlgTerm(Constant(val, getvalue(m.context, arg)))
-    end
-  end)
-  substitute_term(m.body, substitution)
+  m(argvals...)
+end
+
+function Base.show(io::IO, f::AlgClosure)
+  m = only(values(f.methods))
+  fndef = Expr(:(->), Expr(:tuple, toexpr(f.theory, m.context).args...), toexpr(GATContext(f.theory, m.context), m.body))
+  println(io, "AlgClosure in theory $(nameof(f.theory)) with definition:")
+  print(io, fndef)
 end
 
 """
@@ -108,18 +173,6 @@ This means that arbitrary Julia code can go in the body, including calling
 other algebraic functions that happen to be in scope.
 
 Also, the result of this let block is bound to the name given to the function.
-
-```
-\$name = let
-  ...
-  __body = \$body
-  AlgClosure(
-    \$gat,
-    \$args,
-    \$ret
-    __body,
-  )
-end
 """
 macro algebraic(theorymodule, fn)
   theory = macroexpand(__module__, :($theorymodule.Meta.@theory))
