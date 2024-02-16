@@ -130,7 +130,7 @@ function AlgSort(c::Context, t::AlgTerm)
     AlgSort(value.type)
   elseif isdot(t)
     algstruct = c[AlgSort(c, bodyof(bodyof(t))).method] |> getvalue
-    AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
+    AlgSort(algstruct.fields[headof(bodyof(t))])
   else # variable
     binding = c[t.body]
     AlgSort(getvalue(binding))
@@ -218,7 +218,7 @@ end
 Accessing a name from a term of tuple type
 """
 @struct_hash_equal struct AlgDot <: AbstractDot
-  head::Ident
+  head::Symbol
   body::AlgTerm
 end
 headof(a::AlgDot) = a.head 

@@ -492,10 +492,10 @@ end
 function mk_fun(f::AlgFunction, theory, mod, jltype_by_sort)
   name = nameof(f.declaration)
   args = map(zip(f.args, sortsignature(f))) do (i,s)
-    Expr(:(::),nameof(f[i]),jltype_by_sort[s])
+    Expr(:(::), nameof(f[i]), jltype_by_sort[s])
   end
-  impl = to_call_impl(f.value,theory, mod, false)
-  JuliaFunction(;name=name, args, impl)
+  impl = to_call_impl(f.value, theory, mod, false)
+  JuliaFunction(; name=name, args, impl)
 end
 
 function make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, whereparams, ext_functions)
@@ -756,11 +756,7 @@ function to_call_impl(t::AlgTerm, theory::GAT, mod::Union{Symbol,Module}, migrat
     nameof(b)
   elseif  GATs.isdot(t)
     impl = to_call_impl(b.body, theory, mod, migrate)
-    if isnamed(b.head)
-      Expr(:., impl, QuoteNode(nameof(b.head)))
-    else 
-      Expr(:ref, impl, getlid(b.head).val)
-    end
+    Expr(:., impl, QuoteNode(b.head))
   else
     args = to_call_impl.(argsof(b), Ref(theory), Ref(mod), migrate)
     name = nameof(headof(b))
