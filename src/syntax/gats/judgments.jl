@@ -167,14 +167,16 @@ Is tantamount to (in a vanilla GAT):
   declaration::Ident
   localcontext::TypeScope
   typeargs::Vector{LID}
-  fields::TypeScope
+  fields::OrderedDict{Symbol, AlgType}
 end
 
 Base.nameof(t::AlgStruct) = nameof(t.declaration)
 typeargsof(t::AlgStruct) = t[t.typeargs]
 typesortsignature(tc::AlgStruct) =
   AlgSort.(getvalue.(typeargsof(tc)))
-argsof(t::AlgStruct) = getbindings(t.fields)
+argsof(t::AlgStruct) = map(collect(pairs(t.fields))) do (k,v) 
+  Binding{AlgType}(k, v)
+end
 
 """
 A shorthand for a function, such as "square(x) := x * x".  It is relevant for 

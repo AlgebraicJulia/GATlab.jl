@@ -7,6 +7,8 @@ using Base.Meta: ParseError
 using GATlab
 
 strip_all(expr) = strip_lines(expr, recurse=true)
+strip_all(f::JuliaFunction) = setimpl(f, strip_all(f.impl))
+
 parse_fun(expr) = parse_function(strip_all(expr))
 
 # Function generation
@@ -29,20 +31,21 @@ end
 
 # Function parsing
 @test_throws ParseError parse_fun(:(f(x,y)))
-@test (parse_fun(:(function f(x,y) x end)) ==
-       JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end))
-
+@test (strip_all(parse_fun(:(function f(x,y) x end))) ==
+       strip_all(JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end)))
+f = parse_fun(:(function f(x,y) x end))
+x = JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end)
 @test parse_fun((quote
   """ My docstring
   """
   function f(x,y) x end
-end).args[1]) == JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end, " My docstring\n")
+end).args[2]) == strip_all(JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end, " My docstring\n"))
 
 @test (parse_fun(:(function f(x::Int,y::Int)::Int x end)) ==
-       JuliaFunction(:f, [:(x::Int),:(y::Int)], [], [], :Int, quote x end))
+       strip_all(JuliaFunction(:f, [:(x::Int),:(y::Int)], [], [], :Int, quote x end)))
 
 @test (parse_fun(:(f(x,y) = x)) ==
-       JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end))
+       strip_all(JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, quote x end)))
 
 sig = JuliaFunctionSig(:f, [:Int,:Int])
 @test parse_function_sig(parse_fun(:(function f(x::Int,y::Int)::Int end))) == sig

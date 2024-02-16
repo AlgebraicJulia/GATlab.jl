@@ -37,7 +37,7 @@ function fromexpr(c::GATContext, e, ::Type{AlgTerm})
     Expr(:., body, QuoteNode(head)) => begin 
       t = fromexpr(c, body, AlgTerm)
       algstruct = c[AlgSort(c, t).method] |> getvalue
-      AlgTerm(AlgDot(ident(algstruct.fields; name=head), t))# , str))
+      AlgTerm(AlgDot(head, t))
   end
     Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(c, head, argexprs))
     Expr(:(::), val, type) => AlgTerm(Constant(val, fromexpr(c, type, AlgType)))
@@ -378,7 +378,8 @@ function parse_struct!(theory::GAT, e, linenumber, ctx=nothing)
   (name, args...) = @match e begin 
     Expr(:struct, false, Expr(:call, name, lc...), Expr(:block, body...)) => begin
       typeargs = parseargs!(theory, lc, localcontext)
-      args = fromexpr(GATContext(theory, localcontext),Expr(:vect,body...),TypeScope)  
+      ts_args = fromexpr(GATContext(theory, localcontext),Expr(:vect,body...),TypeScope)  
+      args = OrderedDict(nameof(x)=>getvalue(ts_args[x]) for x in getidents(ts_args))
       (name, localcontext, typeargs, args)
     end
   end
