@@ -24,6 +24,7 @@ leaf(x::A) where {A} = Trie{A}(TrieLeaf{A}(x))
 isnode(p::Trie) = content(p) isa TrieNode
 node(d::OrderedDict{Symbol, Trie{A}}) where {A} = Trie{A}(TrieNode{Trie{A}}(d))
 node(ps::Pair{Symbol, Trie{A}}...) where {A} = node(OrderedDict{Symbol, Trie{A}}(ps...))
+node(g::Base.Generator) = node(OrderedDict(g))
 
 struct TrieIndexError <: Exception
   package::Trie
@@ -224,6 +225,34 @@ function Base.merge(t1::Trie{A}, t2::Trie{A}) where {A}
     node(b)
   end
 end
+
+"""
+Make a trie out of a dict from trie keys to values.
+
+Fails if the keys in the dict are not prefix-free.
+"""
+function Trie(d::OrderedDict{TrieVar, A}) where {A}
+  branches = OrderedDict{Symbol, OrderedDict{TrieVar, A}}()
+  for (v, x) in d
+    if isroot(v)
+      if length(d) == 1
+        return leaf(x)
+      else
+        error("attempted trie conversion failed because keys were not prefix-free")
+      end
+    else
+      (n, v′) = content(v)
+      if haskey(branches, n)
+        branches[n][v′] = x
+      else
+        branches[n] = OrderedDict(v′ => x)
+      end
+    end
+  end
+  node(n => Trie(d′) for (n, d′) in branches)
+end
+
+Trie(pairs::Pair{TrieVar, A}...) where {A} = Trie(OrderedDict{TrieVar, A}(pairs...))
 
 function Base.show(io::IO, v::TrieVar)
   print(io, "■")
