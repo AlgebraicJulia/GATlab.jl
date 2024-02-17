@@ -1,5 +1,5 @@
 module Tries
-export Trie, PACKAGE_ROOT, ■, TrieVar, mapwithkey
+export Trie, PACKAGE_ROOT, ■, TrieVar, mapwithkey, traversewithkey
 
 using AbstractTrees
 using OrderedCollections
@@ -150,8 +150,18 @@ function Base.map(f, p::Trie)::Trie
     leaf(f(p[]))
   else
     d′ = OrderedDict((n => map(f, p′)) for (n, p′) in branches(p))
-    B = valtype(valtype(d′))
-    Trie{B}(TrieNode{Trie{B}}(d′))
+    for (n, p′) in branches(p)
+      p″ = map(f, p′)
+      if !isnothing(p″)
+        d′[n] = p″
+      end
+    end
+    if length(d′) > 0
+      B = valtype(last(first(d′)))
+      node(OrderedDict{Symbol, Trie{B}}(d′))
+    else
+      nothing
+    end
   end
 end
 
@@ -159,7 +169,7 @@ function flatten(p::Trie{Trie{A}})::Trie{A} where {A}
   if isleaf(p)
     p[]
   else
-    map(flatten, p)
+    node(n => flatten(v) for (n, v) in branches(p))
   end
 end
 
@@ -183,6 +193,15 @@ function Base.getproperty(v::TrieVar, n::Symbol)
   end
 end
 
+function Base.:(*)(v1::TrieVar, v2::TrieVar)
+  if isroot(v1)
+    v2
+  else
+    (n, v1′) = content(v1)
+    TrieVar((n, v1′ * v2))
+  end
+end
+
 function mapwithkey(f, t::Trie; prefix=PACKAGE_ROOT)
   if isleaf(t)
     leaf(f(prefix, t[]))
@@ -190,6 +209,17 @@ function mapwithkey(f, t::Trie; prefix=PACKAGE_ROOT)
     node([k => mapwithkey(f, v; prefix=getproperty(prefix, k)) for (k, v) in branches(t)]...)
   end
 end
+
+function traversewithkey(f, t::Trie; prefix=PACKAGE_ROOT)
+  if isleaf(t)
+    f(prefix, t[])
+  else
+    for (k, v) in branches(t)
+      traversewithkey(f, v; prefix=getproperty(prefix, k))
+    end
+  end
+end
+
 
 function fold(base, induction, t::Trie)
   if isleaf(t)

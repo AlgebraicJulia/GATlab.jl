@@ -13,12 +13,12 @@ struct AlgMethod
   ret::Union{AlgType, Nothing}
   function AlgMethod(
     context::TypeScope,
-    body::AlgTerm,
+    body::Any,
     docstring::String="",
     args::Vector{LID}=LID.(1:length(context)),
     ret::Union{AlgType, Nothing}=nothing,
   )
-    new(context, body, docstring, args, ret)
+    new(context, AlgTerm(body), docstring, args, ret)
   end
 end
 
@@ -131,6 +131,14 @@ function Base.show(io::IO, f::AlgClosure)
   print(io, fndef)
 end
 
+function strip_annot(t::AlgTerm)
+  if isannot(t)
+    strip_annot(t.body.term)
+  else
+    map(strip_annot, t)
+  end
+end
+
 """
 This constructs an algebraic closure.
 
@@ -188,7 +196,7 @@ macro algebraic(theorymodule, fn)
           :block,
           [:($n = $theorymodule.Meta.Constructors.$n) for n in nameof.(declarations(theory))]...,
           [:($(nameof(x)) = $(AlgTerm(AlgAnnot(AlgTerm(x), getvalue(scope, x))))) for x in getidents(scope)]...,
-          :(__body = $(fn.impl)),
+          :(__body = $strip_annot($AlgTerm($(fn.impl)))),
           :(__f = $AlgClosure($theory)),
           :(__m = $AlgMethod($scope, __body))
         ),

@@ -19,8 +19,8 @@ function toexpr(c::Context, m::MethodApp)
   Expr(:call, toexpr(c, m.head), toexpr.(Ref(c), m.args)...)
 end
 
-function toexpr(c::Context, m::AlgDot)
-  Expr(:., toexpr(c, m.body), QuoteNode(m.head))
+function toexpr(c::Context, m::AlgDot; kw...)
+  Expr(:., toexpr(c, m.body; kw...), QuoteNode(m.head))
 end
 
 function fromexpr(c::GATContext, e, ::Type{AlgTerm})
@@ -95,10 +95,10 @@ end
 toexpr(c::Context, constant::Constant; kw...) =
   Expr(:(::), constant.value, toexpr(c, constant.type; kw...))
 
-# toexpr(c::Context, annot::AlgAnnot; kw...) =
-#   Expr(:(::), toexpr(c, annot.term; kw...), toexpr(c, annot.type; kw...))
+toexpr(c::Context, annot::AlgAnnot; kw...) =
+  Expr(:(::), toexpr(c, annot.term; kw...), toexpr(c, annot.type; kw...))
 
-toexpr(c::Context, annot::AlgAnnot; kw...) = toexpr(c, annot.term; kw...)
+# toexpr(c::Context, annot::AlgAnnot; kw...) = toexpr(c, annot.term; kw...)
 
 toexpr(c::Context, t::AlgNamedTuple{AlgTerm}; kw...) =
   Expr(:tuple, [Expr(:(=), k, toexpr(c, v; kw...)) for (k, v) in t.fields]...)

@@ -185,13 +185,21 @@ function substitute_term(ma::MethodApp{AlgTerm}, subst::Dict{Ident, AlgTerm})
 end
 
 function substitute_term(ad::AlgDot, subst::Dict{Ident, AlgTerm})
-  AlgDot(ad.head, substitute_term(ad.body, subst))
+  if istuple(ad.body)
+    substitute_term(ad.body.body.fields[ad.head], subst)
+  else
+    AlgDot(ad.head, substitute_term(ad.body, subst))
+  end
 end
 
 function substitute_term(annot::AlgAnnot, subst::Dict{Ident, AlgTerm})
-  AlgAnnot(substitute_term(annot.term, subst), substitute_term(annot.type, subst)) 
+  # todo: should also substitute in type
+  AlgAnnot(substitute_term(annot.term, subst), annot.type) 
 end
 
+function substitute_term(tup::AlgNamedTuple{AlgTerm}, subst::Dict{Ident, AlgTerm})
+  AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(n => substitute_term(t, subst) for (n, t) in tup.fields))
+end
 
 """Replace all functions with their desugared expressions"""
 function substitute_funs(ctx::Context, t::AlgTerm)
@@ -213,3 +221,18 @@ function substitute_funs(ctx::Context, t::AlgTerm)
     AlgTerm(AlgAnnot(substitute_funs(ctx, t.body.term), t.body.type))
   end
 end
+
+Base.map(f, t::AlgTerm) = AlgTerm(map(f, bodyof(t)))
+
+Base.map(f, b::MethodApp{AlgTerm}) = MethodApp{AlgTerm}(headof(b), methodof(b), map(f, argsof(b)))
+
+Base.map(f, b::AlgDot) = AlgDot(b.head, f(b.body))
+
+Base.map(f, b::AlgAnnot) = AlgAnnot(f(b.term), b.type)
+
+Base.map(f, b::AlgNamedTuple{AlgTerm}) =
+  AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(n => f(v) for (n, v) in b.fields))
+
+Base.map(f, b::Ident) = b
+
+Base.map(f, b::Constant) = b

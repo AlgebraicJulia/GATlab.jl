@@ -32,6 +32,7 @@ end
 
 iseq(::AlgEqSort) = true
 iseq(::AlgSort) = false
+istuple(s::AlgSort) = s.body isa AlgNamedTuple
 headof(a::AbstractAlgSort) = a.body[1]
 methodof(a::AbstractAlgSort) = a.body[2]
 
@@ -116,9 +117,17 @@ function AlgTerm(fun::Ident, method::Ident)
   AlgTerm(MethodApp{AlgTerm}(fun, method, EMPTY_ARGS))
 end
 
+AlgTerm(t::AlgTerm) = t
+
+function AlgTerm(tup::NamedTuple)
+  AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(n => AlgTerm(v) for (n, v) in pairs(tup))))
+end
+
 isvariable(t::AlgTerm) = t.body isa Ident
 
 isapp(t::AlgTerm) = t.body isa MethodApp
+
+istuple(t::AlgTerm) = t.body isa AlgNamedTuple
 
 isdot(t::AlgAST) = t.body isa AlgDot
 
@@ -128,6 +137,16 @@ rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
   AlgTerm(rename(tag, reps, t.body))
 
 retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
+
+function tcompose(t::Trie{AlgTerm})
+  if Tries.isleaf(t)
+    t[]
+  else
+    AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(
+      (n, tcompose(v)) for (n, v) in Tries.branches(t)
+    )))
+  end
+end
 
 function AlgSort(c::Context, t::AlgTerm)
   t_sub = substitute_funs(c, t)
@@ -141,8 +160,15 @@ function AlgSort(c::Context, t::AlgTerm)
     value = getvalue(binding)
     AlgSort(value.type)
   elseif isdot(t)
-    algstruct = c[methodof(AlgSort(c, bodyof(bodyof(t))))] |> getvalue
-    AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
+    parentsort = AlgSort(c, bodyof(bodyof(t)))
+    if istuple(parentsort)
+      parentsort.body.fields[headof(bodyof(t))]
+    else
+      algstruct = c[methodof(AlgSort(c, bodyof(bodyof(t))))] |> getvalue
+      AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
+    end
+  elseif isannot(t)
+    AlgSort(t.body.type)
   else # variable
     binding = c[t.body]
     AlgSort(getvalue(binding))
@@ -255,6 +281,13 @@ Accessing a name from a term of tuple type
 @struct_hash_equal struct AlgDot <: AbstractDot
   head::Symbol
   body::AlgTerm
+  function AlgDot(head::Symbol, body::AlgTerm)
+    if istuple(body)
+      body.body.fields[head]
+    else
+      new(head, body)
+    end
+  end
 end
 headof(a::AlgDot) = a.head 
 bodyof(a::AlgDot) = a.body
@@ -265,6 +298,16 @@ function Base.getindex(a::AlgTerm, v::TrieVar)
   else
     (n, v′) = Tries.content(v)
     getindex(AlgTerm(AlgDot(n, a)), v′)
+  end
+end
+
+function Base.getproperty(a::AlgTerm, n::Symbol)
+  if n == :body
+    # this is a hack: we should instead replace everywhere we use t.body
+    # with `getbody(t)` or something like it
+    getfield(a, :body)
+  else
+    AlgTerm(AlgDot(n, a))
   end
 end
 
