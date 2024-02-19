@@ -1,9 +1,9 @@
 module TheoryInterface
 export @theory, @signature, Model, invoke_term
 
-using ..Scopes, ..GATs, ..ExprInterop
+using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
 
-using MLStyle, StructEquality
+using MLStyle, StructEquality, Markdown
 
 abstract type Model{Tup <: Tuple} end
 
@@ -72,7 +72,7 @@ function theory_impl(head, body, __module__)
   else
     GAT(:_EMPTY)
   end
-
+  ## theory defined here
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
   newsegment = theory.segments.scopes[end]
 
@@ -93,6 +93,7 @@ function theory_impl(head, body, __module__)
 
   modulelines = Any[]
 
+  # this exports the names of the module, e.g. :default, :⋅, :e 
   push!(modulelines, :(export $(allnames(theory; aliases=true)...)))
 
   push!(
@@ -109,9 +110,25 @@ function theory_impl(head, body, __module__)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
   end
 
+  vec = split(repr(theory), "\n")
+  head = popfirst!(vec)
+  replace!(line -> startswith(line, "  #=") ? "" : "    " * line, vec)
+  string = join(vec, "\n")
+  docstring = Markdown.parse("""
+
+  $head
+
+  $string
+
+  """)
+
   push!(modulelines, Expr(:toplevel, :(module Meta
     struct T end
-    const theory = $theory
+    # const theory = $theory 
+    
+    using GATlab.Util
+    @gatdoc $theory
+
     macro theory() $theory end
     macro theory_module() parentmodule(@__MODULE__) end
   end)))
@@ -183,4 +200,5 @@ function mk_struct(s::AlgStruct, mod)
     $she
   end
 end
+
 end
