@@ -72,7 +72,7 @@ function theory_impl(head, body, __module__)
   else
     GAT(:_EMPTY)
   end
-  ## theory defined here
+  
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
   newsegment = theory.segments.scopes[end]
 
@@ -110,18 +110,6 @@ function theory_impl(head, body, __module__)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
   end
 
-  vec = split(repr(theory), "\n")
-  head = popfirst!(vec)
-  replace!(line -> startswith(line, "  #=") ? "" : "    " * line, vec)
-  string = join(vec, "\n")
-  docstring = Markdown.parse("""
-
-  $head
-
-  $string
-
-  """)
-
   push!(modulelines, Expr(:toplevel, :(module Meta
     struct T end
     # const theory = $theory 
@@ -132,7 +120,6 @@ function theory_impl(head, body, __module__)
     macro theory() $theory end
     macro theory_module() parentmodule(@__MODULE__) end
   end)))
-
 
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
