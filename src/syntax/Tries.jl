@@ -4,16 +4,72 @@ export Trie, PACKAGE_ROOT, ■, TrieVar, mapwithkey, traversewithkey
 using AbstractTrees
 using OrderedCollections
 
+"""
+An internal node of a [`Trie`](@ref). Should not be used outside of this module.
+
+Cannot be empty.
+"""
 struct TrieNode{X}
   branches::OrderedDict{Symbol, X}
+  function TrieNode{X}(branches::OrderedDict{Symbol, X}) where {X}
+    if length(branches) == 0
+      error(
+        """
+        Attempted to make a TrieNode with no branches. This is an error because
+        tries can only be empty at the top level.
+        """
+      )
+    end
+    new(branches)
+  end
+  function TrieNode(branches::OrderedDict{Symbol, X}) where {X}
+    TrieNode{X}(branches)
+  end
 end
 
+"""
+A leaf node of a [`Trie`](@ref). Should not be used outside of this module.
+"""
 struct TrieLeaf{A}
   value::A
 end
 
+"""
+A non-empty trie.
+
+See the docs for [`Trie`](@ref) for general information about tries; these
+docs are specific to the reasoning behind having a non-empty variant.
+
+We use non-empty tries because we don't want to worry about the difference
+between the empty tuple `()` and a named tuple `(a::())`. In either one, the
+set of valid paths is the same. Thus, we only allow a trie to be empty at
+the toplevel, and subtries must be non-empty. So the self-similar recursion
+happens for non-empty tries, while [`Trie`](@ref) is just a wrapper around
+`Union{NonEmptyTrie{A}, Nothing}`.
+"""
+struct NonEmptyTrie{A}
+  content::Union{TrieLeaf{A}, TrieNode{NonEmptyTrie{A}}}
+end
+
+"""
+A possibly-empty [trie][1].
+
+We use `trie` in a slightly idiosyncratic way here.
+
+1. Branches are indexed by `Symbol`s rather than `Char`s
+2. We only store values at leaf nodes rather than internal nodes.
+
+One way of slickly defining NonEmptyTrie is that it is the free monad on the
+polynomial
+
+p = ∑_{U ⋐ Symbol, U ≠ ∅} y^U
+
+Then Trie = NonEmptyTrie + 1.
+
+[1]: https://en.wikipedia.org/wiki/Trie
+"""
 struct Trie{A}
-  content::Union{TrieLeaf{A}, TrieNode{Trie{A}}}
+  content::Union{Nothing, NonEmptyTrie{A}}
 end
 
 value(p::Trie) = content(p).value
