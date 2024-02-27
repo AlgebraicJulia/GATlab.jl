@@ -8,11 +8,28 @@ using ...Syntax.GATs: tcompose
 using MLStyle
 using OrderedCollections
 
+"""
+A state variable.
+
+This is used for both the variables of [`ResourceSharer`](@ref) and the
+junctions of [`Rhizome`](@ref).
+
+This simplifies naming, because instead of having tries and an injective
+map between them, we can just have a single trie.
+"""
 struct Variable
   exposed::Bool
   type::AlgType
 end
 
+"""
+A variable in the interface to an inner box of a rhizome.
+
+Fields:
+
+- `type`: the type of the variable
+- `junction`: the junction that the variable is attached to.
+"""
 struct PortVariable
   type::AlgType
   junction::TrieVar
@@ -20,16 +37,68 @@ end
 
 const Interface = Trie{AlgType}
 
+"""
+A rhizome is a variant of a UWD where the underlying cospan is epi-monic.
+
+The mathematical theory is developed within (provide link to Lohmayer-Lynch
+paper).
+
+This also differs from the ACSet-based UWDs in the following ways
+
+1. We use tries instead of numbering things sequentially.
+2. All of the "functions out" of the tries are handled by just storing data in
+the leaves of the tries, rather than having external "column vectors".
+So e.g. we would use `Trie{Int}` rather than a pair of `Trie{Nothing}`,
+`Dict{TrieVar, Int}`.
+3. We use an indexed rather than fibered representation for inner ports
+on boxes. That is, we have a function Boxes -> Set rather than a function
+InnerPorts -> Boxes. Following 2., this is just stored in the leaf nodes
+of the trie of boxes, hence `Trie{Trie{PortVariable}}`.
+4. We don't have separate sets for outer ports and junctions: rather each
+junction is marked as "exposed" or not. This simplifies naming. Also see
+[`Variable`](@ref).
+
+All of this adds up to a convenient and compact representation.
+
+The namespaces of `boxes` and `junctions` must be disjoint. One way
+of enforcing this would be to do something like
+
+```
+struct Box
+  ports::Trie{PortVariable}
+end
+
+struct Rhizome
+  stuff::Trie{Union{Variable, Box}}
+end
+```
+
+The only problem is that I'm not sure then what to call the single field in
+`Rhizome`. Also, this would require a slight refactor of the rest of the code.
+"""
 struct Rhizome
   boxes::Trie{Trie{PortVariable}}
   junctions::Trie{Variable}
   function Rhizome(boxes::Trie{Trie{PortVariable}}, junctions::Trie{Variable})
-    # TODO: assert that boxes and junctions are disjoint
-    # Or alternatively: have a Trie of Union{Interface, Junction}?
     new(boxes, junctions)
   end
 end
 
+"""
+    ocompose(r::Rhizome, rs::Trie{Rhizome})
+
+This implements the composition operation for the Trie-multicategory of
+rhizomes. This is the better way of doing the [operad of undirected wiring][1].
+
+TODO: add link to arXiv paper on Trie-multicategories once it goes up.
+
+See [2] for a reference on general T-multicategories, then trust me for now
+that Trie is a cartesian monoid.
+
+[1]: [The operad of wiring diagrams: formalizing a graphical language for
+databases, recursion, and plug-and-play circuits](https://arxiv.org/abs/1305.0297)
+[2]: [Higher Operads, Higher Categories](https://arxiv.org/abs/math/0305049)
+"""
 function ocompose(r::Rhizome, rs::Trie{Rhizome})
   # paired :: Trie{Tuple{Trie{PortVariable}, Rhizome}}
   paired = zip(r.boxes, rs)
@@ -116,6 +185,11 @@ end
 """
 A modified version of the relation macro supporting namespacing
 
+TODO: this currently does not support unexposed junctions. We should support
+unexposed junctions.
+
+See some examples below:
+
 ```
 @rhizome ThRing R(a, b) begin
   X(a, b)
@@ -126,6 +200,15 @@ end
   _(a, b)
 end
 ```
+
+We can interpret the first rhizome as follows:
+
+1. The rhizome has ports that are typed by types within ThRing. Because
+`ThRing` has a `default` type, ports that are not explicitly annotated
+will be assumed to be of that type.
+2. The name of the rhizome is `R`.
+3. The namespace for the external ports of the rhizome is `[a, b]`.
+As noted in 1., each of these ports is typed with `default`.
 """
 macro rhizome(theory, head, body)
   # macroexpand `theory` to get the actual theory
@@ -175,6 +258,13 @@ macro rhizome(theory, head, body)
   )
 end
 
+"""
+A resource sharer whose variables are namespaced in a trie
+and whose update function is symbolic
+
+TODO: there should be a smart constructor that takes an AlgClosure and finds
+the right method of it for the variables and params.
+"""
 struct ResourceSharer
   variables::Trie{Variable}
   params::AlgType
