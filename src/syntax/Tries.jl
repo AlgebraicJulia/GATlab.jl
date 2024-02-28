@@ -1,38 +1,41 @@
 module Tries
-export Trie, PACKAGE_ROOT, ■, TrieVar, mapwithkey, traversewithkey
+export Trie, NonEmptyTrie, AbstractTrie, PACKAGE_ROOT, ■, TrieVar, mapwithkey, traversewithkey
 
 using AbstractTrees
 using OrderedCollections
+using MLStyle
 
 """
 An internal node of a [`Trie`](@ref). Should not be used outside of this module.
 
 Cannot be empty.
 """
-struct TrieNode{X}
+struct Node_{X}
   branches::OrderedDict{Symbol, X}
-  function TrieNode{X}(branches::OrderedDict{Symbol, X}) where {X}
+  function Node_{X}(branches::OrderedDict{Symbol, X}) where {X}
     if length(branches) == 0
       error(
         """
-        Attempted to make a TrieNode with no branches. This is an error because
+        Attempted to make a Node with no branches. This is an error because
         tries can only be empty at the top level.
         """
       )
     end
-    new(branches)
+    new{X}(branches)
   end
-  function TrieNode(branches::OrderedDict{Symbol, X}) where {X}
-    TrieNode{X}(branches)
+  function Node_(branches::OrderedDict{Symbol, X}) where {X}
+    Node{X}(branches)
   end
 end
 
 """
 A leaf node of a [`Trie`](@ref). Should not be used outside of this module.
 """
-struct TrieLeaf{A}
+struct Leaf_{A}
   value::A
 end
+
+abstract type AbstractTrie{A} end
 
 """
 A non-empty trie.
@@ -47,8 +50,28 @@ the toplevel, and subtries must be non-empty. So the self-similar recursion
 happens for non-empty tries, while [`Trie`](@ref) is just a wrapper around
 `Union{NonEmptyTrie{A}, Nothing}`.
 """
-struct NonEmptyTrie{A}
-  content::Union{TrieLeaf{A}, TrieNode{NonEmptyTrie{A}}}
+struct NonEmptyTrie{A} <: AbstractTrie{A}
+  content::Union{Leaf_{A}, Node_{NonEmptyTrie{A}}}
+end
+
+content(t::NonEmptyTrie) = getfield(t, :content)
+
+@active Node(t) begin
+  inner = content(t)
+  if inner isa Node_
+    Some(inner.branches)
+  else
+    nothing
+  end
+end
+
+@active Leaf(t) begin
+  inner = content(t)
+  if inner isa Leaf_
+    Some(inner.value)
+  else
+    nothing
+  end
 end
 
 """
@@ -68,164 +91,187 @@ Then Trie = NonEmptyTrie + 1.
 
 [1]: https://en.wikipedia.org/wiki/Trie
 """
-struct Trie{A}
+struct Trie{A} <: AbstractTrie{A}
   content::Union{Nothing, NonEmptyTrie{A}}
 end
 
-value(p::Trie) = content(p).value
-branches(p::Trie) = content(p).branches
-content(p::Trie) = getfield(p, :content)
-isleaf(p::Trie) = content(p) isa TrieLeaf
-leaf(x::A) where {A} = Trie{A}(TrieLeaf{A}(x))
-isnode(p::Trie) = content(p) isa TrieNode
-node(d::OrderedDict{Symbol, Trie{A}}) where {A} = Trie{A}(TrieNode{Trie{A}}(d))
-node(ps::Pair{Symbol, Trie{A}}...) where {A} = node(OrderedDict{Symbol, Trie{A}}(ps...))
+@active Empty(t) begin
+  isnothing(content(t))
+end
+
+@active NonEmpty(t) begin
+  if t isa NonEmptyTrie
+    Some(t)
+  elseif t isa Trie
+    c = getfield(t, :content)
+    if !isnothing(c)
+      Some(c)
+    else
+      nothing
+    end
+  end
+end
+
+function content(p::Trie)
+  unwrapped = getfield(p, :content)
+  if !isnothing(unwrapped)
+    content(unwrapped)
+  else
+    nothing
+  end
+end
+
+function node(d::OrderedDict{Symbol, <:AbstractTrie{A}}) where {A}
+  nonempties = OrderedDict{Symbol, NonEmptyTrie{A}}()
+  for (k, t) in pairs(d)
+    @match t begin
+      NonEmpty(net) => begin
+        nonempties[k] = net
+      end
+      Empty() => nothing
+    end
+  end
+  if length(nonempties) > 0
+    Trie{A}(NonEmptyTrie{A}(Node_{NonEmptyTrie{A}}(nonempties)))
+  else
+    Trie{A}(nothing)
+  end
+end
+
+node(ps::Pair{Symbol, T}...) where {A, T<:AbstractTrie{A}} = node(OrderedDict{Symbol, T}(ps...))
+
 node(g::Base.Generator) = node(OrderedDict(g))
 
+leaf(x::A) where {A} = Trie{A}(NonEmptyTrie{A}(Leaf_{A}(x)))
+
+Trie{A}() where {A} = Trie{A}(nothing)
+
 struct TrieIndexError <: Exception
-  package::Trie
+  trie::Trie
   key::Symbol
 end
 
 struct TrieDerefError <: Exception
-  package::Trie
+  trie::Trie
 end
 
-function Base.getproperty(p::Trie{A}, n::Symbol)::Trie{A} where {A}
-  if isnode(p)
-    d = branches(p)
-    if haskey(d, n)
-      d[n]
-    else
-      throw(TrieIndexError(p, n))
-    end
-  else
-    throw(TrieIndexError(p, n))
+function Base.getproperty(t::AbstractTrie{A}, n::Symbol) where {A}
+  @match t begin
+    Node(bs) =>
+      if haskey(bs, n)
+        bs[n]
+      else
+        throw(TrieIndexError(t, n))
+      end
+    _ => throw(TrieIndexError(t, n))
   end
 end
 
-function Base.filter(f, t::Trie{A}) where {A}
-  if isleaf(t)
-    if f(t[])
-      t
-    else
-      nothing
+function Base.filter(f, t::AbstractTrie{A}) where {A}
+  @match t begin
+    Leaf(v) => f(v) ? t : Trie{A}()
+    Node(bs) => begin
+      bs′ = OrderedDict{Symbol, NonEmptyTrie{A}}()
+      for (n, s) in bs
+        @match filter(f, s) begin
+          NonEmpty(net) => (bs′[n] = net)
+          Empty() => nothing
+        end
+      end
+      node(bs′)
     end
-  else
-    branches′ = OrderedDict{Symbol, Trie{A}}()
-    for (n, s) in branches(t)
-      s′ = filter(f, s)
-      if !isnothing(s′)
-        branches′[n] = s′
+    Empty() => t
+  end
+end
+
+function filtermap(f, return_type::Type, t::AbstractTrie)
+  @match t begin
+    Leaf(v) => begin
+      v′ = f(v)
+      if !isnothing(v′)
+        leaf(v′)
       end
     end
-    if length(branches′) > 0
-      node(branches′)
-    else
-      nothing
-    end
-  end
-end
-
-function filtermap(f, t::Trie)
-  if isleaf(t)
-    v′ = f(t[])
-    if !isnothing(v′)
-      leaf(v′)
-    end
-  else
-    branches′ = OrderedDict{Symbol, Trie}()
-    for (n, s) in branches(t)
-      s′ = filtermap(f, s)
-      if !isnothing(s′)
-        branches′[n] = s′
+    Node(bs) => begin
+      bs′ = OrderedDict{Symbol, NonEmptyTrie{return_type}}()
+      for (n, s) in bs
+        @match filtermap(f, return_type, s) begin
+          NonEmpty(net) => (bs′[n] = s′)
+          Empty() => nothing
+        end
       end
-      if length(branches′) > 0
-        B = valtype(second(first(branches)))
-        node(OrderedDict{Symbol, Trie{B}}(branches′))
-      end
+      node(bs′)
     end
+    Empty() => t
   end
 end
 
-function zipwith(f, t1::Trie, t2::Trie)
-  if isleaf(t1) && isleaf(t2)
-    leaf(f(t1[], t2[]))
-  elseif isnode(t1) && isnode(t2)
-    b1, b2 = branches(t1), branches(t2)
-    keys(b1) == keys(b2) || error("cannot zip two tries not of the same shape")
-    node(OrderedDict(n => zip(s1, s2) for ((n, s1), (_, s2)) in zip(b1, b2)))
-  else
-    error("cannot zip two tries not of the same shape")
+function zipwith(f, t1::AbstractTrie{A1}, t2::AbstractTrie{A2}) where {A1, A2}
+  @match (t1, t2) begin
+    (Leaf(v1), Leaf(v2)) => leaf(f(v1, v2))
+    (Node(bs1), Node(bs2)) => begin
+      keys(bs1) == keys(bs2) || error("cannot zip two tries not of the same shape")
+      node(OrderedDict(n => zip(s1, s2) for ((n, s1), (_, s2)) in zip(bs1, bs2)))
+    end
+    (Empty, Empty) => Trie{Tuple{A1, A2}}
+    _ => error("cannot zip two tries not of the same shape")
   end
 end
 
-Base.zip(t1::Trie, t2::Trie) = zipwith((a,b) -> (a,b), t1, t2)
+Base.zip(t1::AbstractTrie, t2::AbstractTrie) = zipwith((a,b) -> (a,b), t1, t2)
 
 Base.getindex(p::Trie, n::Symbol) = getproperty(p, n)
 
-function Base.getindex(p::Trie{A})::A where {A}
-  if isleaf(p)
-    value(p)
-  else
-    throw(TrieDerefError(p))
+function Base.getindex(t::AbstractTrie{A})::A where {A}
+  @match t begin
+    Leaf(v) => v
+    _ => throw(TrieDerefError(t))
   end
 end
 
-function Base.first(t::Trie)
-  if isleaf(t)
-    t[]
-  else
-    first(first(values(branches(t))))
+function Base.first(t::AbstractTrie)
+  @match t begin
+    Leaf(v) => v
+    Node(bs) => first(first(values(bs)))
+    Empty() => error("cannot take the first value of an empty trie")
   end
 end
 
-function Base.hasproperty(p::Trie, n::Symbol)
-  if isleaf(p)
-    false
-  else
-    haskey(branches(p), n)
+function Base.hasproperty(t::AbstractTrie, n::Symbol)
+  @match t begin
+    Node(bs) => haskey(bs, n)
+    _ => false
   end
 end
 
-function Base.propertynames(p::Trie)
-  if isleaf(p)
-    Symbol[]
-  else
-    keys(branches(p))
+function Base.propertynames(t::AbstractTrie)
+  @match t begin
+    Node(bs) => keys(bs)
+    _ => Symbol[]
   end
 end
 
-Base.keys(p) = Base.propertynames(p)
+Base.keys(t) = Base.propertynames(t)
+Base.valtype(t::AbstractTrie{A}) where {A} = A
+Base.valtype(::Type{<:AbstractTrie{A}}) where {A} = A
 
-Base.valtype(p::Trie{A}) where {A} = A
-Base.valtype(::Type{Trie{A}}) where {A} = A
-
-function Base.map(f, p::Trie)::Trie
-  if isleaf(p)
-    leaf(f(p[]))
-  else
-    d′ = OrderedDict((n => map(f, p′)) for (n, p′) in branches(p))
-    for (n, p′) in branches(p)
-      p″ = map(f, p′)
-      if !isnothing(p″)
-        d′[n] = p″
-      end
-    end
-    if length(d′) > 0
-      B = valtype(last(first(d′)))
-      node(OrderedDict{Symbol, Trie{B}}(d′))
-    else
-      nothing
-    end
+function Base.map(f, return_type::Type, t::AbstractTrie)
+  @match t begin
+    Leaf(v) => leaf(f(v))
+    Node(bs) => node(
+      OrderedDict{Symbol, Trie{return_type}}(
+        (n => map(f, return_type, t′)) for (n, t′) in bs
+      )
+    )
+    Empty() => Trie{return_type}()
   end
 end
 
-function flatten(p::Trie{Trie{A}})::Trie{A} where {A}
-  if isleaf(p)
-    p[]
-  else
-    node(n => flatten(v) for (n, v) in branches(p))
+function flatten(t::Trie{Trie{A}})::Trie{A} where {A}
+  @match t begin
+    Leaf(v) => v
+    Node(bs) => node(n => flatten(v) for (n, v) in bs)
+    Empty() => Trie{A}()
   end
 end
 
@@ -237,78 +283,90 @@ PACKAGE_ROOT = TrieVar(nothing)
 ■ = PACKAGE_ROOT
 
 content(v::TrieVar) = getfield(v, :content)
-isroot(v::TrieVar) = isnothing(content(v))
-isnested(v::TrieVar) = !isroot(v)
+
+@active Root(v) begin
+  isnothing(content(v))
+end
+
+@active Nested(v) begin
+  inner = content(v)
+  if !isnothing(inner)
+    Some(inner)
+  else
+    nothing
+  end
+end
 
 function Base.getproperty(v::TrieVar, n::Symbol)
-  if isroot(v)
-    TrieVar((n, v))
-  else
-    (n′, v′) = content(v)
-    TrieVar((n′, getproperty(v′, n)))
+  @match v begin
+    Root() => TrieVar((n, v))
+    Nested((n′, v′)) => TrieVar((n′, getproperty(v′, n)))
   end
 end
 
 function Base.:(*)(v1::TrieVar, v2::TrieVar)
-  if isroot(v1)
-    v2
-  else
-    (n, v1′) = content(v1)
-    TrieVar((n, v1′ * v2))
+  @match v1 begin
+    Root() => v2
+    Nested((n, v1′)) => TrieVar((n, v1′ * v2))
   end
 end
 
-function mapwithkey(f, t::Trie; prefix=PACKAGE_ROOT)
-  if isleaf(t)
-    leaf(f(prefix, t[]))
-  else
-    node([k => mapwithkey(f, v; prefix=getproperty(prefix, k)) for (k, v) in branches(t)]...)
+function mapwithkey(f, return_type::Type, t::AbstractTrie; prefix=PACKAGE_ROOT)
+  @match t begin
+    Leaf(v) => leaf(f(prefix, v))
+    Node(bs) =>
+      node([k => mapwithkey(f, v; prefix=getproperty(prefix, k)) for (k, v) in bs]...)
+    Empty() => Trie{return_type}()
   end
 end
 
 function traversewithkey(f, t::Trie; prefix=PACKAGE_ROOT)
-  if isleaf(t)
-    f(prefix, t[])
-  else
-    for (k, v) in branches(t)
-      traversewithkey(f, v; prefix=getproperty(prefix, k))
+  @match t begin
+    Leaf(v) => (f(prefix, v); nothing)
+    Node(bs) => begin
+      for (k, v) in branches(t)
+        traversewithkey(f, v; prefix=getproperty(prefix, k))
+      end
     end
+    Empty() => nothing
   end
 end
 
-
-function fold(base, induction, t::Trie)
-  if isleaf(t)
-    base(t[])
-  else
-    induction(OrderedDict(k => fold(base, induction, v) for (k,v) in branches(t)))
+function fold(emptycase::A, leafcase, nodecase, t::AbstractTrie)::A where {A}
+  @match t begin
+    Empty() => emptycase
+    Leaf(v) => leafcase(v)
+    Node(bs) => nodecase(OrderedDict(k => fold(emptycase, leafcase, nodecase, v) for (k,v) in bs))
   end
 end
 
-function Base.all(f, t::Trie)
+function Base.all(f, t::AbstractTrie)
   fold(f, d -> all(values(d)), t)
 end
 
 # precondition: the union of the keys in t1 and t2 is prefix-free
-function Base.merge(t1::Trie{A}, t2::Trie{A}) where {A}
-  if isleaf(t1) || isleaf(t2)
-    error("cannot merge tries with overlapping keys")
-  else
-    b1, b2 = branches(t1), branches(t2)
-    b = OrderedDict{Symbol, Trie{A}}()
-    for (n, t) in b1
-      if haskey(b2, n)
-        b[n] = merge(t, b2[n])
-      else
-        b[n] = t
+function Base.merge(t1::AbstractTrie{A}, t2::AbstractTrie{A}) where {A}
+  @match (t1, t2) begin
+    (Leaf(_), _) || (_, Leaf(_)) =>
+      error("cannot merge tries with overlapping keys")
+    (Empty, _) => t2
+    (_, Empty) => t1
+    (Node(b1), Node(b2)) => begin
+      b = OrderedDict{Symbol, NonEmptyTrie{A}}()
+      for (n, t) in b1
+        if haskey(b2, n)
+          b[n] = merge(t, b2[n])
+        else
+          b[n] = t
+        end
       end
-    end
-    for (n, t) in b2
-      if !haskey(b1, n)
-        b[n] = t
+      for (n, t) in b2
+        if !haskey(b1, n)
+          b[n] = t
+        end
       end
+      node(b)
     end
-    node(b)
   end
 end
 
@@ -342,18 +400,22 @@ Trie(pairs::Pair{TrieVar, A}...) where {A} = Trie(OrderedDict{TrieVar, A}(pairs.
 
 function Base.show(io::IO, v::TrieVar)
   print(io, "■")
-  while !isroot(v)
-    (n, v) = content(v)
-    print(io, ".", n)
+  while true
+    @match v begin
+      Root() => break
+      Nested((n, v′)) => begin
+        print(io, ".", n)
+        v = v′
+      end
+    end
   end
 end
 
-function Base.haskey(p::Trie, v::TrieVar)
-  if isroot(v)
-    isleaf(p)
-  else
-    (n, v′) = content(v)
-    hasproperty(p, n) && haskey(getproperty(p, n), v′)
+function Base.haskey(t::AbstractTrie, v::TrieVar)
+  @match (t, v) begin
+    (Leaf(_), Root) => true
+    (Node(_), Nested((n, v))) => hasproperty(t, n) && haskey(getproperty(t, n), v)
+    _ => false
   end
 end
 
@@ -367,44 +429,39 @@ function Base.showerror(io::IO, e::TrieVarNotFound)
   println(io, e.p)
 end
 
-function Base.getindex(p::Trie, v::TrieVar)
-  if isroot(v)
-    if isleaf(p)
-      p[]
-    else
-      throw(TrieVarNotFound(p, v))
-    end
-  else
-    (n, v′) = content(v)
-    if hasproperty(p, n)
-      getproperty(p, n)[v′]
-    else
-      throw(TrieVarNotFound(p, v))
-    end
+function Base.getindex(t::AbstractTrie, v::TrieVar)
+  @match (t, v) begin
+    (Leaf(v), Root) => v
+    (Node(_), Nested((n, v′))) =>
+      if hasproperty(t, n)
+        getproperty(t, n)[v′]
+      else
+        throw(TrieVarNotFound(t, v))
+      end
+    _ => throw(TrieVarNotFound(t, v))
   end
 end
 
-function AbstractTrees.children(p::Trie)
-  if isleaf(p)
-    ()
-  else
-    branches(p)
+function AbstractTrees.children(t::AbstractTrie)
+  @match t begin
+    Leaf(_) => ()
+    Node(bs) => bs
   end
 end
 
-function AbstractTrees.printnode(io::IO, p::Trie{A}; kw...) where {A}
-  if isleaf(p)
-    print(io, p[])
-  else
-    print(io, "Trie{$A}")
+function AbstractTrees.printnode(io::IO, t::AbstractTrie{A}; kw...) where {A}
+  @match t begin
+    Leaf(v) => print(io, v)
+    Node(bs) => print(io, nameof(typeof(t)), "{$A}")
+    Empty() => print(io, "{}")
   end
 end
 
-function Base.show(io::IO, p::Trie{A}) where {A}
-  if isleaf(p)
-    print(io, "leaf(", p[], ")::Trie{$A}")
-  else
-    print_tree(io, p)
+function Base.show(io::IO, t::AbstractTrie{A}) where {A}
+  @match t begin
+    Leaf(v) => print(io, "leaf(", v, ")::$(nameof(typeof(t))){$A}")
+    Node(_) => print_tree(io, t)
+    Empty() => print(io, "Trie{$A}()")
   end
 end
 
