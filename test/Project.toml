@@ -1,5 +1,6 @@
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 GATlab = "f0ffcf3b-d13a-433e-917c-cc44ccf5ead2"
+Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 StructEquality = "6ec83bb0-ed9f-11e9-3b4c-2b04cb4e219c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
