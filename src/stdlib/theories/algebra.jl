@@ -4,6 +4,11 @@ export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb,
 @theory ThEmpty begin
 end
 
+""" The theory of a set with no operations
+
+A base theory for all algebraic theories so that multiple
+inheritance doesn't create multiple types.
+"""
 @theory ThSet begin
   default::TYPE
 end

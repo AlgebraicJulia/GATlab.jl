@@ -1,3 +1,5 @@
+using Markdown
+
 """
 `GATSegment`
 
@@ -139,6 +141,28 @@ end
 
 
 # Pretty-printing
+
+function Base.repr(theory::GAT)
+  head = theory.name
+  vec = []
+  for seg in theory.segments.scopes
+    push!(vec, LineNumberNode)
+    block = toexpr(theory, seg)
+    for line in block.args
+      push!(vec, line, LineNumberNode)
+    end
+  end
+  # Newlines in Markdown just require inserting a new line in the string.
+  replace!(line -> line == LineNumberNode ? "
+          " : line, vec)
+  string = join(vec)
+  Markdown.parse("""
+  ## $head
+
+  $string
+
+  """)
+end
 
 function Base.show(io::IO, theory::GAT)
   println(io, "GAT(", theory.name, "):")

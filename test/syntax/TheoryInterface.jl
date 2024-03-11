@@ -1,6 +1,6 @@
 module TestTheoryInterface
 
-using Test, GATlab
+using Test, GATlab, Markdown
 
 @theory ThCategoryTypes begin
   Ob::TYPE
@@ -45,5 +45,8 @@ end
 @test_throws Exception @eval @theory ThBadAliases <: ThCategory begin
   @op 1 + 1
 end
+
+@test (@doc ThCMonoid.Meta.theory) isa Markdown.MD
+@test (@doc ThSet) == (@doc ThSet.Meta.theory)
 
 end

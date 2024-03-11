@@ -2,6 +2,7 @@ module TheoryInterface
 export @theory, @signature, Model, invoke_term
 
 using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
+# using GATlab.Util
 
 using MLStyle, StructEquality, Markdown
 
@@ -75,6 +76,7 @@ function theory_impl(head, body, __module__)
   
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
   newsegment = theory.segments.scopes[end]
+  docstr = repr(theory)
 
   lines = Any[]
   newnames = Symbol[]
@@ -109,13 +111,14 @@ function theory_impl(head, body, __module__)
   if !isnothing(parentname)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
   end
+  
+  doctarget = gensym()
 
   push!(modulelines, Expr(:toplevel, :(module Meta
     struct T end
-    # const theory = $theory 
-    
-    using GATlab.Util
-    @gatdoc $theory
+   
+    @doc ($(Markdown.MD)((@doc $(__module__).$doctarget), $docstr))
+    const theory = $theory
 
     macro theory() $theory end
     macro theory_module() parentmodule(@__MODULE__) end
@@ -123,17 +126,20 @@ function theory_impl(head, body, __module__)
 
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
+
   esc(
     Expr(
       :toplevel,
       lines...,
+      :(const $(doctarget) = nothing),
+      :(Core.@__doc__ $(doctarget)),
       :(
         module $name
         $(modulelines...)
         $(structlines...)
         end
       ),
-      :(Core.@__doc__ $(name)),
+      :(@doc ($(Markdown.MD)((@doc $doctarget), $docstr)) $name)
     )
   )
 end
