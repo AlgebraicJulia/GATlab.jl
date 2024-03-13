@@ -25,7 +25,7 @@ Cannot be empty.
     new{X}(branches)
   end
   function Node_(branches::OrderedDict{Symbol, X}) where {X}
-    Node{X}(branches)
+    Node_{X}(branches)
   end
 end
 
@@ -229,7 +229,7 @@ function zipwith(f, t1::AbstractTrie{A1}, t2::AbstractTrie{A2}) where {A1, A2}
       keys(bs1) == keys(bs2) || error("cannot zip two tries not of the same shape")
       node(OrderedDict(n => zipwith(f, s1, s2) for ((n, s1), (_, s2)) in zip(bs1, bs2)))
     end
-    (Empty, Empty) => Trie{Tuple{A1, A2}}
+    (Empty(), Empty()) => Trie{Core.Compiler.return_type(f, Tuple{A1, A2})}()
     _ => error("cannot zip two tries not of the same shape")
   end
 end
@@ -278,6 +278,8 @@ end
 Base.keys(t) = Base.propertynames(t)
 Base.valtype(t::AbstractTrie{A}) where {A} = A
 Base.valtype(::Type{<:AbstractTrie{A}}) where {A} = A
+Base.eltype(t::AbstractTrie{A}) where {A} = A
+Base.eltype(::Type{<:AbstractTrie{A}}) where {A} = A
 
 """
     map(f, return_type::Type, t::AbstractTrie)
@@ -345,8 +347,6 @@ end
   inner = content(v)
   if !isnothing(inner)
     Some(inner)
-  else
-    nothing
   end
 end
 
@@ -438,7 +438,10 @@ function Base.merge(t1::AbstractTrie{A}, t2::AbstractTrie{A}) where {A}
       b = OrderedDict{Symbol, NonEmptyTrie{A}}()
       for (n, t) in b1
         if haskey(b2, n)
-          b[n] = merge(t, b2[n])
+          @match merge(t, b2[n]) begin
+            NonEmpty(t′) => (b[n] = t′)
+            _ => nothing
+          end
         else
           b[n] = t
         end
@@ -505,11 +508,6 @@ end
 struct TrieVarNotFound <: Exception
   p::Trie
   v::TrieVar
-end
-
-function Base.showerror(io::IO, e::TrieVarNotFound)
-  println(io, "package variable ", e.v, " does not point to leaf in package")
-  println(io, e.p)
 end
 
 function Base.getindex(t::AbstractTrie, v::TrieVar)
