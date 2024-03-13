@@ -30,7 +30,6 @@ end
 # Function parsing
 @test_throws ParseError parse_fun(:(f(x,y)))
 @test (parse_fun(:(function f(x,y) x end)) ==
-       JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, strip_all(quote x end)))
   JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, strip_all(quote x end)))
 
 @test parse_fun(strip_all(quote

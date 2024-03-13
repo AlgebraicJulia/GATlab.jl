@@ -756,7 +756,7 @@ function to_call_impl(t::AlgTerm, theory::GAT, mod::Union{Symbol,Module}, migrat
     nameof(b)
   elseif GATs.isdot(t)
     impl = to_call_impl(b.body, theory, mod, migrate)
-    Expr(:., impl, b.head)
+    Expr(:., impl, QuoteNode(b.head))
   else
     args = to_call_impl.(argsof(b), Ref(theory), Ref(mod), migrate)
     name = nameof(headof(b))
