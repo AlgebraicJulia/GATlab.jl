@@ -6,6 +6,7 @@ using GATlab.NonStdlib.ResourceSharers
 using GATlab.NonStdlib.ResourceSharers: ocompose, oapply
 using GATlab
 using GATlab.Syntax.GATs: tcompose
+using ComponentArrays
 
 import Base: +, *, -
 
@@ -39,14 +40,12 @@ r = ocompose(rtop, Trie(■.X => rX, ■.Y => rY))
   params = k
   update = (state, params) -> (x = state.v, v = -params.k * state.x)
 end;
-show(stdout, Spring; theory=ThRing.Meta.theory)
 
 @resource_sharer ThRing Gravity begin
   variables = v
   params = g
   update = (state, params) -> (v = - params.g,)
 end;
-show(stdout, Gravity; theory=ThRing.Meta.theory)
 
 @rhizome ThRing SpringGravity(x, v) begin
   spring(x, v)
@@ -54,7 +53,6 @@ show(stdout, Gravity; theory=ThRing.Meta.theory)
 end
 
 s = oapply(SpringGravity, Trie(■.spring => Spring, ■.gravity => Gravity));
-show(stdout, s; theory=ThRing.Meta.theory)
 
 body = toexpr(GATContext(ThRing.Meta.theory, s.update.context), s.update.body)
 
@@ -79,6 +77,5 @@ function euler(init, params, v, dt, steps)
 end
 
 traj = euler(init, params, update, 0.1, 100);
-DataFrame(x = getproperty.(traj, Ref(:x)), v = getproperty.(traj, Ref(:v)))
 
 end
