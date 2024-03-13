@@ -93,11 +93,11 @@ end
 @test mapwithkey((k, _) -> k, TrieVar, t1) == node(:a => leaf(■.a), :b => node(:a => leaf(■.b.a), :c => leaf(■.b.c)))
 @test mapwithkey((k, _) -> k, TrieVar, Trie{Int}()) == Trie{TrieVar}()
 
-keys = TrieVar[]
+t1_keys = TrieVar[]
 
-traversewithkey((k, _) -> push!(keys, k), t1)
+traversewithkey((k, _) -> push!(t1_keys, k), t1)
 
-@test keys == [■.a, ■.b.a, ■.b.c]
+@test t1_keys == [■.a, ■.b.a, ■.b.c]
 
 b = Ref(true)
 
