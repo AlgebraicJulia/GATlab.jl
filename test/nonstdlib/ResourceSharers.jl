@@ -1,7 +1,7 @@
 module TestResourceSharers
 
-using GATlab.Syntax.Tries
-using GATlab.Syntax.Tries: node, leaf
+using GATlab.Util.Tries
+using GATlab.Util.Tries: node, leaf
 using GATlab.NonStdlib.ResourceSharers
 using GATlab.NonStdlib.ResourceSharers: ocompose, oapply
 using GATlab

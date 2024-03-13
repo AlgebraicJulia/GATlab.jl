@@ -2,7 +2,6 @@ module Syntax
 
 using Reexport
 
-include("Tries.jl")
 include("Scopes.jl")
 include("ExprInterop.jl")
 include("GATs.jl")

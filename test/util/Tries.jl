@@ -1,6 +1,6 @@
 module TestTries
 
-using GATlab.Syntax.Tries
+using GATlab.Util.Tries
 import .Tries: node, leaf, Node, Leaf, Empty, NonEmpty, zipwith, flatten, fold
 using Test
 
@@ -78,7 +78,7 @@ traversewithkey((k, _) -> push!(keys, k), t1)
 
 @test Trie(■.a => 1, ■.b.a => 2, ■.b.c => 3) == t1
 
-g2 = node(:a => Trie{Int}())
+t2 = node(:a => Trie{Int}())
 
 @test t2 == Trie{Int}()
 

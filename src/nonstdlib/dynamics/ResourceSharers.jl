@@ -2,8 +2,8 @@ module ResourceSharers
 export Rhizome, @rhizome, ResourceSharer, @resource_sharer, Variable
 
 using ...Syntax
-using ...Syntax.Tries
-using ...Syntax.Tries: flatten, node
+using ...Util.Tries
+using ...Util.Tries: flatten, node
 using ...Syntax.GATs: tcompose
 using ...Util
 using MLStyle

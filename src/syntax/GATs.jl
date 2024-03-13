@@ -15,7 +15,7 @@ using ..Scopes
 import ..ExprInterop: fromexpr, toexpr
 
 import ..Scopes: retag, rename
-using ..Tries
+using ...Util.Tries
 using AbstractTrees
 
 using StructEquality
