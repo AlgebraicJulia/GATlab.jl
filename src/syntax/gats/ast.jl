@@ -138,13 +138,15 @@ rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
 
 retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
 
-function tcompose(t::Trie{AlgTerm})
-  if Tries.isleaf(t)
-    t[]
-  else
-    AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(
-      (n, tcompose(v)) for (n, v) in Tries.branches(t)
-    )))
+function tcompose(t::AbstractTrie{AlgTerm})
+  @match t begin
+    Tries.Leaf(v) => v
+    Tries.Node(bs) => 
+      AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(
+        (n, tcompose(v)) for (n, v) in bs
+      )))
+    Tries.Empty() =>
+      AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}()))
   end
 end
 
@@ -237,11 +239,12 @@ function AlgSort(t::AlgType)
   end
 end
 
-function tcompose(t::Trie{AlgType})
-  if Tries.isnode(t)
-    AlgType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (k,v) in AbstractTrees.children(t))))
-  else
-    t[]
+function tcompose(t::AbstractTrie{AlgType})
+  @match t begin
+    Tries.Node(bs) =>
+      AlgType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (k,v) in AbstractTrees.children(t))))
+    Tries.Leaf(v) => v
+    Tries.Empty() => AlgType(AlgNamedTuple(OrderedDict{Symbol, AlgType}()))
   end
 end
   
@@ -293,11 +296,9 @@ headof(a::AlgDot) = a.head
 bodyof(a::AlgDot) = a.body
 
 function Base.getindex(a::AlgTerm, v::TrieVar)
-  if Tries.isroot(v)
-    a
-  else
-    (n, v′) = Tries.content(v)
-    getindex(AlgTerm(AlgDot(n, a)), v′)
+  @match v begin
+    Tries.Root() => a
+    Tries.Nested((n, v′)) => getindex(AlgTerm(AlgDot(n, a)), v′)
   end
 end
 

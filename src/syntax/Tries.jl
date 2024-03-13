@@ -121,6 +121,9 @@ function content(p::Trie)
   end
 end
 
+"""
+Construct a new Trie node.
+"""
 function node(d::OrderedDict{Symbol, <:AbstractTrie{A}}) where {A}
   nonempties = OrderedDict{Symbol, NonEmptyTrie{A}}()
   for (k, t) in pairs(d)
@@ -134,7 +137,7 @@ function node(d::OrderedDict{Symbol, <:AbstractTrie{A}}) where {A}
   if length(nonempties) > 0
     Trie{A}(NonEmptyTrie{A}(Node_{NonEmptyTrie{A}}(nonempties)))
   else
-    Trie{A}(nothing)
+    Trie{A}()
   end
 end
 
@@ -267,7 +270,12 @@ function Base.map(f, return_type::Type, t::AbstractTrie)
   end
 end
 
-function flatten(t::Trie{Trie{A}})::Trie{A} where {A}
+function Base.map(f, t::AbstractTrie{A}) where {A}
+  B = Core.Compiler.return_type(f, Tuple{A})
+  map(f, B, t)
+end
+
+function flatten(t::AbstractTrie{Trie{A}}) where {A}
   @match t begin
     Leaf(v) => v
     Node(bs) => node(n => flatten(v) for (n, v) in bs)
@@ -315,16 +323,16 @@ function mapwithkey(f, return_type::Type, t::AbstractTrie; prefix=PACKAGE_ROOT)
   @match t begin
     Leaf(v) => leaf(f(prefix, v))
     Node(bs) =>
-      node([k => mapwithkey(f, v; prefix=getproperty(prefix, k)) for (k, v) in bs]...)
+      node([k => mapwithkey(f, return_type, v; prefix=getproperty(prefix, k)) for (k, v) in bs]...)
     Empty() => Trie{return_type}()
   end
 end
 
-function traversewithkey(f, t::Trie; prefix=PACKAGE_ROOT)
+function traversewithkey(f, t::AbstractTrie; prefix=PACKAGE_ROOT)
   @match t begin
     Leaf(v) => (f(prefix, v); nothing)
     Node(bs) => begin
-      for (k, v) in branches(t)
+      for (k, v) in bs
         traversewithkey(f, v; prefix=getproperty(prefix, k))
       end
     end
@@ -349,8 +357,8 @@ function Base.merge(t1::AbstractTrie{A}, t2::AbstractTrie{A}) where {A}
   @match (t1, t2) begin
     (Leaf(_), _) || (_, Leaf(_)) =>
       error("cannot merge tries with overlapping keys")
-    (Empty, _) => t2
-    (_, Empty) => t1
+    (Empty(), _) => t2
+    (_, Empty()) => t1
     (Node(b1), Node(b2)) => begin
       b = OrderedDict{Symbol, NonEmptyTrie{A}}()
       for (n, t) in b1
@@ -378,19 +386,19 @@ Fails if the keys in the dict are not prefix-free.
 function Trie(d::OrderedDict{TrieVar, A}) where {A}
   branches = OrderedDict{Symbol, OrderedDict{TrieVar, A}}()
   for (v, x) in d
-    if isroot(v)
-      if length(d) == 1
-        return leaf(x)
-      else
-        error("attempted trie conversion failed because keys were not prefix-free")
-      end
-    else
-      (n, v′) = content(v)
-      if haskey(branches, n)
-        branches[n][v′] = x
-      else
-        branches[n] = OrderedDict(v′ => x)
-      end
+    @match v begin
+      Root() =>
+        if length(d) == 1
+          return leaf(x)
+        else
+          error("attempted trie conversion failed because keys were not prefix-free")
+        end
+      Nested((n, v′)) =>
+        if haskey(branches, n)
+          branches[n][v′] = x
+        else
+          branches[n] = OrderedDict(v′ => x)
+        end
     end
   end
   node(n => Trie(d′) for (n, d′) in branches)

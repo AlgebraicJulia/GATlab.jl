@@ -7,21 +7,7 @@ using GATlab.NonStdlib.ResourceSharers: ocompose, oapply
 using GATlab
 using GATlab.Syntax.GATs: tcompose
 
-@rhizome ThMonoid rtop(a, b) begin
-  X(a)
-  Y(a, c.x = b)
-end
-
-@rhizome ThMonoid rX(a) begin
-  A(x = a, y = a)
-end
-
-@rhizome ThMonoid rY(a, c.x) begin
-  A(x = a, y = a)
-  B(t = c.x)
-end
-
-r = ocompose(rtop, node(:X => leaf(rX), :Y => leaf(rY)))
+import Base: +, *, -
 
 @theory ThRing begin
   default::TYPE
@@ -32,27 +18,67 @@ r = ocompose(rtop, node(:X => leaf(rX), :Y => leaf(rY)))
   (-(x::default))::default
 end
 
-deftype = fromexpr(ThRing.Meta.theory, :default, AlgType)
-spring_variables = node(:x => leaf(Variable(true, deftype)), :v => leaf(Variable(true, deftype)))
-spring_params = tcompose(node(:k => leaf(deftype)))
-@algebraic ThRing spring_update(s::(x,v), p::(k,)) = (x = s.v, v = - p.k * s.x)
+@rhizome ThRing rtop(a, b) begin
+  X(a)
+  Y(a, c.x = b)
+end
 
-Spring = ResourceSharer(spring_variables, spring_params, first(values(spring_update.methods)))
+@rhizome ThRing rX(a) begin
+  A(x = a, y = a)
+end
 
-gravity_variables = node(:v => leaf(Variable(true, deftype)))
-gravity_params = tcompose(node(:g => leaf(deftype)))
-@algebraic ThRing gravity_update(s::(v,), p::(g,)) = (v = - p.g,)
+@rhizome ThRing rY(a, c.x) begin
+  A(x = a, y = a)
+  B(t = c.x)
+end
 
-Gravity = ResourceSharer(gravity_variables, gravity_params, first(values(gravity_update.methods)))
+r = ocompose(rtop, Trie(■.X => rX, ■.Y => rY))
+
+@resource_sharer ThRing Spring begin
+  variables = x, v
+  params = k
+  update = (state, params) -> (x = state.v, v = -params.k * state.x)
+end;
+show(stdout, Spring; theory=ThRing.Meta.theory)
+
+@resource_sharer ThRing Gravity begin
+  variables = v
+  params = g
+  update = (state, params) -> (v = - params.g,)
+end;
+show(stdout, Gravity; theory=ThRing.Meta.theory)
 
 @rhizome ThRing SpringGravity(x, v) begin
   spring(x, v)
   gravity(v)
 end
 
-z = fromexpr(ThRing.Meta.theory, :(zero()), AlgTerm)
-p = fromexpr(ThRing.Meta.theory, :(zero() + zero()), AlgTerm)
+s = oapply(SpringGravity, Trie(■.spring => Spring, ■.gravity => Gravity));
+show(stdout, s; theory=ThRing.Meta.theory)
 
-oapply( SpringGravity, node(:spring => leaf(Spring), :gravity => leaf(Gravity)), (p.body.head, p.body.method), (z.body.head, z.body.method))
+body = toexpr(GATContext(ThRing.Meta.theory, s.update.context), s.update.body)
+
+zero() = 0.0
+
+eval(
+  :(update(state, params) = ComponentArray(;$(body.args...)))
+)
+
+update((x = 0.0, v = 1.0), (spring = (k = 1.0,), gravity = (g = 9.8,)))
+
+init = ComponentArray(x = 0.0, v = 1.0)
+params = ComponentArray(spring = (k = 1.0,), gravity = (g = 9.8,))
+
+function euler(init, params, v, dt, steps)
+  values = Vector{typeof(init)}(undef, steps+1)
+  values[1] = init
+  for i in 1:steps
+    values[i+1] = values[i] .+ (dt .* v(values[i], params))
+  end
+  values
+end
+
+traj = euler(init, params, update, 0.1, 100);
+DataFrame(x = getproperty.(traj, Ref(:x)), v = getproperty.(traj, Ref(:v)))
 
 end

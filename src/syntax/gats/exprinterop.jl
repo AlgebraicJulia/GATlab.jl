@@ -37,9 +37,21 @@ function fromexpr(c::GATContext, e, ::Type{AlgTerm})
     Expr(:., body, QuoteNode(head)) => begin 
       t = fromexpr(c, body, AlgTerm)
       AlgTerm(AlgDot(head, t))
-  end
+    end
     Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(c, head, argexprs))
     Expr(:(::), val, type) => AlgTerm(Constant(val, fromexpr(c, type, AlgType)))
+    Expr(:tuple, kvs...) => AlgTerm(
+      AlgNamedTuple{AlgTerm}(
+        OrderedDict{Symbol, AlgTerm}(
+          map(kvs) do kv
+            @match kv begin
+              Expr(:(=), k, v) => (k => fromexpr(c, v, AlgTerm))
+              _ => error("expected key-value pairs inside tuple")
+            end
+          end
+        )
+      )
+    )
     e::Expr => error("could not parse AlgTerm from $e")
     constant::Constant => AlgTerm(constant)
   end

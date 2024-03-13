@@ -45,20 +45,21 @@ function tcompose(ms::Trie{AlgMethod}, argnames::Vector{Symbol})
 
   # Then create a new typescope with the same variable names, but with types
   # given by tcompose of the argument types of the ms
-  contexts = map(m -> m.context, ms)
+  contexts = map(m -> m.context, TypeScope, ms)
   context = TypeScope(
-    Scope([x => tcompose(map(ctx -> getvalue(ctx, LID(i)), contexts)) for (i,x) in enumerate(argnames)]...)
+    Scope([x => tcompose(map(ctx -> getvalue(ctx, LID(i)), AlgType, contexts)) for (i,x) in enumerate(argnames)]...)
   )
 
   # Then for each method, create a new body by applying it to the variables
   # in the new scope with the appropriate AlgDots added
-  bodies = mapwithkey(ms) do k, m
+  bodies = mapwithkey(AlgTerm, ms) do k, m
     m([AlgTerm(x)[k] for x in getidents(context)]...)
   end
 
   # Finally, compose all of the bodies into an expression creating an
   # AlgNamedTuple
   body = Tries.fold(
+    AlgTerm(AlgNamedTuple(OrderedDict{Symbol, AlgTerm}())),
     x -> x,
     d -> AlgTerm(AlgNamedTuple{AlgTerm}(d)),
     bodies
@@ -128,6 +129,11 @@ function Base.show(io::IO, f::AlgClosure)
   m = only(values(f.methods))
   fndef = Expr(:(->), Expr(:tuple, toexpr(f.theory, m.context).args...), toexpr(GATContext(f.theory, m.context), m.body))
   println(io, "AlgClosure in theory $(nameof(f.theory)) with definition:")
+  print(io, fndef)
+end
+
+function Base.show(io::IO, m::AlgMethod; theory)
+  fndef = Expr(:(->), Expr(:tuple, toexpr(theory, m.context).args...), toexpr(GATContext(theory, m.context), m.body))
   print(io, fndef)
 end
 

@@ -1,10 +1,11 @@
 module ResourceSharers
-export Rhizome, @rhizome, ResourceSharer, Variable
+export Rhizome, @rhizome, ResourceSharer, @resource_sharer, Variable
 
 using ...Syntax
 using ...Syntax.Tries
 using ...Syntax.Tries: flatten, node
 using ...Syntax.GATs: tcompose
+using ...Util
 using MLStyle
 using OrderedCollections
 
@@ -77,11 +78,11 @@ The only problem is that I'm not sure then what to call the single field in
 `Rhizome`. Also, this would require a slight refactor of the rest of the code.
 """
 struct Rhizome
+  theory::GAT
+  mcompose::AlgClosure
+  mzero::AlgClosure
   boxes::Trie{Trie{PortVariable}}
   junctions::Trie{Variable}
-  function Rhizome(boxes::Trie{Trie{PortVariable}}, junctions::Trie{Variable})
-    new(boxes, junctions)
-  end
 end
 
 """
@@ -102,15 +103,15 @@ databases, recursion, and plug-and-play circuits](https://arxiv.org/abs/1305.029
 function ocompose(r::Rhizome, rs::Trie{Rhizome})
   # paired :: Trie{Tuple{Trie{PortVariable}, Rhizome}}
   paired = zip(r.boxes, rs)
-  boxes = flatten(mapwithkey(paired) do k, (interface, r′)
+  boxes = flatten(mapwithkey(Trie{Trie{PortVariable}}, paired) do k, (interface, r′)
     # k :: TrieVar
     # interface :: Trie{PortVariable}
     # r′ :: Rhizome
     # We want to create the new collection of boxes
 
-    map(r′.boxes) do b
+    map(Trie{PortVariable}, r′.boxes) do b
       # b :: Trie{PortVariable}
-      map(b) do p
+      map(PortVariable, b) do p
         # p :: PortVariable
         # p.junction :: namespace(b.junctions)
         jvar = p.junction
@@ -128,7 +129,7 @@ function ocompose(r::Rhizome, rs::Trie{Rhizome})
   end)
   # Add all unexposed junctions
   newjunctions = flatten(
-    map(rs) do r′
+    map(Trie{Variable}, rs) do r′
       internal_junctions = filter(j -> !j.exposed, r′.junctions)
       if isnothing(internal_junctions)
         Tries.node(OrderedDict{Symbol, Trie{Variable}}())
@@ -140,7 +141,7 @@ function ocompose(r::Rhizome, rs::Trie{Rhizome})
 
   junctions = merge(r.junctions, newjunctions)
 
-  Rhizome(boxes, junctions)
+  Rhizome(r.theory, r.mcompose, r.mzero, boxes, junctions)
 end
 
 # TODO: this should just use a `toexpr` method
@@ -210,9 +211,9 @@ will be assumed to be of that type.
 3. The namespace for the external ports of the rhizome is `[a, b]`.
 As noted in 1., each of these ports is typed with `default`.
 """
-macro rhizome(theory, head, body)
+macro rhizome(theorymod, head, body)
   # macroexpand `theory` to get the actual theory
-  theory = macroexpand(__module__, :($theory.Meta.@theory))
+  theory = macroexpand(__module__, :($theorymod.Meta.@theory))
   # parse the name and junctions out of `head`
   junctions = OrderedDict{TrieVar, Variable}()
   (name, args) = @match head begin
@@ -254,8 +255,14 @@ macro rhizome(theory, head, body)
     boxes[box] = Trie(interface)
   end
   :(
-    $(esc(name)) = $(Rhizome(Trie(boxes), junctions))
-  )
+    $name = $Rhizome(
+      $theory,
+      $theorymod.Meta.Constructors.:(+),
+      $theorymod.Meta.Constructors.zero,
+      $(Trie(boxes)),
+      $(junctions),
+    )
+  ) |> esc
 end
 
 """
@@ -273,6 +280,82 @@ struct ResourceSharer
   # output::AlgType
   # (tcompose(variables[..].type), params) -> output
   # observe::AlgClosure
+end
+
+"""
+A DSL for writing down resource sharers
+
+Example:
+```
+@resource_sharer ThRing Spring begin
+  variables = x, v
+  params = k
+  update = (state, params) -> (x = state.v, v = -params.k * state.x)
+end
+```
+"""
+macro resource_sharer(theory, name, body)
+  args = Expr[]
+
+  for line in body.args
+    @match line begin
+      _ :: LineNumberNode => nothing
+      Expr(:(=), arg, val) =>
+        push!(args, Expr(:kw, arg, Expr(:quote, val)))
+    end
+  end
+
+  esc(:($name = $ResourceSharer($theory.Meta.theory; $(args...))))
+end
+
+function parse_namespace(theory::GAT, expr::Expr0)
+  vs = OrderedDict{TrieVar, AlgType}()
+  argexprs = @match expr begin
+    Expr(:tuple, args...) => args
+    _ => [expr]
+  end
+  for arg in argexprs
+    (vname, typeexpr) = @match arg begin
+      vname::Symbol => (vname, :default)
+      Expr(:(.), _, _) => (arg, :default)
+      Expr(:(::), vname, type) => (vname, type)
+    end
+    v = parse_var(vname)
+    type = fromexpr(theory, typeexpr, AlgType)
+    vs[v] = type
+  end
+  Trie(vs)
+end
+
+function ResourceSharer(theory::GAT; variables::Expr0, params::Expr0, update::Expr0)
+  variable_trie = parse_namespace(theory, variables)
+  variables = map(Variable, variable_trie) do type
+    Variable(true, type)
+  end
+  param_type = tcompose(parse_namespace(theory, params))
+  state_type = tcompose(variable_trie)
+
+  update = begin
+    (argexpr, bodyexpr) = @match update begin
+      Expr(:(->), args, body) => (args, last(body.args))
+    end
+    statename, paramname = @match argexpr begin
+      Expr(:tuple, s, p) => (s, p)
+    end
+    args = TypeScope(statename => state_type, paramname => param_type)
+    body = fromexpr(GATContext(theory, args), bodyexpr, AlgTerm)
+    AlgMethod(args, body, "", LID.([1,2]), state_type)
+  end
+
+  ResourceSharer(variables, param_type, update)
+end
+
+function Base.show(io::IO, r::ResourceSharer; theory)
+  println(io, "ResourceSharer:")
+  print(io, "variables = ", map(v -> string(toexpr(theory, v.type)), String, r.variables))
+  println(io, "params = ", toexpr(theory, r.params))
+  println(io, "update = ")
+  show(io, r.update; theory)
 end
 
 """
@@ -294,7 +377,7 @@ function pullback(t1::Trie{AlgType}, t2::Trie{Tuple{AlgType, TrieVar}}; argname=
   ctx = TypeScope(argname => ty1)
   x = AlgTerm(ident(ctx; name=argname))
   body = tcompose(
-    map(t2) do (_, k)
+    map(AlgTerm, t2) do (_, k)
       x[k]
     end
   )
@@ -318,8 +401,8 @@ Produces an AlgMethod going from tcompose(first.(t2)) to tcompose(t1)
 function pushforward(
   t1::Trie{AlgType},
   t2::Trie{Tuple{AlgType, TrieVar}},
-  mcompose::Tuple{Ident, Ident},
-  mzero::Tuple{Ident, Ident};
+  mcompose::AlgClosure,
+  mzero::AlgClosure;
   argname=:x
 )
   preimages = Dict{TrieVar, Vector{TrieVar}}()
@@ -335,18 +418,18 @@ function pushforward(
   ctx = TypeScope(argname => ty2)
   x = AlgTerm(ident(ctx; name=argname))
   body = tcompose(
-    mapwithkey(t1) do k, _
+    mapwithkey(AlgTerm, t1) do k, _
       foldl(
-        (term, v) -> AlgTerm(mcompose..., [term, x[v]]),
+        (term, v) -> first(values(mcompose.methods))(term, x[v]),
         preimages[k];
-        init=AlgTerm(mzero..., AlgTerm[])
+        init=mzero()
       )
     end
   )
   AlgMethod(ctx, body, "", [LID(1)], ty1)
 end
 
-function oapply(r::Rhizome, sharers::Trie{ResourceSharer}, mcompose, mzero)
+function oapply(r::Rhizome, sharers::Trie{ResourceSharer})
   new_variables = filter(v -> !v.exposed, flatten(
     map(sharers) do sharer
       sharer.variables
@@ -365,8 +448,8 @@ function oapply(r::Rhizome, sharers::Trie{ResourceSharer}, mcompose, mzero)
   # to their type, and to the variable in the reduced system that they
   # map to
   full_state = flatten(
-    mapwithkey(zip(r.boxes, sharers)) do b, (interface, sharer)
-      mapwithkey(sharer.variables) do k, v
+    mapwithkey(Trie{Tuple{AlgType, TrieVar}}, zip(r.boxes, sharers)) do b, (interface, sharer)
+      mapwithkey(Tuple{AlgType, TrieVar}, sharer.variables) do k, v
         if v.exposed
           (v.type, interface[k].junction)
         else
@@ -385,7 +468,7 @@ function oapply(r::Rhizome, sharers::Trie{ResourceSharer}, mcompose, mzero)
   copy = pullback(state, full_state; argname=:state)
 
   # add :: full_state -> state
-  add = pushforward(state, full_state, mcompose, mzero)
+  add = pushforward(state, full_state, r.mcompose, r.mzero)
 
   update_ctx = TypeScope(:state => state_type, :params => params)
   statevar, paramsvar = AlgTerm.(idents(update_ctx; name=[:state, :params]))
