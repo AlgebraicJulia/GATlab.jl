@@ -11,6 +11,11 @@ equal. (E.g. when to apply universal property of a pushout).
 
 export ThPushout
 
+""" Span and CoSpan
+
+The theory for spans and cospans on a category
+
+"""
 @theory ThSpanCospan <: ThCategory begin
   struct Span(dom::Ob, codom::Ob)
     apex::Ob
