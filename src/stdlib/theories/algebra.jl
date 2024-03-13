@@ -13,26 +13,60 @@ inheritance doesn't create multiple types.
   default::TYPE
 end
 
+""" The theory of a set with a binary operation which does not guarantee associativity
+
+Examples:
+  - The integers with minus operation is not associative.
+
+    (a ⋅ b) ⋅ c = a - b - c
+
+    a ⋅ (b ⋅ c) = a - b + c 
+
+"""
 @theory ThMagma <: ThSet begin
   (x ⋅ y) :: default ⊣ [x, y]
 end
 
+""" This theory contains an associative binary operation called multiplication. 
+
+Examples:
+  - The integers under multiplication
+  - Nonempty lists under concatenation
+"""
 @theory ThSemiGroup <: ThMagma begin
   (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
 end
 
+""" The theory of a semigroup with identity.
+
+Examples:
+  - The integers under multiplication
+  - Lists (nonempty and empty) under concatenation
+"""
 @theory ThMonoid <: ThSemiGroup begin
   e() :: default
   e() ⋅ x == x ⊣ [x]
   x ⋅ e() == x ⊣ [x]
 end
 
+""" The theory of a monoid with multiplicative inverse.
+
+Examples:
+  - The rationals (excluding zero) under multiplication
+  - E(n), the group of rigid transformations (translation and rotation)
+  - Bₙ, the braid group of n strands
+"""
 @theory ThGroup <: ThMonoid begin
   i(x) :: default ⊣ [x]
   i(x) ⋅ x == e() ⊣ [x]
   x ⋅ i(x) == e() ⊣ [x]
 end
 
+""" The theory of a monoid where multiplication enjoys commutativity.
+
+Examples:
+  - The set of classical 1-knots under "knot sum"
+"""
 @theory ThCMonoid <: ThMonoid begin
   a ⋅ b == b ⋅ a ⊣ [a, b]
 end
@@ -70,6 +104,12 @@ end
 #   sigmoid(x) ⊣ [x]
 # end
 
+# TODO @op does not get repr
+""" The theory of sets which have a preorder.
+
+Examples:
+  - The set of natural numbers
+"""
 @theory ThPreorder <: ThSet begin
   Leq(dom, codom)::TYPE ⊣ [dom, codom]
   @op (≤) := Leq
