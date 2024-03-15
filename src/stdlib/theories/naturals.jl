@@ -11,7 +11,7 @@ import Base: +
   S(n::ℕ) :: ℕ
 end
 
-""" The theory of natural numbers with succession
+""" The theory of natural numbers with addition as repeated succession
 
 """
 @theory ThNatPlus <: ThNat begin

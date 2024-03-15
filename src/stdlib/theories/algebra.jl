@@ -107,8 +107,11 @@ end
 # TODO @op does not get repr
 """ The theory of sets which have a preorder.
 
+This is equivalent to the theory of thin categories (`ThThinCategory`) where ≤ is the composition operation.
+
 Examples:
-  - The set of natural numbers
+  - The set of natural numbers ordered by b-a ≥ 0
+  - The set of natural numbers ordered by "a divides b"
 """
 @theory ThPreorder <: ThSet begin
   Leq(dom, codom)::TYPE ⊣ [dom, codom]
