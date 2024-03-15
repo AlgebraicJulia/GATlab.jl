@@ -68,6 +68,7 @@ function theory_impl(head, body, __module__)
     _ => error("could not parse head of @theory: $head")
   end
 
+  ## ThAb <: ThMonoid  
   parent = if !isnothing(parentname)
     macroexpand(__module__, :($parentname.Meta.@theory))
   else

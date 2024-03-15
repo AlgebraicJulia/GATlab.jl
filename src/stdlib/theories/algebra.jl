@@ -37,10 +37,31 @@ end
   a ⋅ b == b ⋅ a ⊣ [a, b]
 end
 
+# XXX 
 # @theory ThAb <: ThMonoid begin
 #   using ThGroup
 #   using ThCMonoid
 # end
+
+@theory ThRing <: ThSet begin
+           @op (+) := addition
+           addition(a, b) :: default ⊣ [a,b]
+           
+           e() :: default
+           e() + a == a ⊣ [a]
+           a + e() == a ⊣ [a]
+           # commutative group
+           (a + b) + c == a + (b + c) ⊣ [a,b,c]
+           a + b == b + a ⊣ [a,b]
+           i(a) :: default ⊣ [a]
+           a + i(a) == e() ⊣ [a]
+           # monoid
+           (a ⋅ b) :: default ⊣ [a,b]
+           (a ⋅ b) ⋅ c == a ⋅ (b ⋅ c) ⊣ [a,b,c]
+           # distributivity
+           a ⋅ (b + c) == a ⋅ b + a ⋅ c ⊣ [a,b,c]
+           (a + b) ⋅ c == a ⋅ c + b ⋅ c ⊣ [a,b,c]
+       end
 
 # @theory ThRing <: ThSet begin
 #   using ThAb: ⋅ as +, i as -, e as zero

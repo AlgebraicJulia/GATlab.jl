@@ -280,6 +280,7 @@ function parseaxiom!(theory::GAT, localcontext, sort_expr, e; name=nothing)
   end
 end
 
+# XXX using ThGroup fails
 function parseconstructor!(theory::GAT, localcontext, type_expr, e)
   (name, arglist) = @match e begin
     Expr(:call, name, args...) => (name, args)
@@ -349,7 +350,7 @@ function parse_binding_line!(theory::GAT, e, linenumber)
     Expr(:(::), head, type_expr) => (head, type_expr)
     _ => (binding, nothing)
   end
-
+  # XXX using ThGroup hits 
   @match head begin
     Expr(:(:=), name, equation) => @match equation begin 
       Expr(:call, :(==), _, _) => parseaxiom!(theory, localcontext, type_expr, equation; name)
@@ -422,6 +423,10 @@ function parse_gat_line!(theory::GAT, e::Expr, linenumber; current_module)
     @match e begin
       Expr(:struct, _...) => parse_struct!(theory, e, linenumber)
       Expr(:call, :⊣, Expr(:struct, _...), ctx) => parse_struct!(theory, e.args[2], linenumber, ctx)
+      # XXX
+      Expr(:using, m) => @show esc(:(macroexpand(@__MODULE__, :(m.Meta.theory)))) 
+      # fromexpr(theory, m, GAT) 
+      # esc(:(macroexpand(@__MODULE__, :($m.Meta.@theory))))
       Expr(:macrocall, var"@op", _, aliasexpr) => begin
         lines = @match aliasexpr begin
           Expr(:block, lines...) => lines
@@ -441,6 +446,7 @@ function parse_gat_line!(theory::GAT, e::Expr, linenumber; current_module)
           end
         end
       end
+      # XXX using ThGroup
       _ => begin
         parse_binding_line!(theory, e, linenumber)
       end
@@ -460,6 +466,7 @@ function fromexpr(parent::GAT, e, ::Type{GAT}; name=parent.name, current_module:
       l::LineNumberNode => begin
         linenumber = l
       end
+      # XXX using ThGroup
       _ => parse_gat_line!(theory, line, linenumber; current_module)
     end
   end
