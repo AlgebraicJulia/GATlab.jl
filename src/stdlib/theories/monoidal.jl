@@ -2,6 +2,8 @@ export ThLawlessMonCat, ThStrictMonCat
 
 """ The theory of monoidal categories 
 
+`mcompose` is usually denoted with ⊗ and the munit is usually denoted by 1 or I.
+
 """
 @theory ThLawlessMonCat <: ThCategory begin
   mcompose(A::Ob, B::Ob) :: Ob
