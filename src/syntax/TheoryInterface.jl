@@ -67,14 +67,96 @@ function theory_impl(head, body, __module__)
     Expr(:(<:), name, parent) => (name, parent)
     _ => error("could not parse head of @theory: $head")
   end
-
+:L
   ## ThAb <: ThMonoid  
   parent = if !isnothing(parentname)
     macroexpand(__module__, :($parentname.Meta.@theory))
   else
     GAT(:_EMPTY)
   end
-  
+  ## need to filter out methods already loaded, e.g., ThAbs <: ThSert
+
+# Expr(:using, m) => begin
+        #   # I get a weird expression if I just use m 
+        #   mod = m.args[1]
+        #   th = macroexpand(__module__, :($mod.Meta.@theory))
+        #   ## TODO this pattern is used in repr as well.
+        #   for seg in th.segments.scopes
+        #       block = toexpr(th, seg)
+        #       for line in block.args
+        #         push!(inherited, line)
+        #       end
+        #   end
+        # end
+
+
+  # @theory ThRig <: ThSet begin
+  #   using ThCMonoid: ⋅ as +, e as zero
+  #   using ThMonoid: ⋅ as *, e as one
+  #   a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
+  # end
+ 
+  ## this whole deal should be in a function acting on "body"
+  ## initialize vector for storing inherited axioms
+  inherited = Any[]
+  ## filter out using statements. avoid pesky LNNs
+  nonempty_body = filter(u -> typeof(u) != LineNumberNode, body.args)
+  any_using = filter(u -> u.head == :using, nonempty_body)
+  if !isnothing(any_using)
+    # for every using line
+    for t ∈ any_using
+      @match t begin
+        Expr(:using, m) => begin
+          # extract module name
+          mod = m.args[1].args[1]
+          popfirst!(m.args)
+          # initialize array of pairs for replacement
+          array = Any[]
+          for expr ∈ m.args
+              # TODO this would probably be better as a do block
+              key = string(expr.args[1].args[1])
+              val = string(expr.args[2])
+              # if "e" or "i" we want to make sure we don't
+              # get "default" -> "donefault"
+              row = if isletter(key[1])
+                  key*"()" => val*"()"
+              else
+                  key => val
+              end
+              ## TODO this does work for "default as Ob"
+              # row = string(expr.args[1].args[1]) => expr.args[2]
+              push!(array, row)
+          end
+          # pull the args from the theory block
+          th = macroexpand(__module__, :($mod.Meta.@theory))
+          for seg in th.segments.scopes
+            block = toexpr(th, seg)
+            for line in block.args
+              # TODO i'd like a more principled way of replacing terms than
+              # acting on constructed term. For example, instead of
+              #   replace("e()::default ⊣ []", "e()" => "zero()")
+              # i'd like: pretend term = "e()::default ⊣ []" then I'd like to overload
+              # replace for GAT terms 
+              #   replace(term, e, zero)
+              #   
+              newline = Meta.parse(replace(string(line), array...))
+              push!(inherited, newline)
+            end
+            # i'd like to separate the algebraic terms 
+            # push!(inherited, length(inherited)+1)
+          end
+        end
+        _ => nothing
+      end
+    end
+  end
+  ## 
+  unique_inherited = unique(inherited)
+  ## i'd rather insert the args into the :using stmt
+  for expr in reverse(unique_inherited)
+    pushfirst!(body.args, expr)
+  end
+
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
   newsegment = theory.segments.scopes[end]
   docstr = repr(theory)

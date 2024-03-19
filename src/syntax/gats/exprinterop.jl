@@ -423,10 +423,8 @@ function parse_gat_line!(theory::GAT, e::Expr, linenumber; current_module)
     @match e begin
       Expr(:struct, _...) => parse_struct!(theory, e, linenumber)
       Expr(:call, :⊣, Expr(:struct, _...), ctx) => parse_struct!(theory, e.args[2], linenumber, ctx)
-      # XXX
-      Expr(:using, m) => @show esc(:(macroexpand(@__MODULE__, :(m.Meta.theory)))) 
-      # fromexpr(theory, m, GAT) 
-      # esc(:(macroexpand(@__MODULE__, :($m.Meta.@theory))))
+      # XXX using m: [op as ...]
+      Expr(:using, m) => nothing
       Expr(:macrocall, var"@op", _, aliasexpr) => begin
         lines = @match aliasexpr begin
           Expr(:block, lines...) => lines
@@ -466,7 +464,6 @@ function fromexpr(parent::GAT, e, ::Type{GAT}; name=parent.name, current_module:
       l::LineNumberNode => begin
         linenumber = l
       end
-      # XXX using ThGroup
       _ => parse_gat_line!(theory, line, linenumber; current_module)
     end
   end
