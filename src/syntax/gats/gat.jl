@@ -219,7 +219,7 @@ function Base.union!(base::GAT, theory::GAT)
       end
     end
   end
-  dict
+  return dict
 end
 
 # Accessors
@@ -265,9 +265,6 @@ function typecons(theory::GAT)
   end
   xs
 end
-
-Base.iterate(t::GAT) = iterate(collect(t))
-Base.iterate(t::GAT, i) = iterate(collect(t), i)
 
 Base.issubset(t1::GAT, t2::GAT) =
   all(s->hastag(t2, s), gettag.(Scopes.getscopelist(t1).scopes))

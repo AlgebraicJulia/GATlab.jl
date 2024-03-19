@@ -142,7 +142,6 @@ expected = :((x + y) + Z() ⊣ [x::default, y::default])
 GATs.parseaxiom!(TM′, fromexpr(TM′, :([x, y]), TypeScope), nothing, 
                         :((x + y) == (y + x)))
 
-
 lft = TheoryIncl(ThSet.Meta.theory, TM)
 rght = TheoryMaps.compose(lft, m)
  
