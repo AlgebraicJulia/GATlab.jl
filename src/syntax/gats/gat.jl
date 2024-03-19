@@ -119,19 +119,16 @@ function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgStruct)
   theory.accessors[x] = Dict{Int, Ident}()
 end
 
-
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgAccessor)
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
   theory.accessors[judgment.typecon][judgment.arg] = x
 end
 
-function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgAxiom)
+function unsafe_updatecache!(theory::GAT, x::Ident, ::AlgAxiom)
   push!(theory.axioms, x)
 end
 
-function unsafe_updatecache!(theory::GAT, x::Ident, judgment::Alias)
-  nothing
-end
+unsafe_updatecache!(::GAT, ::Ident, ::Alias) = nothing
 
 function Scopes.unsafe_pushbinding!(theory::GAT, binding::Binding{Judgment})
   x = Scopes.unsafe_pushbinding!(theory.segments, binding)
@@ -172,6 +169,57 @@ function Base.show(io::IO, theory::GAT)
       println(io, "  ", line)
     end
   end
+end
+
+# Merging overlapping GATs
+
+"""
+There is no shadowing allowed in GATs, so if the new theory shares an 
+AlgDeclaration name with the base theory, the new theory Idents which refer 
+to that name should instead be retagged to refer to the AlgDeclaration in the 
+base theory.
+
+Returns a Dict mapping idents from the merged-in theory into the modified base 
+theory.
+"""
+function Base.union!(base::GAT, theory::GAT)
+  dict = Dict{Ident,Ident}()
+  for xs in theory.segments.scopes
+    unsafe_newsegment!(base)
+    for (x, v) in identvalues(xs)
+      if v isa AlgDeclaration 
+        if !hasident(base; name=nameof(x)) 
+          Scopes.unsafe_pushbinding!(base, theory[x])
+        end
+        dict[x] = ident(base; name=nameof(x))
+      else
+        x′ = nothing
+        v′ = reident(dict, v)
+        set = setvalue(theory[x], v′)
+        if v isa TrmTypConstructor
+          sig = sortsignature(v′)
+          res = base.resolvers[v′.declaration].bysignature
+          x′ = haskey(res, sig) ? res[sig] : Scopes.unsafe_pushbinding!(base, set)
+        elseif v isa AlgAxiom
+          for ax in base.axioms
+            axiom = getvalue(base[ax])
+            actx, vctx = getcontext.([axiom, v])
+            if values(actx) == [reident(dict, t) for t in values(vctx)]
+              dic = Dict([pairs(dict)..., zip(getidents.([vctx,actx])...)...])
+              if axiom.equands == [reident(dic, eq) for eq in v.equands]
+                x′ = ax
+              end
+            end
+          end
+          if isnothing(x′) 
+            x′ = Scopes.unsafe_pushbinding!(base, set)
+          end
+        end
+        dict[x] = x′
+      end
+    end
+  end
+  return dict
 end
 
 # Accessors
@@ -217,7 +265,6 @@ function typecons(theory::GAT)
   end
   xs
 end
-
 
 Base.issubset(t1::GAT, t2::GAT) =
   all(s->hastag(t2, s), gettag.(Scopes.getscopelist(t1).scopes))

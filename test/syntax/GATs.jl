@@ -143,6 +143,23 @@ end
   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
 end
 
+# Union
+#######
+
+@theory ThMonoid2 <: ThSemiGroup begin
+  e() :: default
+  e() ⋅ x == x ⊣ [x]
+  x ⋅ e() == x ⊣ [x]
+  e() ⋅ e() == e() ⊣ [x]
+end
+
+T, T′ = deepcopy.([ThMonoid.Meta.theory, ThMonoid2.Meta.theory]);
+@test length(T.axioms) == 3
+dic = union!(T, T′)
+@test dic isa Dict
+@test length(T.axioms) == 4
+@test length(termcons(T)) == 2
+@test length(typecons(T)) == 1
 
 
 end # module

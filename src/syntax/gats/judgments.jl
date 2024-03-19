@@ -7,7 +7,7 @@
 A scope where variables are assigned to `AlgType`s. We use a wrapper
 here so that it pretty prints as `[a::B]` instead of `{a => AlgType(B)}`
 """
-struct TypeScope <: HasScope{AlgType}
+@struct_hash_equal struct TypeScope <: HasScope{AlgType}
   scope::Scope{AlgType}
 end
 
@@ -18,8 +18,12 @@ TypeScope(bindings::Vector{Binding{AlgType}}; tag=newscopetag()) = TypeScope(Sco
 TypeScope(bindings::Pair{Symbol, AlgType}...) = TypeScope(Scope{AlgType}(bindings...))
 
 Scopes.getscope(ts::TypeScope) = ts.scope
+
 Scopes.unsafe_pushbinding!(ts::TypeScope, b) = 
   Scopes.unsafe_pushbinding!(ts.scope, b)
+
+reident(d::Dict{Ident, Ident}, ts::TypeScope) = 
+  TypeScope(reident(d, getscope(ts)))
 
 function Base.show(io::IO, ts::TypeScope)
   print(io, toexpr(EmptyContext{AlgType}(), ts))
@@ -68,6 +72,13 @@ end
 
 Scopes.getcontext(tc::TrmTypConstructor) = tc.localcontext
 
+reident(d::Dict{Ident,Ident}, tc::AlgTypeConstructor) = AlgTypeConstructor(
+  get(d, tc.declaration, tc.declaration),
+  reident(d, Scopes.getcontext(tc)),
+  tc.args,
+)
+
+
 abstract type AccessorField <: Judgment end
 
 """
@@ -106,8 +117,35 @@ A declaration of a term constructor as a method of an `AlgFunction`.
 end
 
 
-sortsignature(tc::TrmTypConstructor) =
-  AlgSort.(getvalue.(argsof(tc)))
+sortsignature(tc::TrmTypConstructor) = AlgSort.(getvalue.(argsof(tc)))
+
+reident(d::Dict{Ident,Ident}, tc::AlgTermConstructor) = AlgTermConstructor(
+  get(d, tc.declaration, tc.declaration),
+  reident(d, Scopes.getcontext(tc)),
+  tc.args,
+  reident(d, tc.type)
+)
+
+function reident(d::Dict{Ident, Ident}, s::Scope{AlgType})
+  Scope(Binding{AlgType}[setvalue(b, reident(d, getvalue(b))) for b in s.bindings]; 
+        tag = gettag(s))
+end
+
+reident(d::Dict{Ident, Ident}, s::AlgSort) = 
+  AlgSort(reident(d, headof(s)), reident(d, methodof(s)))
+
+reident(d::Dict{Ident, Ident}, s::T) where T<:AlgAST = 
+  T(reident(d, bodyof(s)))
+
+reident(d::Dict{Ident, Ident}, x::Ident) = get(d, x, x)
+
+reident(d::Dict{Ident, Ident}, m::MethodApp{T}) where T = 
+  MethodApp{T}(reident(d, headof(m)), reident(d, methodof(m)), 
+               reident.(Ref(d), argsof(m)))
+
+reident(d::Dict{Ident,Ident}, b::Binding{Judgment}) =   
+  setvalue(b, reident(d, getvalue(b)))
+
 
 """
 `AlgAxiom`
@@ -120,6 +158,13 @@ A declaration of an axiom
   equands::Vector{AlgTerm}
 end
 
+Scopes.getcontext(ax::AlgAxiom) = ax.localcontext
+
+reident(d::Dict{Ident,Ident}, ax::AlgAxiom) = AlgAxiom(
+  reident(d, Scopes.getcontext(ax)),
+  reident(d, ax.sort),
+  reident.(Ref(d), ax.equands)
+)
 
 """
 `AlgSorts`

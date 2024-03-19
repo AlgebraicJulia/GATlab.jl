@@ -1,12 +1,13 @@
 module TheoryMaps
-export IdTheoryMap, TheoryIncl, AbsTheoryMap, TheoryMap, @theorymap,
+export IdTheoryMap, TheoryIncl, AbsTheoryMap, SimpleTheoryMap, TheoryMap, @theorymap,
        TypeMap, TermMap, typemap, termmap
 
-using ..GATs, ..Scopes, ..ExprInterop
+using ..GATs, ..Scopes, ..ExprInterop, ...Util.MetaUtils
 using ..Scopes: unsafe_pushbinding!
-using ..GATs: InCtx, bindingexprs, substitute_term
+using ..GATs: InCtx, TrmTypConstructor, bindingexprs, substitute_term, reident
 using ..TheoryInterface
 import ..ExprInterop: toexpr, fromexpr
+import ..Scopes: rename
 
 using StructEquality, MLStyle
 using DataStructures: OrderedDict
@@ -199,8 +200,64 @@ function bind_localctx(ctx::GATContext, t::AlgAST)
 
   Dict([k=>v[1] for (k,v) in pairs(typed_terms)])
 end
+# Simple
+#-------
+"""
+Simple theory maps just send idents to idents, not general terms
+This ought not be allowed to send two idents of the same name to idents of 
+different names in the codom.
+"""
+@struct_hash_equal struct SimpleTheoryMap <: AbsTheoryMap
+  dom::GAT 
+  codom::GAT
+  typmap::Dict{Ident,Ident}
+  trmmap::Dict{Ident,Ident}
+end
 
-# ID 
+"""
+Induce a SimpleTheoryMap via a mapping of names. 
+
+Any typecon / termcon constructors whose name is not in the dictionary must be 
+shared by the dom/codom
+"""
+function SimpleTheoryMap(d::GAT, c::GAT, names::Dict{Symbol,Symbol})
+  typs, trms, iddict = [Dict{Ident, Ident}() for _ in 1:3]
+  for xs in d.segments.scopes
+    for (x, v) in identvalues(xs)
+      if v isa AlgDeclaration 
+        iddict[x] = ident(c; name=get(names, nameof(x), nameof(x)))
+      elseif v isa TrmTypConstructor
+        v′ = reident(merge(typs, trms, iddict), v)
+        m = GATs.methodlookup(GATContext(c), iddict[v.declaration], sortsignature(v′))
+        (v isa AlgTermConstructor ? trms : typs)[x] = m
+      end
+    end
+  end
+  SimpleTheoryMap(d, c, typs, trms)
+end
+
+"""Go from Dict{Ident,Ident} to Dict{Symbol,Symbol}"""
+function namedict(m::SimpleTheoryMap)
+  Dict{Symbol,Symbol}(vcat(map([m.typmap, m.trmmap]) do d
+    map(collect(d)) do (k,v)
+      map([dom(m) => k, codom(m) => v]) do (theory, x)
+        nameof(getvalue(theory[x]).declaration)
+      end
+    end
+  end...))
+end
+
+typemap(m::SimpleTheoryMap) = 
+  OrderedDict(k => TypeInCtx(codom(m), m.typmap[k]) for k in last.(typecons(dom(m))))
+
+termmap(m::SimpleTheoryMap) = 
+  OrderedDict(k => TermInCtx(codom(m), m.trmmap[k]) for k in last.(termcons(dom(m))))
+
+function compose(f::SimpleTheoryMap, g::SimpleTheoryMap)
+  nf, ng = namedict(f), namedict(g)
+  SimpleTheoryMap(dom(f), codom(g), Dict(k=>get(ng,v,v) for (k,v) in nf))
+end
+
 #---
 @struct_hash_equal struct IdTheoryMap <: AbsTheoryMap
   gat::GAT
@@ -229,10 +286,12 @@ A theory inclusion has a subset of scopes
 @struct_hash_equal struct TheoryIncl <: AbsTheoryMap
   dom::GAT
   codom::GAT
-  function TheoryIncl(dom,codom) 
-    err = "Cannot construct TheoryInclusion"
-    dom ⊆ codom ? new(dom,codom) : error(err)
-  end
+  # `⊆` is a sufficient but not necessary condition of judgment-wise inclusion
+  # since the judgments may be split apart across different scopes in the codom 
+  #function TheoryIncl(dom,codom) 
+    #err = "Cannot construct TheoryInclusion"
+    #dom ⊆ codom ? new(dom,codom) : error(err)
+  #end
 end
 
 typemap(ι::Union{IdTheoryMap,TheoryIncl}) = 
@@ -243,8 +302,11 @@ termmap(ι::Union{IdTheoryMap,TheoryIncl}) =
 
 compose(f::TheoryIncl, g::TheoryIncl) = TheoryIncl(dom(f), codom(g))
 
-compose(f::AbsTheoryMap, g::TheoryIncl) = 
-  TheoryIncl(dom(f), codom(g), typemap(f), termmap(f))
+compose(f::TheoryIncl, g::SimpleTheoryMap) = 
+  SimpleTheoryMap(dom(f), codom(g), namedict(g))
+
+compose(f::SimpleTheoryMap, g::TheoryIncl) = 
+  SimpleTheoryMap(dom(f), codom(g), namedict(f))
 
 Base.inv(f::TheoryIncl) = 
   dom(f) == codom(f) ? f : error("Cannot invert a nontrivial theory inclusion")
@@ -283,6 +345,50 @@ termmap(t::TheoryMap) = t.termmap
 """Invert a theory iso"""
 # Base.inv(::TheoryMap) = error("Not implemented")
 
+# Renaming
+#---------
+
+"""
+Rename a GAT, T, yielding a GAT T' and a morphism T → T'
+"""
+function rename(theory::GAT, namedict::Dict{Symbol, Symbol}; name=nothing)
+  newtheory = GAT(isnothing(name) ? nameof(theory) : name)
+  iddict, typmap, trmmap = [Dict{Ident,Ident}() for _ in 1:3]
+  
+  for xs in theory.segments.scopes
+    GATs.unsafe_newsegment!(newtheory)
+    for (x, v) in identvalues(xs)
+      if v isa AlgDeclaration 
+        b = MetaUtils.setname(theory[x], get(namedict, nameof(x), nameof(x)))
+        x′ = Scopes.unsafe_pushbinding!(newtheory, b)
+        iddict[x] = x′
+      elseif v isa TrmTypConstructor
+        x′ = Scopes.unsafe_pushbinding!(newtheory, reident(iddict, theory[x]))
+        (v isa AlgTermConstructor ? trmmap : typmap)[x] = x′
+        iddict[x] = x′
+      elseif v isa AlgAxiom
+        Scopes.unsafe_pushbinding!(newtheory, reident(iddict, theory[x]))
+      end
+    end
+  end
+  
+  SimpleTheoryMap(theory, newtheory, typmap, trmmap)
+end
+
+"""
+Pushout of a multispan of theories. If necessary, names can be disambiguated
+via `names` - a vector of Dict{Symbol, Symbol} of the same length 
+"""
+function pushout(maps::Vector{<:AbsTheoryMap}; name=nothing, names=nothing)
+  any(m->m isa TheoryMap, maps) && error("Cannot pushout general theory maps")
+  names = isnothing(names) ? fill(Dict{Symbol,Symbol}(), length(maps)) : names
+  feet = rename.(codom.(maps), names)
+  apex = GAT(isnothing(name) ? Symbol(join(nameof.(feet), "_")) : name)
+  union!.(Ref(apex), codom.(feet))
+  [compose(f, TheoryIncl(codom(f), apex)) for f in feet]
+end
+
+pushout(maps::AbsTheoryMap...; name=nothing, names=nothing) = pushout(collect(maps); name, names)
 
 # Serialization
 #--------------

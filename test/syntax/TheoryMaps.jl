@@ -15,6 +15,8 @@ TNP = ThNatPlus.Meta.theory
 PC = PreorderCat.MAP
 NP = NatPlusMonoid.MAP
 
+using .ThCategory
+
 # TheoryMaps 
 ############
 x = toexpr(PC)
@@ -101,24 +103,72 @@ end
 # Inclusions 
 #############
 incl = TheoryIncl(TLC, T)
-@test TheoryMaps.dom(incl) == TLC
-@test TheoryMaps.codom(incl) == T
+@test dom[GATC()](incl) == TLC
+@test codom[GATC()](incl) == T
 incl2 = TheoryIncl(ThGraph.Meta.theory, TLC)
 incl3 = TheoryIncl(ThGraph.Meta.theory, T)
 
-@test TheoryMaps.compose(incl2, incl) == incl3
+@test compose[GATC()](incl2, incl) == incl3
 
 toexpr(incl)
-@test_throws ErrorException TheoryIncl(T, TLC)
+# @test_throws ErrorException TheoryIncl(T, TLC) # we no longer check for this
 @test_throws ErrorException inv(incl)
 
 # Identity 
 ##########
 i = IdTheoryMap(T)
-@test TheoryMaps.dom(i) == T
-@test TheoryMaps.codom(i) == T
-@test TheoryMaps.compose(i,i) == i
-@test TheoryMaps.compose(incl,i) == incl
+@test dom[GATC()](i) == T
+@test codom[GATC()](i) == T
+@test compose[GATC()](i, i) == i
+@test compose[GATC()](incl, i) == incl
 
+# Renaming
+##########
+
+m = rename(TM, Dict(:⋅=>:+, :e => :Z); name=:ThCommMonoid)
+TM′ = codom[GATC()](m)
+m′ = SimpleTheoryMap(TM, TM′, Dict(:⋅=>:+, :e=>:Z))
+@test m == m′
+
+xterm = fromexpr(TM, :((x ⋅ y) ⋅ e() ⊣ [(x,y)::default]), TermInCtx)
+expected = :((x + y) + Z() ⊣ [x::default, y::default])
+@test toexpr(TM′, m(xterm)) == expected
+
+
+# Pushouts of simple theorymaps via renaming
+#-------------------------------------------
+
+# Add commutativity of addition
+GATs.parseaxiom!(TM′, fromexpr(TM′, :([x, y]), TypeScope), nothing, 
+                        :((x + y) == (y + x)))
+
+lft = TheoryIncl(ThSet.Meta.theory, TM)
+rght = TheoryMaps.compose(lft, m)
+ 
+ι₁,ι₂ = TheoryMaps.pushout(lft, rght; name=:PreRing) # basically union!, since no name collisions
+@test codom[GATC()](ι₁) == codom[GATC()](ι₂)
+ThPreRing = codom[GATC()](ι₁)
+@test dom[GATC()](ι₁) == TM 
+@test dom[GATC()](ι₂) == TM′
+
+# do the renaming in the inclusion maps themselves
+#--------------------------------------------
+@theory CommMonoid <: ThMonoid begin
+  x⋅y == y⋅x ⊣ [x,y]
+end
+
+lft = TheoryIncl(ThSet.Meta.theory, TM)
+rght = TheoryIncl(ThSet.Meta.theory, CommMonoid.Meta.theory)
+
+ι₁,ι₂ = TheoryMaps.pushout(lft, rght; name=:PreRing, 
+                names=[Dict{Symbol,Symbol}(), Dict(:e=>:Z,:⋅=>:+)])
+@test codom[GATC()](ι₁) == codom[GATC()](ι₂)
+ThPreRing = codom[GATC()](ι₁)
+@test dom[GATC()](ι₁) == TM 
+@test dom[GATC()](ι₂) == CommMonoid.Meta.theory
+
+x = last(last.(termcons(TM))) # monoid unit
+exprs = [toexpr(ThPreRing,getvalue(f(x))) for f in [ι₁,ι₂]]
+@test exprs == [:(e()), :(Z())] # same termcon mapped to two different ones
 
 end # module
