@@ -4,6 +4,7 @@ export @theory, @signature, Model, invoke_term
 using ..Scopes, ..GATs, ..ExprInterop
 
 using MLStyle
+using Folds
 
 abstract type Model{Tup <: Tuple} end
 
@@ -60,16 +61,39 @@ function fqmn(mod::Module)
   reverse(names)
 end
 
-function usetheory!(theory::GAT, other::GAT, renames::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
+
+function _usetheory!(theory::GAT, othertheory::GAT, renames::Dict{Symbol,Symbol}=Dict{Symbol, Symbol}())
+  # rename stuff
+  # scopes cache the relation between names and bindings
+  for scope in othertheory.segments.scopes
+    renamed = map(getbindings(scope)) do binding
+      # there are several cases we need to be mindful of.  
+      @match binding begin
+        # e.g., default => AlgDeclaration 
+        if !isnothing(nameof(binding)) end => begin 
+          out = setname(binding, :Ob)
+          @info out
+        end
+        _ => nothing
+      end
+    end
+  end
+
+  # get declarations, rename them, etc.
+  newscopes = symdiff(theory.segments.scopes, othertheory.segments.scopes)
+end
+
+function usetheory!(theory::GAT, othertheory::GAT, renames::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
   retagging = Dict{ScopeTag, ScopeTag}()
   renamings = Vector{Tuple{ScopeTag, Dict{Symbol, Symbol}}}()
   for segment in othertheory.segments.scopes
     makenew = false
     current_renames = Dict{Symbol, Symbol}()
+    @info "vibe check" getbindings(segment)
     newbindings = map(getbindings(segment)) do binding
       name = nameof(binding)
       retagged = retag(retagging, getvalue(binding))
-      renamed = fold((b, (tag, r)) -> rename(tag, r, b), renamings; init=retagged)
+      renamed = foldl((b, (tag, r)) -> rename(tag, r, b), renamings; init=retagged)
       newbinding = if haskey(renames, name)
         makenew = true
         current_renames[name] = renames[name]
@@ -105,9 +129,25 @@ function expand_theory(parentname, body, __module__)
   end
   for line in body.args
     @match line begin
+      Expr(:using, Expr(:(:), Expr(:(.), other), renames...)) => begin
+        othertheory = macroexpand(__module__, :($other.Meta.@theory))
+        # hideous loop
+        rename_args = Any[]
+        for r ∈ renames
+          u = r.args
+          fst = u[1].args[1]
+          snd = u[2]
+          push!(rename_args, [fst, snd])
+        end
+        @info rename_args
+        rename_dict = foldl((x, y) -> merge(x, Dict([y])), rename_args, init=Dict{Symbol, Symbol}())
+        @info "renames" rename_dict
+        usetheory!(theory, othertheory, rename_dict)
+      end
       Expr(:using, Expr(:(.), other)) => begin
         othertheory = macroexpand(__module__, :($other.Meta.@theory))
-        usetheory!(theory, othertheory)
+        # usetheory!(theory, othertheory)
+        @info other
       end
       _ => nothing
     end
