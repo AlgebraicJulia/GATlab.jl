@@ -15,6 +15,8 @@ using ..Scopes
 import ..ExprInterop: fromexpr, toexpr
 
 import ..Scopes: retag, rename
+using ...Util.Tries
+using AbstractTrees
 
 using StructEquality
 using MLStyle
@@ -25,5 +27,6 @@ include("gats/judgments.jl")
 include("gats/gat.jl")
 include("gats/exprinterop.jl")
 include("gats/algorithms.jl")
+include("gats/closures.jl")
 
 end

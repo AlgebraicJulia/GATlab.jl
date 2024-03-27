@@ -6,4 +6,8 @@ using Test
   include("MetaUtils.jl")
 end
 
+@testset "Tries" begin
+  include("Tries.jl")
+end
+
 end

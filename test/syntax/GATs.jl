@@ -55,7 +55,6 @@ seg_expr = quote
   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
 end
 
-
 thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 
 O, H, i = idents(thcat; name=[:Ob, :Hom, :id])
@@ -107,7 +106,7 @@ iida = AlgTerm(i, im, [AlgTerm(i, im, [AlgTerm(A)])])
 
 # Good type and bad type
 haa = HomT
-haia = AlgType(HomS.head, HomS.method, [ATerm, ida])
+haia = AlgType(headof(HomS), methodof(HomS), [ATerm, ida])
 @test sortcheck(c, haa)
 @test_throws Exception sortcheck(c, haia)
 
@@ -143,6 +142,8 @@ end
   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
 end
 
+# Tries
 
+tuplescope = fromexpr(ThMonoid.Meta.theory, :([x::(a::(s,t),b)]), TypeScope)
 
 end # module
