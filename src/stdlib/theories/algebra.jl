@@ -1,5 +1,6 @@
 export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing,
-  ThCRing, ThRig, ThCRig, ThElementary, ThPreorder
+  ThCRing, ThRig, ThCRig, ThElementary, ThPreorder,
+  TheMagma, TheSemiGroup, TheMonoid
 
 @theory ThEmpty begin
 end
@@ -8,24 +9,63 @@ end
   default::TYPE
 end
 
-@theory ThMagma <: ThSet begin
+@theory TheMagma begin
+  using ThSet
   (x ⋅ y) :: default ⊣ [x, y]
 end
 
-@theory ThSemiGroup <: ThMagma begin
+@theory ThMagma begin
+  using ThSet
+  (x ⋅ y) :: default ⊣ [x, y]
+end
+
+@theory TheSemiGroup begin
+  using TheMagma
   (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
 end
 
-@theory ThMonoid <: ThSemiGroup begin
+@theory ThSemiGroup begin
+  using ThMagma
+  (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
+end
+
+@theory TheMonoid begin
+  using TheSemiGroup
   e() :: default
   e() ⋅ x == x ⊣ [x]
   x ⋅ e() == x ⊣ [x]
+end
+# ERROR: LoadError: UndefVarError: `default` not defined
+# Stacktrace:
+#   [1] getproperty(x::Module, f::Symbol)
+#     @ Base ./Base.jl:31
+#   [2] macro expansion
+#     @ ~/Documents/UFAJ/AlgebraicJulia/GATlab/GATlab.jl/src/models/ModelInterface.jl:701 [inlined]
+#   [3] top-level scope
+#     @ ~/Documents/UFAJ/AlgebraicJulia/GATlab/GATlab.jl/src/stdlib/derivedmodels/DerivedModels.jl:12
+@theory ThMonoid begin
+  using ThSemiGroup
+  e() :: default
+  e() ⋅ x == x ⊣ [x]
+  x ⋅ e() == x ⊣ [x]
+end
+
+@theory TheGroup begin
+  using TheMonoid
+  i(x) :: default ⊣ [x]
+  i(x) ⋅ x == e() ⊣ [x]
+  x ⋅ i(x) == e() ⊣ [x]
 end
 
 @theory ThGroup <: ThMonoid begin
   i(x) :: default ⊣ [x]
   i(x) ⋅ x == e() ⊣ [x]
   x ⋅ i(x) == e() ⊣ [x]
+end
+
+@theory TheCMonoid begin
+  using TheMonoid
+  a ⋅ b == b ⋅ a ⊣ [a, b]
 end
 
 @theory ThCMonoid <: ThMonoid begin
