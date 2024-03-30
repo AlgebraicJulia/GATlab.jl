@@ -5,6 +5,7 @@ using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
 # using GATlab.Util
 
 using MLStyle, StructEquality, Markdown
+using DataStructures: DefaultDict
 
 abstract type Model{Tup <: Tuple} end
 
@@ -39,6 +40,10 @@ When we declare a new theory, we add the scope tag of its new segment to this
 dictionary pointing to the module corresponding to the new theory.
 """
 const GAT_MODULE_LOOKUP = Dict{ScopeTag, Module}()
+
+const REVERSE_GAT_MODULE_LOOKUP = Dict{Module,ScopeTag}()
+
+
 
 macro signature(head, body)
   theory_impl(head, body, __module__)
@@ -115,16 +120,18 @@ function theory_impl(head, body, __module__)
   doctarget = gensym()
 
   push!(modulelines, Expr(:toplevel, :(module Meta
+    using DataStructures: DefaultDict
     struct T end
    
     @doc ($(Markdown.MD)((@doc $(__module__).$doctarget), $docstr))
     const theory = $theory
-
+    const models = DefaultDict(()->[])
     macro theory() $theory end
     macro theory_module() parentmodule(@__MODULE__) end
   end)))
 
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
+  push!(modulelines, :($(GlobalRef(TheoryInterface, :REVERSE_GAT_MODULE_LOOKUP))[$name] = $(gettag(newsegment))))
 
 
   esc(

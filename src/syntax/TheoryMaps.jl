@@ -9,7 +9,7 @@ using ..TheoryInterface
 import ..ExprInterop: toexpr, fromexpr
 
 using StructEquality, MLStyle
-using DataStructures: OrderedDict
+using DataStructures: OrderedDict, DefaultDict
 
 # Theory Maps
 #############
@@ -389,6 +389,9 @@ end
 reorder(b::Binding{T}, tag::ScopeTag, perm::Dict{Int,Int}) where {T} = 
   setvalue(b, reorder(getvalue(b), tag, perm))
 
+const THEORY_DOM_LOOKUP = DefaultDict{Module, Vector{Module}}(()->Module[])
+const THEORY_CODOM_LOOKUP = DefaultDict{Module, Vector{Module}}(()->Module[])
+const THEORY_MAPS = Module[]
 
 macro theorymap(head, body)
   (name, domname, codomname) = @match head begin
@@ -413,11 +416,15 @@ macro theorymap(head, body)
           macro map() $tmap end
           macro dom() $dommod end
           macro codom() $codommod end
-
+          const dom = $dommod
+          const codom = $dommod
           $mig
         end
       ),
       :(Core.@__doc__ $(name)),
+      :(push!($(GlobalRef(TheoryMaps, :THEORY_MAPS)), $name)),
+      :(push!($(GlobalRef(TheoryMaps, :THEORY_DOM_LOOKUP))[$dommod], $name)),
+      :(push!($(GlobalRef(TheoryMaps, :THEORY_CODOM_LOOKUP))[$codommod], $name))
     )
   )
 end

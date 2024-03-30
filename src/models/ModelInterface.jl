@@ -159,6 +159,8 @@ macro instance(head, model, body)
   generate_instance(theory, theory_module, jltype_by_sort, model_type, whereparams, body)
 end
 
+const GAT_MODEL_LOOKUP = DefaultDict{Module,Vector{Any}}(()->[])
+
 function generate_instance(
   theory::GAT,
   theory_module::Union{Expr0, Module},
@@ -213,13 +215,20 @@ function generate_instance(
   docsink = gensym(:docsink)
 
   code = Expr(:block,
+    [add_source_code(theory_module, model_type, whereparams, f) for f in functions]...,
     [generate_function(f) for f in qualified_functions]...,
     implements_declarations...,
+    :(push!($(GlobalRef(ModelInterface, :GAT_MODEL_LOOKUP))[$theory_module], 
+            $model_type where {$(whereparams...)})),
     :(function $docsink end),
     :(Core.@__doc__ $docsink)
   )
 
   escape ? esc(code) : code
+end
+
+function add_source_code(theory_module, mod, whereparams, f)
+  :(push!($(theory_module).Meta.models[$mod where {$(whereparams...)}], $f))
 end
 
 macro instance(head, body)
