@@ -424,7 +424,8 @@ macro theorymap(head, body)
       :(Core.@__doc__ $(name)),
       :(push!($(GlobalRef(TheoryMaps, :THEORY_MAPS)), $name)),
       :(push!($(GlobalRef(TheoryMaps, :THEORY_DOM_LOOKUP))[$dommod], $name)),
-      :(push!($(GlobalRef(TheoryMaps, :THEORY_CODOM_LOOKUP))[$codommod], $name))
+      :(push!($(GlobalRef(TheoryMaps, :THEORY_CODOM_LOOKUP))[$codommod], $name)),
+      name
     )
   )
 end

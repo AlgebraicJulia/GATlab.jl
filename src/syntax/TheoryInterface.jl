@@ -5,7 +5,6 @@ using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
 # using GATlab.Util
 
 using MLStyle, StructEquality, Markdown
-using DataStructures: DefaultDict
 
 abstract type Model{Tup <: Tuple} end
 
