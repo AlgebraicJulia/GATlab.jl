@@ -127,7 +127,8 @@ function to_forest(mod::Module, path::String; verbose=true)
     "\\transclude{$(alphanum(hash(m)))}"
   end)
 
-  mods′ = filter(m->nameof(m)!=:Migrator, ModelInterface.GAT_MODEL_LOOKUP[mod])
+  mods′ = filter(m->!isnothing(m) && nameof(m)!=:Migrator, 
+                 ModelInterface.GAT_MODEL_LOOKUP[mod])
   mods = join(map(enumerate(mods′)) do (i,m)
     mhsh = alphanum(hash(mod) + i)
     fi = joinpath(path, "$(mhsh).tree")
