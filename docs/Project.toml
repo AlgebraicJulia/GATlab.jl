@@ -1,4 +1,5 @@
 [deps]
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 GATlab = "f0ffcf3b-d13a-433e-917c-cc44ccf5ead2"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"

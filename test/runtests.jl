@@ -20,3 +20,7 @@ end
   include("nonstdlib/tests.jl")
 end
 
+@testset "forest" begin
+  include("forest/tests.jl")
+end
+

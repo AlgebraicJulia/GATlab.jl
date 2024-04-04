@@ -5,6 +5,7 @@ using ...Syntax.GATs: TrmTypConstructor, AlgAST, MethodApp
 using ...Stdlib: ThSet
 import ...Models: show_latex, ModelInterface
 using ...Util.MetaUtils: generate_function
+import Markdown
 
 const nn = "\n\n"
 latex(x::String) = "#{$x}"
@@ -61,7 +62,7 @@ function to_forest_model(mod::Module, model::Any)
     str = string(Base.remove_linenums!(generate_function(jf)))
     code(replace(str, r"#=.+=#" => ""))
   end
-  "\\title{$(nameof(model))}\\taxon{definition} $(join(p.(stmts),nn))"
+  "\\title{$(nameof(model))}\n\\taxon{definition}\n\\tag{model}$(join(p.(stmts),nn))"
 end
 
 
@@ -96,11 +97,11 @@ finame(x::Ident) =  "$(alphanum(gettag(x).val.value+getlid(x).val))"
 Convert a Module (for a theory) into a tree, a definition tree, and a tree 
 for each judgment.
 """
-function to_forest(mod::Module, path::String)
+function to_forest(mod::Module, path::String; verbose=true)
   T = mod.Meta.theory
 
   hsh = alphanum(Syntax.TheoryInterface.REVERSE_GAT_MODULE_LOOKUP[mod].val.value)
-  println("$mod $hsh")
+  verbose && println("$mod $hsh")
   for xs in T.segments.scopes
     for (x, v) in identvalues(xs)
       fi = joinpath(path, "$(finame(x)).tree")
@@ -126,7 +127,8 @@ function to_forest(mod::Module, path::String)
     "\\transclude{$(alphanum(hash(m)))}"
   end)
 
-  mods = join(map(enumerate(ModelInterface.GAT_MODEL_LOOKUP[mod])) do (i,m)
+  mods′ = filter(m->nameof(m)!=:Migrator, ModelInterface.GAT_MODEL_LOOKUP[mod])
+  mods = join(map(enumerate(mods′)) do (i,m)
     mhsh = alphanum(hash(mod) + i)
     fi = joinpath(path, "$(mhsh).tree")
     writefile(fi, to_forest_model(mod, m))
@@ -140,9 +142,13 @@ function to_forest(mod::Module, path::String)
 \\subtree{\\title{Axioms} \n$axs}\n
 """
   writefile(joinpath(path, "$(hsh)_def.tree"), def)
+
+  doc = to_forest(Base.Docs.doc(mod))
+
   page = """  
-\\title{$(nameof(T))}\n\n
-\\transclude{$(hsh)_def}\n
+\\title{$(nameof(T))}\n\\tag{theory}\n\n $doc
+\\scope{  \\put\\transclude/heading{false} 
+\\transclude{$(hsh)_def}\n }
 \\subtree{\\title{Models}\n \\put\\transclude/expanded{false} $mods}\n
 \\subtree{\\title{TheoryMaps} \n
 \\subtree{\\title{As domain} \\put\\transclude/expanded{false} $doms}\n
@@ -174,7 +180,7 @@ function to_forest_map(mod::Module, path::String)
   scope = p("[$(nameof(M.dom))]($(Syntax.TheoryInterface.REVERSE_GAT_MODULE_LOOKUP[mod.dom].val.value|> alphanum)) #{\\rightarrow} [$(nameof(M.codom))]($(Syntax.TheoryInterface.REVERSE_GAT_MODULE_LOOKUP[mod.codom].val.value |> alphanum))")
 
   def = """  
-\\title{$(nameof(mod))}
+\\title{$(nameof(mod))}\n\\tag{theorymap}
 \\taxon{definition}\n\n$scope
 \\subtree{\\title{Type Mapping} \n$typs}\n
 \\subtree{\\title{Term Mapping} \n$trms}\n
@@ -186,12 +192,24 @@ end
 Create a forest in a directory based on all user-declared theories, theorymaps, 
 and models
 """
-function to_forest(path::String; clear=false)
-  clear && rm.(joinpath.(path, readdir(path)))
+function to_forest(path::String; clear=false, verbose=true)
+  ispath(path) && clear && rm.(joinpath.(path, readdir(path)))
   for T in values(Syntax.TheoryInterface.GAT_MODULE_LOOKUP)
-    occursin("NonStdlib", string(T)) || to_forest(T, path)
+    occursin("NonStdlib", string(T)) || to_forest(T, path; verbose)
   end
   to_forest_map.(values(Syntax.TheoryMaps.THEORY_MAPS)  , path);
+  cp(joinpath(@__DIR__,"gatlab.tree"), joinpath(path,"gatlab.tree"))
+  return nothing
+end
+
+"""Ad hoc translation for GATlab docstrings to look passable in Forester"""
+function to_forest(doc::Markdown.MD)::String
+  str = split(string(doc), "\n\n##")[1] # auto docs produces stuff after this point
+  res = replace(str, 
+    r"```\n((.|\n)*)\n```"=> s"\\code{\1}", # convert ``` ``` codeblocks
+    r"`(.+)`"=> s"\\code{\1}" # convert ` ` inline code
+    )
+  join(p.(string.((split(res, r"\n+"))))) # handle newlines
 end
 
 end # module
