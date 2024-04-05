@@ -2,7 +2,7 @@ module Forest
 export to_forest
 using ...Syntax
 using ...Syntax.GATs: TrmTypConstructor, AlgAST, MethodApp
-using ...Stdlib: ThSet
+using ...Stdlib: ThSet, StdTheories
 import ...Models: show_latex, ModelInterface
 using ...Util.MetaUtils: generate_function
 import Markdown
@@ -46,13 +46,13 @@ function show_latex(T::GAT, expr::MethodApp)
     end
   end
   if !binary 
-    join(["\\mathop{\\mathrm{$(nameof(head))}}",
+    join(["\\mathop{\\mathrm{ $(nameof(head)) }}",
   (isempty(argsof(expr)) ? [] : ["\\left(",
   join([show_latex(T,arg) for arg in argsof(expr)], ","),
   "\\right)"])...])
   else 
     join(["\\left(", show_latex(T,first(argsof(expr))), 
-    "\\mathop{\\mathrm{$(nameof(head))}}",
+    "\\mathop{\\mathrm{ $(nameof(head)) }}",
     show_latex(T,last(argsof(expr))), "\\right)"])
   end
 end
@@ -77,7 +77,8 @@ end
 to_forest(T::GAT, n::Ident, ::AlgDeclaration) = "\\title{$(nameof(n))}"
 
 function to_forest(T::GAT, n::Ident, x::Alias)
-  "\\title{$(nameof(n))}\n \\p{Alias for \\ref{$(finame(x.ref))}}"
+  n = nameof(n) == :\ ? "(Backslash)" : nameof(n)
+  "\\title{$n}\n \\p{Alias for \\ref{$(finame(x.ref))}}"
 end
 
 function to_forest(T::GAT, ::Ident, x::AlgAccessor)
@@ -191,12 +192,19 @@ end
 
 """
 Create a forest in a directory based on all user-declared theories, theorymaps, 
-and models
+and models. These models are defined in modules
 """
-function to_forest(path::String; clear=false, verbose=true)
+function to_forest(path::String; whitelist=nothing, blacklist=nothing, 
+                                 clear=false, verbose=true)
   ispath(path) && clear && rm.(joinpath.(path, readdir(path)))
+  isnothing(whitelist) || isnothing(blacklist) || error("Cannot set both white/blacklist")
   for T in values(Syntax.TheoryInterface.GAT_MODULE_LOOKUP)
-    occursin("NonStdlib", string(T)) || to_forest(T, path; verbose)
+    if isnothing(whitelist) || !isempty(parentmodules(T) ∩ whitelist)
+      if isnothing(blacklist) || isempty(parentmodules(T) ∩ blacklist)
+        println("T $T")
+        to_forest(T, path; verbose)
+      end
+    end
   end
   to_forest_map.(values(Syntax.TheoryMaps.THEORY_MAPS)  , path);
   cp(joinpath(@__DIR__,"gatlab.tree"), joinpath(path,"gatlab.tree"))
@@ -207,10 +215,19 @@ end
 function to_forest(doc::Markdown.MD)::String
   str = split(string(doc), "\n\n##")[1] # auto docs produces stuff after this point
   res = replace(str, 
-    r"```\n((.|\n)*)\n```"=> s"\\code{\1}", # convert ``` ``` codeblocks
-    r"`(.+)`"=> s"\\code{\1}" # convert ` ` inline code
+    r"```\n((.|\n)*?)\n```"=> s"\\code{\1}", # convert ``` ``` codeblocks
+    r"`(.+?)`"=> s"\\code{\1}", # convert ` ` inline code
+    r"\$(.+?)\$"=> s"#{\1}" # convert ` ` inline code
     )
   join(p.(string.((split(res, r"\n+"))))) # handle newlines
 end
+
+"""Get all modules in the hierarchy, for use in white/blacklist constraints"""
+function parentmodules(m::Module, res=nothing)
+  res = isnothing(res) ? Module[] : res  
+  push!(res, m)
+  p = parentmodule(m)
+  p == m ? res : parentmodules(p, res)
+end 
 
 end # module

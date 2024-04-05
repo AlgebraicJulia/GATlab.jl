@@ -38,6 +38,7 @@ A constant called `Meta.theory` which is the `GAT` data structure.
 When we declare a new theory, we add the scope tag of its new segment to this
 dictionary pointing to the module corresponding to the new theory.
 """
+
 const GAT_MODULE_LOOKUP = Dict{ScopeTag, Module}()
 
 const REVERSE_GAT_MODULE_LOOKUP = Dict{Module,ScopeTag}()
@@ -129,10 +130,6 @@ function theory_impl(head, body, __module__)
     macro theory_module() parentmodule(@__MODULE__) end
   end)))
 
-  push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
-  push!(modulelines, :($(GlobalRef(TheoryInterface, :REVERSE_GAT_MODULE_LOOKUP))[$name] = $(gettag(newsegment))))
-
-
   esc(
     Expr(
       :toplevel,
@@ -142,10 +139,16 @@ function theory_impl(head, body, __module__)
       :(
         module $name
         $(modulelines...)
+
+        function __init__()
+          $(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name
+          $(GlobalRef(TheoryInterface, :REVERSE_GAT_MODULE_LOOKUP))[$name] = $(gettag(newsegment))
+        end
+      
         $(structlines...)
         end
       ),
-      :(@doc ($(Markdown.MD)((@doc $doctarget), $docstr)) $name)
+      :(@doc ($(Markdown.MD)((@doc $doctarget), $docstr)) $name),
     )
   )
 end
