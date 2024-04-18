@@ -46,39 +46,7 @@ end
   @op 1 + 1
 end
 
-# using statement
-@theory ThMagmaWithAssoc begin
-  using ThMagma
-  (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
-end
-@test ThMagmaWithAssoc == ThSemiGroup
-
-[s.scope.names for s in ThSemiGroup.Meta.theory.segments.scopes]
-[s.scope.names for s in ThMagmaWithAssoc.Meta.theory.segments.scopes]
-[s.scope.bindings for s in ThSemiGroup.Meta.theory.segments.scopes]
-[s.scope.bindings for s in ThMagmaWithAssoc.Meta.theory.segments.scopes]
-# m_b[3][1].value.(equands, localcontext.(scope.(bindings, names, tag), sort)
-
-# in my example, i 
-# 1. take sd=symdiff(theory1.seg.scopes, theory2.seg.scopes)
-# 2. val_k = sd[k].scope.bindings[k].value
-# 3. check:
-#   3.1. [sorts] val_i.sort == val_j.sort
-#   3.2. [localcontext]
-#     - val_k.lc.scope.bindings
-#       for each binding, check
-#         - name
-#         - value
-#           - body
-#             - args
-#             - head
-#             - method
-#               - tag
-#                 >: note that the tages
-#               - lid
-#               - name
-#
-
+# test that a theory with redundant using statements is equal to one which hasn't
 @theory ThMagmaMagmaWithAssoc begin
   using ThMagma
   using ThMagma

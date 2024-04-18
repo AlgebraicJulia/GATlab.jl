@@ -81,6 +81,7 @@ end
   x * i(x) == one() ⊣ [x]
 end
 
+# TODO: how to handle cases where RHS of axiom must be a different sort (e.g., nonzero) than those on the LHS (e.g., default)?
 @theory ThIntegralDomain begin
   using ThCRing
   nonzero::TYPE
@@ -88,10 +89,11 @@ end
   x * y == z ⊣ [x::default, y::default, z::nonzero]
 end
 
-# @theory ThField begin
-#   using ThDivisionRing
-#   using ThCRing
-# end
+# using two theories which overlap considerably, we can still add unique elem 
+@theory ThField begin
+  using ThDivisionRing
+  using ThCRing
+end
 
 @theory ThRig begin
   using ThCMonoid: ⋅ as +, e as zero

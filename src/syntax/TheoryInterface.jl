@@ -139,7 +139,6 @@ function expand_theory(parentname, body, __module__)
   end
   for line in body.args
     @match line begin
-      # repeated code
       Expr(:using, Expr(:(:), Expr(:(.), other), renames...)) => begin
         othertheory = macroexpand(__module__, :($other.Meta.@theory))
         rename_dict = merge(map(renames) do expr
@@ -170,17 +169,22 @@ function theory_impl(head, body, __module__)
   parent = expand_theory(parentname, body, __module__)
 
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
-  newsegment = theory.segments.scopes[end]
+  newsegment = theory.segments.scopes[end] # TODO unused?
 
   lines = Any[]
   newnames = Symbol[]
 
-  for binding in newsegment
-    judgment = getvalue(binding)
-    bname = nameof(binding)
-    if judgment isa Union{AlgDeclaration, Alias}
-      push!(lines, juliadeclaration(bname))
-      push!(newnames, bname)
+  # XXX "for binding in segment" was "... in newsegment", and I wrapped this
+  # in a for-loop for segments. This was done to debug an issue with ModelInterface
+  # where the `default` function was not being declared.
+  for segment in theory.segments.scopes
+    for binding in segment
+      judgment = getvalue(binding)
+      bname = nameof(binding)
+      if judgment isa Union{AlgDeclaration, Alias}
+        push!(lines, juliadeclaration(bname))
+        push!(newnames, bname)
+      end
     end
   end
 
