@@ -693,6 +693,8 @@ macro migrate(head)
     typecheck=false
   )
 
+  # TODO we are deriving using the model
+  @info instance_code
   quote
     struct $(esc(name)) <: $model_expr
       model :: $(esc(modelname))

@@ -40,6 +40,14 @@ retag(reps::Dict{ScopeTag, ScopeTag}, t::MethodApp{T}) where {T} =
     retag.(Ref(reps), t.args)
   )
 
+reident(reps::Dict{Ident}, t::MethodApp{T}) where {T} =
+  MethodApp{T}(
+    reident(reps, t.head),
+    reident(reps, t.method),
+    reident.(Ref(reps), t.args)
+  )
+
+
 abstract type AlgAST end
 
 bodyof(t::AlgAST) = t.body
@@ -78,6 +86,9 @@ rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
 
 retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
 
+reident(reps::Dict{Ident}, t::AlgTerm) =
+  AlgTerm(reident(reps, t.body))
+
 """
 `Eq`
 
@@ -91,6 +102,8 @@ retag(reps::Dict{ScopeTag, ScopeTag}, eq::Eq) = Eq(retag.(Ref(reps), eq.equands)
 
 rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, eq::Eq) =
   Eq(retag.(Ref(tag), Ref(reps), eq.equands))
+
+reident(reps::Dict{Ident}, eq::Eq) = Eq(reident.(Ref(reps), eq.equands))
 
 """
 `AlgType`
@@ -126,6 +139,8 @@ retag(reps::Dict{ScopeTag,ScopeTag}, t::AlgType) =
 
 rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::AlgType) =
   AlgType(rename(tag, reps, t.body))
+
+reident(reps::Dict{Ident}, t::AlgType) = AlgType(reident(reps, t.body))
 
 """
 Common methods for AlgType and AlgTerm
@@ -180,6 +195,10 @@ end
 Base.nameof(sort::AlgSort) = nameof(sort.head)
 
 getdecl(s::AlgSort) = s.head
+
+function reident(reps::Dict{Ident}, a::AlgSort)
+  AlgSort(reident(reps, a.head), reident(reps, a.method))
+end
 
 # Type Contexts
 ###############

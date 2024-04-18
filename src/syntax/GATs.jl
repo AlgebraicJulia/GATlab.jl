@@ -6,12 +6,13 @@ export Constant, AlgTerm, AlgType, AlgAST,
   GATSegment, GAT, GATContext, gettheory, gettypecontext, allmethods, resolvemethod,
   termcons,typecons, accessors,
   equations, build_infer_expr, compile, sortcheck, allnames, sorts, sortname,
-  InCtx, TermInCtx, TypeInCtx, headof, argsof, methodof, bodyof, argcontext
+  InCtx, TermInCtx, TypeInCtx, headof, argsof, methodof, bodyof, argcontext,
+  MethodApp, MethodResolver
 
 using ..Scopes
 import ..ExprInterop: fromexpr, toexpr
 
-import ..Scopes: retag, rename
+import ..Scopes: retag, rename, reident
 
 using StructEquality
 using MLStyle

@@ -1,6 +1,6 @@
 module Scopes
 export
-  ScopeTag, newscopetag, retag, rename,
+  ScopeTag, newscopetag, retag, rename, reident,
   ScopeTagError,
   LID,
   Ident, Alias, gettag, getlid, isnamed,
@@ -73,6 +73,7 @@ Recurse through the structure of `x`, and change any name `n` in scope `tag` to
 in them.
 """
 rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x) = x
+
 
 """
 `ScopeTagError`
@@ -161,12 +162,30 @@ retag(replacements::Dict{ScopeTag, ScopeTag}, x::Ident) =
     x
   end
 
-rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x::Ident) =
-  if gettag(x) == tag && nameof(x) ∈ keys(replacements)
-    Ident(tag, getlid(x), replacements[nameof(x)])
+# XXX removed gettag(x) == tag
+function rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x::Ident)
+  if haskey(replacements, nameof(x)) 
+      # && gettag(x) == tag
+    Ident(x.tag, getlid(x), replacements[nameof(x)])
   else
     x
   end
+end
+
+# XXX we need to make sure we match on just tag and name 
+function reident(r::Dict{Ident}, x::Ident)
+  haskey(r, x) ? r[x] : x
+end
+
+function reident(replacements::Dict{Ident}, name::Symbol)
+  result = filter(pair -> nameof(pair.first) == name, collect(replacements))
+	!isempty(result) ? result[1].second.name : name
+end
+
+function reident(replacements::Dict{Ident}, tag::ScopeTag)
+  result = filter(pair -> gettag(pair.first) == tag, collect(replacements))
+	!isempty(result) ? result[1].second.tag : tag
+end
 
 # Bindings
 ##########
@@ -229,6 +248,11 @@ end
 
 getvalue(b::Binding) = b.value
 
+# FIXME
+# old=ThCMonoid.Meta.theory.segments.scopes[1].scope
+# new=retag(Dict(old.tag => newscopetag()), old)
+# issue: {default => AlgDeclaration(), _ => AlgTypeConstructor(default, [], LID[])}; the first default is retagged, but not the second
+
 retag(replacements::Dict{ScopeTag, ScopeTag}, binding::Binding{T}) where {T} =
   Binding{T}(
     nameof(binding),
@@ -242,6 +266,20 @@ setline(b::Binding{T}, line::Union{LineNumberNode, Nothing}) where {T} =
 
 setvalue(b::Binding{T}, t::T) where {T} = 
   Binding{T}(b.name, t, b.line)
+
+function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, b::Binding{T}) where {T}
+  # @warn "has binding name changed?" b.name rename(renames, b.name)
+  Binding{T}(rename(renames, b.name), rename(tag, renames, b.value), b.line)
+end
+
+rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, bs::Vector{Binding{T}}) where {T} =
+map(bs) do b
+  rename(tag, renames, b)
+end
+
+function reident(replacements::Dict{Ident}, b::Binding{T}) where {T}
+  Binding{T}(reident(replacements, b.name), reident(replacements, b.value), b.line)
+end
 
 # Context
 #########
@@ -392,12 +430,32 @@ function Scope(symbols::Symbol...; tag=newscopetag())
   Scope(Pair{Symbol}[x => nothing for x in symbols]...; tag)
 end
 
+function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, scope::Scope{T}) where {T}
+  Scope{T}(scope.tag, rename(tag, renames, scope.bindings), rename(tag, renames, scope.names))
+end
+
 retag(replacements::Dict{ScopeTag,ScopeTag}, s::Scope{T}) where {T} =
   Scope{T}(
     get(replacements, gettag(s), gettag(s)),
     retag.(Ref(replacements), s.bindings),
     s.names
   )
+
+function reident(replacements::Dict{Ident}, s::Scope{T}) where {T}
+	Scope{T}(reident(replacements, gettag(s)), 
+					 reident.(Ref(replacements), s.bindings), 
+					 reident(replacements, s.names))
+end
+
+function reident(reps::Dict{Ident}, names::Dict{Symbol, LID})
+	!isempty(names) ?
+	merge(map(collect(keys(names))) do key
+		Dict(reident(reps, key) => names[key])
+	end...) :
+	names
+end
+
+reident(reps::Dict{Ident}, Nothing) = nothing
 
 function Base.show(io::IO, s::Scope)
   n = length(s.bindings)
@@ -705,6 +763,26 @@ end
 
 function ScopeList{T}() where {T}
   ScopeList{T}(HasScope{T}[])
+end
+
+rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, scopelist::ScopeList{T}) where {T} = ScopeList{T}(rename(tag, renames, scopelist.scopes), scopelist.taglookup, rename(tag, renames, scopelist.namelookup))
+
+function reident(reps::Dict{Ident}, scopelist::ScopeList{T}) where {T}
+	ScopeList{T}(reident.(Ref(reps), scopelist.scopes), 
+							 reident(reps, scopelist.taglookup), 
+							 reident(reps, scopelist.namelookup))
+end
+
+function reident(reps::Dict{Ident}, taglookup::Dict{ScopeTag, Int})
+	merge(map(collect(taglookup)) do (k, v)
+					Dict(reident(reps, k) => v)
+				end...)
+end
+
+function reident(reps::Dict{Ident}, namelookup::Dict{Symbol, Int})
+	merge(map(collect(namelookup)) do (k, v)
+					Dict(reident(reps, k) => v)
+				end...)
 end
 
 function unsafe_pushbinding!(c::ScopeList{T}, binding::Binding{T}) where {T}

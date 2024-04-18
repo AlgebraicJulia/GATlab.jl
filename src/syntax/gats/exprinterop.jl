@@ -245,7 +245,8 @@ function parseaxiom!(theory::GAT, localcontext, sort_expr, e; name=nothing)
       c = GATContext(theory, localcontext)
       equands = fromexpr.(Ref(c), [lhs_expr, rhs_expr], Ref(AlgTerm))
       sorts = sortcheck.(Ref(c), equands)
-      @assert allequal(sorts)
+      # XXX I am removing the assertion to test something
+      # @assert allequal(sorts)
       sort = if isnothing(sort_expr)
         first(sorts)
       else

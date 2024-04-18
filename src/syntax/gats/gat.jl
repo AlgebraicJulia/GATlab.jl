@@ -14,6 +14,14 @@ GATSegment() = GATSegment(Scope{Judgment}())
 
 Scopes.getscope(seg::GATSegment) = seg.scope
 
+function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, segment::GATSegment)
+  GATSegment(rename(tag, renames, segment.scope))
+end
+
+function reident(reps::Dict{Ident}, segment::GATSegment)
+  GATSegment(reident(reps, segment.scope))
+end
+
 """
 `MethodResolver`
 
@@ -42,6 +50,34 @@ function resolvemethod(m::MethodResolver, sig::AlgSorts)
 end
 
 allmethods(m::MethodResolver) = pairs(m.bysignature)
+
+function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, m::MethodResolver)
+  MethodResolver(rename(tag, renames, m.bysignature))
+end
+
+function reident(reps::Dict{Ident}, m::MethodResolver)
+  MethodResolver(reident(reps, m.bysignature))
+end
+
+function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, bysignature::Dict{AlgSorts, Ident})
+  if length(bysignature) == 0
+    bysignature
+  else
+    merge(map(collect(bysignature)) do (algsorts, ident)
+      Dict(rename(tag, renames, algsorts) => rename(tag, renames, ident))
+    end...)
+  end
+end
+
+function reident(reps::Dict{Ident}, bysignature::Dict{AlgSorts, Ident})
+  if length(bysignature) == 0
+    bysignature
+  else
+    merge(map(collect(bysignature)) do (algsorts, ident)
+      Dict(reident.(Ref(reps), algsorts) => reident(reps, ident))
+    end...)
+  end
+end
 
 """
 `GAT`
@@ -85,6 +121,72 @@ function GAT(name::Symbol)
   )
 end
 
+Base.isempty(T::GAT) = T.name == :_EMPTY
+
+# """ 
+# `idents(T::GAT) : Vector{Ident}`
+
+# """
+# function idents(T::GAT)
+#   Iterators.flatten(map(getidents.(T.segments.scopes)) do idents
+#     filter(x -> !isnothing(x.name), idents)
+#   end) |> collect
+# end
+
+function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, gat::GAT)
+  GAT(gat.name, rename(tag, renames, gat.segments), rename(tag, renames, gat.resolvers), rename(tag, renames, gat.sorts), gat.accessors, gat.axioms) 
+end
+
+function reident(reps::Dict{Ident}, gat::GAT)
+  GAT(gat.name, 
+      reident(reps, gat.segments),
+      reident(reps, gat.resolvers),
+      reident.(Ref(reps), gat.sorts),
+      gat.accessors,
+      # TODO do we need? reident(reps, gat.accessors),
+      reident.(Ref(reps), gat.axioms))
+end
+
+function rename(tag::ScopeTag, renames::Dict{Symbol, Symbol}, resolvers::OrderedDict{Ident, MethodResolver})
+  if length(resolvers)==0
+    resolvers
+  else
+    merge(map(collect(resolvers)) do (r,m)
+      Dict(rename(tag, renames, r) => rename(tag, renames, m))
+    end...)
+  end
+end
+
+function reident(reps::Dict{Ident}, resolvers::OrderedDict{Ident, MethodResolver})
+  if length(resolvers)==0
+    resolvers
+  else
+    merge(map(collect(resolvers)) do (r, m)
+      Dict(reident(reps, r) => reident(reps, m))
+    end...)
+  end
+end
+
+function reident(reps::Dict{Ident}, d::Dict{Int64, Ident})
+  if length(d) == 0
+    d
+  else
+    merge(map(collect(d)) do (k, v)
+      Dict(k => reident(reps, v))
+    end...)
+  end
+end
+
+## TODO current reidenting accessors in GATs is suppressed because we need to expose OrderedCollections
+function _reident(reps::Dict{Ident}, accessors::OrderedDict{Ident, Dict{Int64, Ident}})
+  if length(accessors) == 0
+    accessors
+  else
+    merge(map(collect(accessors)) do (i, d)
+      OrderedDict{Ident, Dict{Int64, Ident}}(reident(reps, i), reident(reps, d))
+    end...)
+  end
+end
 
 # Mutators which should only be called during construction of a theory
 

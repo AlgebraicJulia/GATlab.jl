@@ -9,19 +9,9 @@ end
   default::TYPE
 end
 
-@theory TheMagma begin
-  using ThSet
-  (x ⋅ y) :: default ⊣ [x, y]
-end
-
 @theory ThMagma begin
   using ThSet
   (x ⋅ y) :: default ⊣ [x, y]
-end
-
-@theory TheSemiGroup begin
-  using TheMagma
-  (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
 end
 
 @theory ThSemiGroup begin
@@ -29,20 +19,6 @@ end
   (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
 end
 
-@theory TheMonoid begin
-  using TheSemiGroup
-  e() :: default
-  e() ⋅ x == x ⊣ [x]
-  x ⋅ e() == x ⊣ [x]
-end
-# ERROR: LoadError: UndefVarError: `default` not defined
-# Stacktrace:
-#   [1] getproperty(x::Module, f::Symbol)
-#     @ Base ./Base.jl:31
-#   [2] macro expansion
-#     @ ~/Documents/UFAJ/AlgebraicJulia/GATlab/GATlab.jl/src/models/ModelInterface.jl:701 [inlined]
-#   [3] top-level scope
-#     @ ~/Documents/UFAJ/AlgebraicJulia/GATlab/GATlab.jl/src/stdlib/derivedmodels/DerivedModels.jl:12
 @theory ThMonoid begin
   using ThSemiGroup
   e() :: default
@@ -50,60 +26,93 @@ end
   x ⋅ e() == x ⊣ [x]
 end
 
-@theory TheGroup begin
-  using TheMonoid
+@theory ThGroup begin
+  using ThMonoid
   i(x) :: default ⊣ [x]
   i(x) ⋅ x == e() ⊣ [x]
   x ⋅ i(x) == e() ⊣ [x]
 end
 
-@theory ThGroup <: ThMonoid begin
-  i(x) :: default ⊣ [x]
-  i(x) ⋅ x == e() ⊣ [x]
-  x ⋅ i(x) == e() ⊣ [x]
+# TODO if I instead write "a" and "b" for "x" and "y", I think GATlab should coerce "a" and "b" to be "x" and "y"
+# it could do this by going into the args for all the axioms, determining the terms per TYPE, i.e.
+# DEFAULT: [x,y,z]
+@theory ThCMonoid begin
+  using ThMonoid
+  x ⋅ y == y ⋅ x ⊣ [x, y]
 end
 
-@theory TheCMonoid begin
-  using TheMonoid
-  a ⋅ b == b ⋅ a ⊣ [a, b]
-end
-
-@theory ThCMonoid <: ThMonoid begin
-  a ⋅ b == b ⋅ a ⊣ [a, b]
-end
-
-@theory ThAb <: ThMonoid begin
+@theory ThAb begin
   using ThGroup
   using ThCMonoid
 end
 
-# @theory ThRing <: ThSet begin
-#   using ThAb: ⋅ as +, i as -, e as zero
-#   using ThMonoid: ⋅ as *, e as one
-#   a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
+@theory ThSemiRing begin
+  using ThCMonoid: ⋅ as +, e as zero
+  using ThMonoid: ⋅ as *, e as one
+  x * (y + z) == (x * y) + (x * y) ⊣ [x,y,z]
+end
+
+# A ring can be obtained from a semiring by including additive inverse, or this way:
+@theory ThRing begin
+  using ThAb: ⋅ as +, i as -, e as zero
+  using ThMonoid: ⋅ as *, e as one
+  x * (y + z) == (x * y) + (x * y) ⊣ [x,y,z]
+end
+
+@theory ThCRing begin
+  using ThRing
+  x * y == y * x ⊣ [x,y]
+end
+
+@theory ThBooleanRing begin
+  using ThCRing
+  x * x == x ⊣ [x]
+end
+
+""" 
+
+ - Quarternions
+
+"""
+@theory ThDivisionRing begin
+  using ThRing
+  i(x) :: default ⊣ [x]
+  i(x) * x == one() ⊣ [x]
+  x * i(x) == one() ⊣ [x]
+end
+
+@theory ThIntegralDomain begin
+  using ThCRing
+  nonzero::TYPE
+  # using ThCRing: default as nonzero
+  x * y == z ⊣ [x::default, y::default, z::nonzero]
+end
+
+# @theory ThField begin
+#   using ThDivisionRing
+#   using ThCRing
 # end
 
-# @theory ThCRing <: ThRing begin
-#   a * b == b * a ⊣ [a,b]
-# end
+@theory ThRig begin
+  using ThCMonoid: ⋅ as +, e as zero
+  using ThMonoid: ⋅ as *, e as one
+  a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
+end
 
-# @theory ThRig <: ThSet begin
-#   using ThCMonoid: ⋅ as +, e as zero
-#   using ThMonoid: ⋅ as *, e as one
-#   a * (b + c) == (a * b) + (a * c) ⊣ [a,b,c]
-# end
+@theory ThCRig begin
+  using ThRig
+  a * b == b * a ⊣ [a,b]
+end
 
-# @theory ThCRig <: ThRig begin
-#   a * b == b * a ⊣ [a,b]
-# end
 
-# @theory ThElementary <: ThCRing begin
-#   sin(x) ⊣ [x]
-#   cos(x) ⊣ [x]
-#   tan(x) ⊣ [x]
-#   exp(x) ⊣ [x]
-#   sigmoid(x) ⊣ [x]
-# end
+@theory ThElementary begin
+  using ThCRing
+  sin(x) ⊣ [x]
+  cos(x) ⊣ [x]
+  tan(x) ⊣ [x]
+  exp(x) ⊣ [x]
+  sigmoid(x) ⊣ [x]
+end
 
 @theory ThPreorder <: ThSet begin
   Leq(dom, codom)::TYPE ⊣ [dom, codom]
@@ -112,3 +121,14 @@ end
   trans(f::Leq(p,q),g::Leq(q,r))::Leq(p,r)  ⊣ [p,q,r]
   irrev := f == g ⊣ [p,q, (f,g)::Leq(p,q)]
 end
+
+# @theory ThKleene begin
+#   using ThPreorder
+#   using ThSemiRing
+#   x + x == x ⊣ [x]
+#   ⋆(x)::default
+#   1 + ⋆(x)*x ≤ ⋆(x) ⊣ [x]
+#   1 + x*⋆(x) ≤ ⋆(x) ⊣ [x]
+
+
+
