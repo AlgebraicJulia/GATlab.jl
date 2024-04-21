@@ -100,8 +100,7 @@ function makeidentdict(host::GAT, guest::GAT, renames::Dict{Symbol})
   merge(map(collect(keys(renames))) do old
     new = renames[old] 
     tag = haskey(host, new) ? host[new] : newscopetag()
-    # TODO get lid
-    Dict(Ident(guest[old], LID(1), old) => Ident(tag, LID(1), new))
+    Dict(Ident(guest[old], LID(1), old) => Ident(tag, LID(1), new)) # TODO get lid
   end...) 
 end
 
@@ -110,7 +109,7 @@ function usetheory!(host::GAT, guest::GAT, renames::Dict{Symbol}=Dict{Symbol,Sym
   if !isempty(renames)
     guest = reident(makeidentdict(host, guest, renames), guest)
   end
-  
+
   for segment in guest.segments.scopes
     if !hastag(host, gettag(segment))
       GATs.unsafe_pushsegment!(host, segment)
@@ -213,7 +212,7 @@ function theory_impl(head, body, __module__)
     macro theory_module() parentmodule(@__MODULE__) end
   end)))
 
-
+  # FIXME accidentally deprecated this. need to fix.
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
   esc(

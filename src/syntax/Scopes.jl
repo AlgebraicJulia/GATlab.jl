@@ -177,6 +177,11 @@ function reident(r::Dict{Ident}, x::Ident)
   haskey(r, x) ? r[x] : x
 end
 
+### TODO get tag
+function reident(s::ScopeTag, x::Ident)
+  retag(Dict(gettag(x) => s), x)
+end
+
 function reident(replacements::Dict{Ident}, name::Symbol)
   result = filter(pair -> nameof(pair.first) == name, collect(replacements))
 	!isempty(result) ? result[1].second.name : name

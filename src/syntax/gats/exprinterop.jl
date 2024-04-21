@@ -217,7 +217,6 @@ end
 function fromexpr(p::GATContext, e, ::Type{TypeScope})
   ts = TypeScope()
   c = AppendContext(p, ts)
-  # @info "HEY!!!" p e 
   parse_scope!(ts.scope, e.args) do pushbinding!, arg
     parse_binding_expr!(c, pushbinding!, arg)
   end

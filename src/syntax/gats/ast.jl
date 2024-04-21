@@ -40,13 +40,15 @@ retag(reps::Dict{ScopeTag, ScopeTag}, t::MethodApp{T}) where {T} =
     retag.(Ref(reps), t.args)
   )
 
-reident(reps::Dict{Ident}, t::MethodApp{T}) where {T} =
+# TODO can we make this more elegant?
+function reident(reps::Dict{Ident}, t::MethodApp{T}) where {T}
+  head = reident(reps, t.head)
   MethodApp{T}(
-    reident(reps, t.head),
-    reident(reps, t.method),
+    head,
+    retag(Dict(t.head.tag => head.tag), t.method),
     reident.(Ref(reps), t.args)
   )
-
+end
 
 abstract type AlgAST end
 
@@ -140,7 +142,9 @@ retag(reps::Dict{ScopeTag,ScopeTag}, t::AlgType) =
 rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::AlgType) =
   AlgType(rename(tag, reps, t.body))
 
-reident(reps::Dict{Ident}, t::AlgType) = AlgType(reident(reps, t.body))
+function reident(reps::Dict{Ident}, t::AlgType)
+  AlgType(reident(reps, t.body))
+end
 
 """
 Common methods for AlgType and AlgTerm
@@ -197,7 +201,11 @@ Base.nameof(sort::AlgSort) = nameof(sort.head)
 getdecl(s::AlgSort) = s.head
 
 function reident(reps::Dict{Ident}, a::AlgSort)
-  AlgSort(reident(reps, a.head), reident(reps, a.method))
+  newhead = reident(reps, a.head)
+  newmethod = retag(Dict(a.head.tag => newhead.tag), a.method)
+  AlgSort(newhead, newmethod) 
+  # AlgSort(reident(reps, a.head), reident(reps, a.method))
+  # TODO the method should just inherit the tag in the head?
 end
 
 # Type Contexts

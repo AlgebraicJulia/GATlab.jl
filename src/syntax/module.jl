@@ -8,7 +8,6 @@ include("GATs.jl")
 include("GATContexts.jl")
 include("TheoryInterface.jl")
 include("TheoryMaps.jl")
-include("Rename.jl")
 
 @reexport using .Scopes
 @reexport using .ExprInterop
@@ -16,6 +15,5 @@ include("Rename.jl")
 @reexport using .GATContexts
 @reexport using .TheoryInterface
 @reexport using .TheoryMaps
-@reexport using .Rename
 
 end

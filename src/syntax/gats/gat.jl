@@ -55,10 +55,6 @@ function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, m::MethodResolver)
   MethodResolver(rename(tag, renames, m.bysignature))
 end
 
-function reident(reps::Dict{Ident}, m::MethodResolver)
-  MethodResolver(reident(reps, m.bysignature))
-end
-
 function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, bysignature::Dict{AlgSorts, Ident})
   if length(bysignature) == 0
     bysignature
@@ -69,11 +65,35 @@ function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, bysignature::Dict{A
   end
 end
 
-function reident(reps::Dict{Ident}, bysignature::Dict{AlgSorts, Ident})
+function reident(reps::Dict{Ident}, key::Ident, m::MethodResolver)
+  MethodResolver(reident(reps, key, m.bysignature))
+end
+
+# the [] => #2 dict entry is not being reidented because we don't have #2 in our reident dictionary.
+# we will need to pass the tag for the key in {Ident, MethodResolver} to the value, MethodResolver
+# XXX sort of close
+function reident(reps::Dict{Ident}, key::Ident, bysignature::Dict{AlgSorts, Ident})
   if length(bysignature) == 0
     bysignature
   else
     merge(map(collect(bysignature)) do (algsorts, ident)
+      @match algsorts begin
+        [] => Dict(reident.(Ref(reps), algsorts) => reident(gettag(key), ident))
+        _  => Dict(reident.(Ref(reps), algsorts) => reident(reps, ident))
+      end
+    end...)
+  end
+end
+
+function _reident(reps::Dict{Ident}, bysignature::Dict{AlgSorts, Ident})
+  @info "CHECKING IF BYSIGNATURE CHANGE IS TRIGGERED FOR ALGDECLARATION" bysignature
+  if length(bysignature) == 0
+    bysignature
+  else
+    # XXX this makes the correct tags
+    merge(map(collect(bysignature)) do (algsorts, ident)
+      @info "WHAT WILL WE REIDENT" (algsorts, ident)
+      @info "DEBUGGING ALGSORTS: " reident.(Ref(reps), algsorts) reident(reps, ident)
       Dict(reident.(Ref(reps), algsorts) => reident(reps, ident))
     end...)
   end
@@ -138,12 +158,12 @@ function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, gat::GAT)
 end
 
 function reident(reps::Dict{Ident}, gat::GAT)
+  # @info "GAT DEBUG" reps reident(reps, gat.resolvers)
   GAT(gat.name, 
       reident(reps, gat.segments),
       reident(reps, gat.resolvers),
       reident.(Ref(reps), gat.sorts),
-      gat.accessors,
-      # TODO do we need? reident(reps, gat.accessors),
+      reident(reps, gat.accessors),
       reident.(Ref(reps), gat.axioms))
 end
 
@@ -162,7 +182,9 @@ function reident(reps::Dict{Ident}, resolvers::OrderedDict{Ident, MethodResolver
     resolvers
   else
     merge(map(collect(resolvers)) do (r, m)
-      Dict(reident(reps, r) => reident(reps, m))
+      key = reident(reps, r)
+      Dict(key => reident(reps, key, m))
+      # Dict(reident(reps, r) => reident(reps, m)) # reident(reps, m)
     end...)
   end
 end
@@ -177,13 +199,12 @@ function reident(reps::Dict{Ident}, d::Dict{Int64, Ident})
   end
 end
 
-## TODO current reidenting accessors in GATs is suppressed because we need to expose OrderedCollections
-function _reident(reps::Dict{Ident}, accessors::OrderedDict{Ident, Dict{Int64, Ident}})
+function reident(reps::Dict{Ident}, accessors::OrderedDict{Ident, Dict{Int64, Ident}})
   if length(accessors) == 0
     accessors
   else
     merge(map(collect(accessors)) do (i, d)
-      OrderedDict{Ident, Dict{Int64, Ident}}(reident(reps, i), reident(reps, d))
+      Dict(reident(reps, i) => reident(reps, d))
     end...)
   end
 end
@@ -199,16 +220,19 @@ function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgDeclaration)
 end
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgTermConstructor)
+  # @info "ATermC" judgment getdecl(judgment) argsof(judgment) getvalue.(argsof(judgment)) sortsignature(judgment) x
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
 end
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgTypeConstructor)
+  # @info "ATypeC" judgment getdecl(judgment) sortsignature(judgment) x
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
   push!(theory.sorts, AlgSort(getdecl(judgment), x))
   theory.accessors[x] = Dict{Int, Ident}()
 end
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgAccessor)
+  # @info "AccessorC" getdecl(judgment) sortsignature(judgment) x
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
   theory.accessors[judgment.typecon][judgment.arg] = x
 end
@@ -230,6 +254,7 @@ end
 function unsafe_pushsegment!(theory::GAT, segment::GATSegment)
   Scopes.unsafe_pushscope!(theory.segments, segment)
   for (x, judgment) in identvalues(segment)
+    # @info "What is being pushed" x judgment identvalues(segment) 
     unsafe_updatecache!(theory, x, judgment)
   end
   segment
@@ -315,6 +340,23 @@ Scopes.AppendContext(c::GATContext, context::Context{AlgType}) =
 
 function methodlookup(c::GATContext, x::Ident, sig::AlgSorts)
   theory = c.theory
+  if theory.name == :ThTuple
+    @info theory.name
+    @info "DEBUG: SIG" theory.resolvers[x].bysignature sig haskey(theory.resolvers[x].bysignature, sig) sig∈keys(theory.resolvers[x].bysignature)
+  end
+  # note: in
+  #   @theory ThTuple begin
+  #     using ThMagma: default as M
+  #
+  #     x ⋅ (y ⋅ z) == ((x ⋅ y) ⋅ z) ⊣ [(x,y,z)::M]
+  #   end
+  #
+  #   issue:
+  #     Dict([AlgSort(Ma, #2b), AlgSort(M, #2b)] => #2c)
+  #     sig = [AlgSort(Ma, #2a), AlgSort(Ma, #2a)]
+  #
+  #     The 
+  #
   if haskey(theory.resolvers, x) && haskey(theory.resolvers[x].bysignature, sig)
     resolvemethod(theory.resolvers[x], sig)
   else
