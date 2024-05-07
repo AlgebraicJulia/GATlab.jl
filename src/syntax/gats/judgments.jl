@@ -120,6 +120,7 @@ A declaration of an axiom
   equands::Vector{AlgTerm}
 end
 
+Scopes.getcontext(ax::AlgAxiom) = ax.localcontext
 
 """
 `AlgSorts`
