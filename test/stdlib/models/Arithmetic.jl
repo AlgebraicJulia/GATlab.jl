@@ -3,6 +3,14 @@ module TestArithmetic
 using GATlab
 using Test
 
+# Peano arithmetic
+# -----------------------------
+# using .ThNat
+
+# @withmodel IntNat() (ℕ, Z, S) begin
+#   @test S(S(Z())) == 2
+# end
+
 # Integers as model of naturals
 #------------------------------
 using .ThNatPlus
@@ -15,10 +23,9 @@ end
 #--------------------------------------
 using .ThMonoid
 
-IM = IntMonoid(IntNatPlus())
-@withmodel IM (e) begin
+@withmodel IntMonoid (e) begin
   @test e() == 0
-  @test (ThMonoid.:(⋅)[IM])(3, 4) == 7
+  @test (ThMonoid.:(⋅)[IntMonoid])(3, 4) == 7
 end
 
 # Integers as preorder
@@ -34,13 +41,23 @@ end
 # Now using category interface
 
 using .ThCategory
-M = IntPreorderCat(IntPreorder())
 
-@withmodel M (Hom, id, compose) begin
+@withmodel IntPreorderCat (Hom, id, compose) begin
   @test compose((1,3), (3,5)) == (1,5)
   @test_throws TypeCheckFail Hom((5,3), 5, 3)
   @test_throws ErrorException compose((1,2), (3,5))
   @test id(2) == (2,2)
+end
+
+# Ring of integers
+# --------------------
+using .ThRing
+import .ThRing: zero, one, -, +, *
+
+@withmodel ZRing() (zero, one, -, +, *) begin
+  @test 1 + 2 == 3
+  @test 1 - 1 == 0
+  @test 2 * (1 + 1) == 4
 end
 
 end # module 

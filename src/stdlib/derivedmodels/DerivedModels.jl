@@ -1,5 +1,5 @@
 module DerivedModels
-# export OpFinSetC, IntMonoid, IntPreorderCat
+export OpFinSetC, IntMonoid, IntPreorderCat
 
 using ....Models
 using ...StdTheoryMaps
@@ -9,9 +9,9 @@ using ...StdModels
 @migrate OpFinSetC = OpCat(FinSetC)
 
 # Interpret `e` as `0` and `⋅` as `+`.
-# @migrate IntMonoid = NatPlusMonoid(IntNatPlus)
+@migrate IntMonoid = NatPlusMonoid(IntNatPlus)
 
 # Interpret `id` as reflexivity and `compose` as transitivity.
-# @migrate IntPreorderCat = PreorderCat(IntPreorder)
+@migrate IntPreorderCat = PreorderCat(IntPreorder)
 
 end

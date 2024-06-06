@@ -44,6 +44,7 @@ Base.getindex(tc::TrmTypConstructor, lid::LID) = getindex(tc.localcontext, lid)
 
 Base.getindex(tc::TrmTypConstructor, lids::AbstractVector{LID}) = getindex(tc.localcontext, lids)
 
+# TODO: make a judgment which is a subtheory judgment
 """
 `AlgDeclaration`
 

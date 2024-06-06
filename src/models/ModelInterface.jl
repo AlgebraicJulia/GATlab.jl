@@ -548,23 +548,27 @@ end
 macro withmodel(model, subsexpr, body)
   modelvar = gensym("model")
 
+  # e.g., (ℕ, Z, S) => [ℕ, Z, S]
   subs = @match subsexpr begin
     Expr(:tuple, subs...) => [subs...]
     sub::Symbol => [sub]
   end
 
+  # gensym these subs
   subvars = gensym.(subs) # e.g. #25compose to avoid global method overloading
 
+  # set gensym(ℕ) = ℕ, etc.
   subvardefs = [
     Expr(:(=), var, sub)
     for (sub, var) in zip(subs, subvars)
   ]
 
+  # set ℕ = (args...; kwargs...) -> gensym(ℕ)(MyModel, args...; kwargs...) 
   subdefs = [
     Expr(:(=), sub, :((args...;kwargs...) -> $var($modelvar, args...;kwargs...)))
     for (sub, var) in zip(subs, subvars)
-  ]
- 
+  ] 
+
   esc(
     Expr(:let,
       Expr(:block, :($modelvar = $(Expr(:call, TheoryInterface.WithModel, model))), subvardefs...),

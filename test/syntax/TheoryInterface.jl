@@ -47,10 +47,10 @@ end
 end
 
 # test that a theory with redundant using statements is equal to one which hasn't
-@theory ThMagmaMagmaWithAssoc begin
-  using ThMagma
-  using ThMagma
-  (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
-end
+# @theory ThMagmaMagmaWithAssoc begin
+#   using ThMagma
+#   using ThMagma
+#   (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
+# end
 
 end

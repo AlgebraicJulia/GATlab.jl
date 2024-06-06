@@ -9,12 +9,14 @@ import Base: +
   S(n::ℕ) :: ℕ
 end
 
-@theory ThNatPlus <: ThNat begin
+@theory ThNatPlus begin
+  using ThNat
   ((x::ℕ) + (y::ℕ))::ℕ
   (n + S(m) == S(n+m) :: ℕ) ⊣ [n::ℕ,m::ℕ]
 end
 
-@theory ThNatPlusTimes <: ThNatPlus begin
+@theory ThNatPlusTimes begin
+  using ThNatPlus
   ((x::ℕ) * (y::ℕ))::ℕ
   (n * S(m) == ((n * m) + n)) ⊣ [n::ℕ,m::ℕ]
 end

@@ -1,5 +1,7 @@
-export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThRing,
-  ThCRing, ThRig, ThCRig, ThElementary, ThPreorder
+export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThSemiRing, ThRing,
+  ThCRing, ThBooleanRing, ThDivisionRing, ThField, ThCRig, ThElementary, ThPreorder, ThMod, ThCommRMod
+
+import Base: +, *
 
 @theory ThEmpty begin
 end
@@ -7,7 +9,6 @@ end
 @theory ThSet begin
   default::TYPE
 end
-
 
 @theory ThMagma begin
   using ThSet
@@ -60,9 +61,12 @@ Examples:
   x * (y + z) == (x * y) + (x * y) ⊣ [x,y,z]
 end
 
+# TODO test theory equality
 @theory ThRig begin
   using ThSemiRing
 end
+
+import Base: zero, one
 
 """ The theory of a ring
 
@@ -126,7 +130,8 @@ end
 #   x * y == z ⊣ [x::nonzero, y::nonzero, z::nonzero]
 # end
 
-# using two theories which overlap considerably, we can still add unique elem 
+# using two theories which overlap considerably, we can still add unique elem
+# best to export default as K or something
 """ The theory of a commutative division ring
 
  - The rational numbers ℚ and algebraic extensions, i.e. ℚ[√2]
@@ -171,133 +176,63 @@ end
 #   1 + x*⋆(x) ≤ ⋆(x) ⊣ [x]
 
 
-# ALGEBRA OVER TWO SETS
+# THEORIES OVER TWO SORTS
 
-# using two plus signs, oops! can we overload plus signs?
-@theory ThModule begin
+# @theory ThMod begin 
+#   using ThAb: default as M =turnsinto=> import ThAb; @op M := ThAb.default
+# end
+
+# TODO this is a left module
+@theory ThMod begin
   using ThAb: default as M, ⋅ as ⊕
-  using ThRing: default as R, one as unit 
-  
-  (r ⋅ a) :: M ⊣ [r::R, a::M]
-  (r ⋅ (a ⊕ b)) == ((r ⋅ a) ⊕ (r ⋅ b)) ⊣ [r::R, a::M, b::M]
-  ((r + s) ⋅ a) == ((r ⋅ a) ⊕ (s ⋅ a)) ⊣ [r::R, s::R, a::M]
-  (r*s) ⋅ a == r ⋅ (s ⋅ a) ⊣ [r::R, s::R, a::M]
-  unit ⋅ a == a ⊣ [unit::R, a::M]
+  using ThRing: default as R, one as unit  
+  (r ⋅ a) :: M ⊣ [r::R, a::M]                               # R-actions
+  (r ⋅ (a ⊕ b)) == ((r ⋅ a) ⊕ (r ⋅ b)) ⊣ [r::R, a::M, b::M] # R-action left-distributes
+  ((r + s) ⋅ a) == ((r ⋅ a) ⊕ (s ⋅ a)) ⊣ [r::R, s::R, a::M] # addition of R-actions 
+  (r * s) ⋅ a == r ⋅ (s ⋅ a) ⊣ [r::R, s::R, a::M]           # composition of R-action
+  unit ⋅ a == a ⊣ [unit::R, a::M]                           # unit 
+end
+
+@theory ThRightMod begin
+  using ThAb: default as M, ⋅ as ⊕
+  using ThRing: default as R, one as unit  
+  (a ⋅ r) :: M ⊣ [r::R, a::M]                               # R-actions
+  ((a ⊕ b) ⋅ r) == ((a ⋅ r) ⊕ (b ⋅ r)) ⊣ [r::R, a::M, b::M] # R-action left-distributes
+  (a ⋅ (r + s)) == ((a ⋅ r) ⊕ (a ⋅ s)) ⊣ [r::R, s::R, a::M] # addition of R-actions 
+  a ⋅ (r * s) == (a ⋅ r) ⋅ s ⊣ [r::R, s::R, a::M]           # composition of R-action
+  a ⋅ unit  == a ⊣ [unit::R, a::M]                           # unit 
+end
+
+# TODO gensymming afoot
+@theory ThBiModule begin
+  using ThMod
+  using ThRightMod: R as S
 end
 
 @theory ThVectorSpace begin
-  using ThModule
-  using ThField 
+  using ThMod: M as V
+  # using ThField: default as K
 end
 
-@theory ThCommutativeRModule begin
-  using ThModule
-  using ThCRing: default as R, one as unit
+# TODO Fix axioms
+@theory ThCommRMod begin
+  using ThMod
+  x + y == y + x ⊣ [x::R, y::R]
 end
 
 ## bilinear operation is given by ⋅ but should be ⊕
-# @theory ThDistributiveAlgebra begin
-#   using ThCommutativeRModule: M as A
+@theory ThDistributiveAlgebra begin
+  using ThCommRMod
+  #
+  (x ⊕ y) ⋅ z == (x ⋅ z) ⊕ (y ⋅ z) ⊣ [x::M, y::M, z::M]
+  x ⋅ (y ⊕ z) == (x ⋅ y) ⊕ (x ⋅ z) ⊣ [x::M, y::M, z::A]
+  (r ⋅ x) ⋅ (s ⋅ y) == (r ⋅ s) ⋅ (x ⋅ y) ⊣ [r::R, s::R, x::M, y::M]
+end
 
-#   (x + y) ⋅ z == (x ⋅ z) + (y ⋅ z) ⊣ [x::A, y::A, z::A]
-#   x ⋅ (y + z) == (x ⋅ y) + (x ⋅ z) ⊣ [x::A, y::A, z::A]
-#   (r ⋅ x) ⋅ (s ⋅ y) == (r ⋅ s) ⋅ (x ⋅ y) ⊣ [r::R, s::R, x::A, y::A]
+# @theory ThAlternativeAlgebra begin
+#   using ThDistributiveAlgebra
+
+#   x * (x * y) == (x * x) * y ⊣ [x::M, y::M]
+#   (y * x) * x == y * (x * x) ⊣ [x::M, y::M]
 # end
 
-#@theory ThAlternativeAlgebra begin
-#  using ThCommutativeRModule
-
-#  x ⋅ (x ⋅ y) == (x ⋅ x) ⋅ y ⊣ [x::M, y::M]
-#  (y ⋅ x) ⋅ x == y ⋅ (x ⋅ x) ⊣ [x::M, y::M]
-#end
-
-## 
-#@theory ThCompositionAlgebra begin
-#  using ThDistributiveAlgebra: 
-
-#  # nondegenerate p.d. quadratic form
-#  N(x) :: A ⊣ [x::A]
-#  N(x⋅y) == N(x)⋅N(y) ⊣ [x::A, y::A]
-
-#  x ⟧ y == N(x + y) - N(x) - N(y) ⊣ [x::A]
-#end
-
-#@theory ThLieAlgebra begin
-#  using ThDistributiveAlgebra: A as 𝔤
-
-#  x ⟦ y :: A ⊣ [(x,y)::𝔤]
-#  (a*x + b*y) ⟦ z == a ⋅ (x ⟦ z) + b ⋅ (y ⟦ z) ⊣ [(a,b)::K, (x,y,z)::𝔤]
-#  z ⟦ (a*x + b*y) == a ⋅ (z ⟦ x) + b ⋅ (z ⟦ y) ⊣ [(a,b)::K, (x,y,z)::𝔤]
-  
-#  x ⟦ x == zero ⊣ [x::𝔤]
-
-#  (x ⟦ (y ⟦ z)) + (y ⟦ (z ⟦ x)) + (z ⟦ (x ⟦ y)) == zero ⊣ [(x,y,z)::𝔤]
-#end
-
-## @theory ThJordanAlgebra begin
-#  # using ThDistributiveAlgebra
-
-#  # commutativity
-#  # (x⋅y)
-
-#""" The theory of associative algebras
-
-#"""
-#@theory ThAlgebra begin
-#  using ThDistributiveAlgebra
-
-#  (x ⋅ (y ⋅ z)) == (x ⋅ (y ⋅ z)) ⊣ [x::M, y::M, z::M]
-#end
-
-#@theory ThStarAlgebra begin
-#  using ThAlgebra
-
-#  †(x) :: A ⊣ [x::A]
-#  †(x + y) == †(x) + †(y) ⊣ [x::A, y::A]
-#  †(one) == one
-#  †(†(x)) = x ⊣ [x::A]
-#end
-## scalars must be commutative
-
-## what is the 1ₓ? can we axiomatically build "co" theories?
-#@theory ThCoAlgebra begin
-#  using ThVectorSpace: M as V
-
-#  Δ(x) == x ⊗ x ⊣ [x::V]
-#  ϵ(x) :: K ⊣ [x::V]
-#  (1ₓ ⊗ Δ(x))(Δ(x)) == (Δ ⊗ 1ₓ)(Δ(x)) ⊣ [x::V]
-#end
-
-
-## TODO need to add compatibility conditions
-#@theory ThBiAlgebra begin
-#  using ThAlgebra: default as B, ⋅ as ∇
-#  using ThCoAlgebra: default as B
-#end
-
-#@theory ThHopfAlgebra begin
-#  using ThBiAlgebra 
-
-#  # need to specify what it means to be K-linear
-#  S(x) :: B ⊣ [x::B]
-#  S(k⋅ x) == k⋅S(x) ⊣ [k::K, x::B]
-#  # can I omit the scalar term? can I do (k₁,k₂)::K a la Decapodes?
-#  S(k₁⋅x₁ + k₂⋅x₂) == S(k₁⋅x₁) + S(k₂⋅x₂) ⊣ [k₁::K,k₂::K,x₁::B,x₂::B]
-
-#  # antipodal relations
-#  ∇((S ⊗ 1ₓ)(Δ(x))) == η(ϵ(x)) ⊣ [x::B]
-#  ∇((1ₓ ⊗ S)(Δ(x))) == η(ϵ(x)) ⊣ [x::B]
-#end
-
-
-
-
-
-## need conjugate symmetry, linearity, p.d.
-#@theory ThInnerProductSpace begin
-#  using ThVectorSpace: M as V
-
-#  x ⟧ y :: K ⊣ [x::V, y::V]
-#end
-
-# 

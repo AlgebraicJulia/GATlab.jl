@@ -1,5 +1,5 @@
 module TheoryInterface
-export @theory, @signature, Model, invoke_term, _rd
+export @theory, @signature, @rename, Model, invoke_term, _rd, nametag, makerenamedict
 
 using ..Scopes, ..GATs, ..ExprInterop
 
@@ -33,6 +33,7 @@ A macro called `@theory` which expands to the `GAT` data structure for the modul
 A constant called `Meta.theory` which is the `GAT` data structure.
 """
 
+# TODO is every contribution to a theory a new segment, or can a new theory introduce multiple segments? 
 """
 When we declare a new theory, we add the scope tag of its new segment to this
 dictionary pointing to the module corresponding to the new theory.
@@ -45,6 +46,91 @@ end
 
 macro theory(head, body)
   theory_impl(head, body, __module__)
+end
+
+"""
+Renaming a theory can be done with the @theory macro:
+
+  ```
+  @theory ThNewName begin
+    using: ThTheory: using old as new, before as after
+  end
+  ```
+
+@rename simplifies this expression by one line:
+
+  ```
+  @rename ThNewName using ThTheory: using old as new, before as after
+  ```
+
+"""
+macro rename(newname, body)
+  rename_impl(newname, body, __module__)
+end
+
+# @rename ThM using ThMonoid using ⋅ as *
+function rename_impl(newname, body, __module__) 
+ 
+  # validate head and body
+  newname isa Symbol || error("$newname must be a symbol")
+  !isdefined(__module__, newname) || error("$newname cannot be defined already")
+
+  parent = expand_theory(nothing, body, __module__)
+  newtheory = fromexpr(parent, body, GAT; name=newname, current_module=fqmn(__module__))
+
+  #
+  lines = Any[]
+  newnames = Symbol[]
+
+  ## XXX "for binding in segment" was "... in newsegment", and I wrapped this
+  ## in a for-loop for segments. This was done to debug an issue with ModelInterface
+  ## where the `default` function was not being declared.
+  ##
+  ## owen: this should be in newsegment as before
+  for segment in newtheory.segments.scopes
+    for binding in segment
+      judgment = getvalue(binding)
+      bname = nameof(binding)
+      if judgment isa Union{AlgDeclaration, Alias}
+        push!(lines, juliadeclaration(bname))
+        push!(newnames, bname)
+      end
+    end
+  end
+
+  modulelines = Any[]
+
+  push!(modulelines, :(export $(allnames(newtheory; aliases=true)...)))
+
+  push!(
+   modulelines,
+   Expr(:using,
+     Expr(:(:),
+       Expr(:(.), :(.), :(.), nameof(__module__)),
+       Expr.(Ref(:(.)), newnames)...
+     )
+   )
+  )
+
+  push!(modulelines, Expr(:toplevel, :(module Meta
+    struct T end
+    const theory = $newtheory
+    macro theory() $newtheory end
+    macro theory_module() parentmodule(@__MODULE__) end
+  end)))
+
+  esc(
+    Expr(
+      :toplevel,
+      lines...,
+      :(
+        module $newname
+        $(modulelines...)
+        end
+      ),
+      :(Core.@__doc__ $(newname)),
+     )
+   )
 end
 
 """
@@ -95,21 +181,23 @@ This is used by the reident function, which will recurse through the GAT structu
 For example, suppose we are building a theory `ThRing` and require `ThCMonoid` for addition and `ThMonoid` for multiplication, along with their respective rename dictionaries. For each guest, we need the nametags for both host and guest so that we can check, for each entry in the dictionary, if the name we wish to change in the guest already exists in the host theory. This allows us to create ScopeTags only when necessary. 
 
 """
-function makeidentdict(host::GAT, guest::GAT, renames::Dict{Symbol}) 
+function makeidentdict(host::GAT, guest::GAT, renames::Dict{Symbol,Symbol}; is_reident::Bool=true) 
   guest, host = nametag.([guest, host])
   merge(map(collect(keys(renames))) do old
-    new = renames[old] 
-    tag = haskey(host, new) ? host[new] : newscopetag()
-    Dict(Ident(guest[old], LID(1), old) => Ident(tag, LID(1), new)) # TODO get lid
+    new = renames[old]
+    if is_reident
+      tag = haskey(host, new) ? host[new] : (haskey(guest, new) ? guest[new] : newscopetag())
+      Dict(Ident(guest[old], LID(1), old) => Ident(tag, LID(1), new)) # TODO get lid
+    else
+      Dict(Ident(guest[old], LID(1), old) => Ident(guest[old], LID(1), new))
+    end
   end...) 
 end
 
-
-function usetheory!(host::GAT, guest::GAT, renames::Dict{Symbol}=Dict{Symbol,Symbol}())
+function usetheory!(host::GAT, guest::GAT, renames::Dict{Symbol,Symbol}=Dict{Symbol,Symbol}())
   if !isempty(renames)
     guest = reident(makeidentdict(host, guest, renames), guest)
   end
-
   for segment in guest.segments.scopes
     if !hastag(host, gettag(segment))
       GATs.unsafe_pushsegment!(host, segment)
@@ -117,25 +205,17 @@ function usetheory!(host::GAT, guest::GAT, renames::Dict{Symbol}=Dict{Symbol,Sym
   end
 end
 
-# """ 
-# `rename
-
-# This modifies our dictionary so the values contain both 
-# the target symbol as well as the tag
-# """
-# function renamedict(ident_dict, renames::Dict{Symbol})
-#   merge(map(collect(keys(renames))) do key
-#     ident = filter(i -> i.name == key, idents) 
-#     Dict(key => (renames[key], ident[1].tag))
-#   end...)
-# end
-
+"""
+Accepts a name, a theory body and returns a theory
+"""
 function expand_theory(parentname, body, __module__)
   theory = if !isnothing(parentname)
     copy(macroexpand(__module__, :($parentname.Meta.@theory)))
   else
     GAT(:_EMPTY)
   end
+
+  # collect renames
   for line in body.args
     @match line begin
       Expr(:using, Expr(:(:), Expr(:(.), other), renames...)) => begin
@@ -161,7 +241,7 @@ end
 function theory_impl(head, body, __module__)
   (name, parentname) = @match head begin
     (name::Symbol) => (name, nothing)
-    Expr(:(<:), name, parent) => (name, parent)
+    Expr(:(<:), name, parent) => (name, parent) # TODO make parents
     _ => error("could not parse head of @theory: $head")
   end
 
@@ -176,6 +256,8 @@ function theory_impl(head, body, __module__)
   # XXX "for binding in segment" was "... in newsegment", and I wrapped this
   # in a for-loop for segments. This was done to debug an issue with ModelInterface
   # where the `default` function was not being declared.
+  #
+  # owen: this should be in newsegment as before
   for segment in theory.segments.scopes
     for binding in segment
       judgment = getvalue(binding)
@@ -201,6 +283,7 @@ function theory_impl(head, body, __module__)
     )
   )
 
+  # TODO deprecated?
   if !isnothing(parentname)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
   end
