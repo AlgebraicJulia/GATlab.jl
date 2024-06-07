@@ -254,20 +254,23 @@ function theory_impl(head, body, __module__)
 
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
   newsegment = theory.segments.scopes[end]
+  # @info "NEWSEGMENT" newsegment
   docstr = repr(theory)
 
   lines = Any[]
   newnames = Symbol[]
   structlines = Expr[]
   structnames = Set([nameof(s.declaration) for s in structs(theory)])
-  for binding in newsegment
-    judgment = getvalue(binding)
-    bname = nameof(binding)
-    if judgment isa Union{AlgDeclaration, Alias} && bname ∉ structnames
-      push!(lines, juliadeclaration(bname))
-      push!(newnames, bname)
-    elseif judgment isa AlgStruct 
-      push!(structlines, mk_struct(judgment, fqmn(__module__)))
+  for scope in theory.segments.scopes
+    for binding in scope # XXX newsegment
+      judgment = getvalue(binding)
+      bname = nameof(binding)
+      if judgment isa Union{AlgDeclaration, Alias} && bname ∉ structnames
+        push!(lines, juliadeclaration(bname))
+        push!(newnames, bname)
+      elseif judgment isa AlgStruct
+        push!(structlines, mk_struct(judgment, fqmn(__module__)))
+      end
     end
   end
 

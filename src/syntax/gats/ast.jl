@@ -19,7 +19,6 @@ end
 function reident(reps::Dict{Ident}, a::AlgSort)
   newhead = reident(reps, headof(a))
   newmethod = retag(Dict(a.head.tag => newhead.tag), methodof(a))
-  @info "REIDENTING" newhead, newmethod
   AlgSort(newhead, newmethod) 
 end
 

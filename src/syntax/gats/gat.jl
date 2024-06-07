@@ -67,7 +67,7 @@ function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, bysignature::Dict{A
   end
 end
 
-function reident(reps::Dict{Ident}, key::Ident, m::MethodResolver)
+function reident(reps::Dict{Ident, Ident}, key::Ident, m::MethodResolver)
   MethodResolver(reident(reps, key, m.bysignature))
 end
 
@@ -79,10 +79,8 @@ function reident(reps::Dict{Ident}, key::Ident, bysignature::Dict{AlgSorts, Iden
     bysignature
   else
     merge(map(collect(bysignature)) do (algsorts, ident)
-      # @info "INSPECT" reps, algsorts, ident
-      @warn algsorts typeof(reident.(Ref(reps), algsorts))
       @match algsorts begin
-        [] => Dict(reident.(Ref(reps), algsorts) => reident(gettag(key), ident))
+        [] => Dict(algsorts => reident(gettag(key), ident))
         _  => Dict(reident.(Ref(reps), algsorts) => reident(reps, ident))
       end
     end...)
