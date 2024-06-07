@@ -1,7 +1,6 @@
-export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThSemiRing, ThRing,
-  ThCRing, ThBooleanRing, ThDivisionRing, ThField, ThCRig, ThElementary, ThPreorder, ThMod, ThCommRMod
+export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThSemiRing, ThRing, ThCRing, ThBooleanRing, ThDivisionRing, ThField, ThCRig, ThElementary, ThPreorder, ThLeftModule, ThRightModule, ThBiModule, ThModule, ThCommRMod
 
-import Base: +, *
+import Base: +, *, zero, one
 
 @theory ThEmpty begin
 end
@@ -65,8 +64,6 @@ end
 @theory ThRig begin
   using ThSemiRing
 end
-
-import Base: zero, one
 
 """ The theory of a ring
 
@@ -182,52 +179,82 @@ end
 #   using ThAb: default as M =turnsinto=> import ThAb; @op M := ThAb.default
 # end
 
-# TODO this is a left module
-@theory ThMod begin
+@theory ThLeftModule begin
   using ThAb: default as M, ⋅ as ⊕
-  using ThRing: default as R, one as unit  
-  (r ⋅ a) :: M ⊣ [r::R, a::M]                               # R-actions
-  (r ⋅ (a ⊕ b)) == ((r ⋅ a) ⊕ (r ⋅ b)) ⊣ [r::R, a::M, b::M] # R-action left-distributes
-  ((r + s) ⋅ a) == ((r ⋅ a) ⊕ (s ⋅ a)) ⊣ [r::R, s::R, a::M] # addition of R-actions 
-  (r * s) ⋅ a == r ⋅ (s ⋅ a) ⊣ [r::R, s::R, a::M]           # composition of R-action
-  unit ⋅ a == a ⊣ [unit::R, a::M]                           # unit 
+  using ThRing: default as Scalar, one as unit  
+
+  (r ⋅ a) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
+  (r ⋅ (a ⊕ b)) == ((r ⋅ a) ⊕ (r ⋅ b)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
+  ((r + s) ⋅ a) == ((r ⋅ a) ⊕ (s ⋅ a)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions 
+  (r * s) ⋅ a == r ⋅ (s ⋅ a) ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
+  unit ⋅ a == a ⊣ [unit::Scalar, a::M]                                # unit 
 end
 
-@theory ThRightMod begin
+@theory ThRightModule begin
   using ThAb: default as M, ⋅ as ⊕
-  using ThRing: default as R, one as unit  
-  (a ⋅ r) :: M ⊣ [r::R, a::M]                               # R-actions
-  ((a ⊕ b) ⋅ r) == ((a ⋅ r) ⊕ (b ⋅ r)) ⊣ [r::R, a::M, b::M] # R-action left-distributes
-  (a ⋅ (r + s)) == ((a ⋅ r) ⊕ (a ⋅ s)) ⊣ [r::R, s::R, a::M] # addition of R-actions 
-  a ⋅ (r * s) == (a ⋅ r) ⋅ s ⊣ [r::R, s::R, a::M]           # composition of R-action
-  a ⋅ unit  == a ⊣ [unit::R, a::M]                           # unit 
+  using ThRing: default as Scalar, one as unit
+
+  (a ⋅ r) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
+  ((a ⊕ b) ⋅ r) == ((a ⋅ r) ⊕ (b ⋅ r)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
+  (a ⋅ (r + s)) == ((a ⋅ r) ⊕ (a ⋅ s)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions 
+  a ⋅ (r * s) == (a ⋅ r) ⋅ s ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
+  a ⋅ unit  == a ⊣ [unit::Scalar, a::M]                               # unit 
+end
+
+# XXX this exists because we need to fix a issue where terms with the same name have different idents
+@theory ThModule begin
+  using ThAb: default as M, ⋅ as ⊕
+  using ThRing: default as Scalar, one as unit
+
+  (r ⋅ a) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
+  (r ⋅ (a ⊕ b)) == ((r ⋅ a) ⊕ (r ⋅ b)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
+  ((r + s) ⋅ a) == ((r ⋅ a) ⊕ (s ⋅ a)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions 
+  (r * s) ⋅ a == r ⋅ (s ⋅ a) ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
+  unit ⋅ a == a ⊣ [unit::Scalar, a::M]                                # unit
+
+  (a ⋅ r) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
+  ((a ⊕ b) ⋅ r) == ((a ⋅ r) ⊕ (b ⋅ r)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
+  (a ⋅ (r + s)) == ((a ⋅ r) ⊕ (a ⋅ s)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions 
+  a ⋅ (r * s) == (a ⋅ r) ⋅ s ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
+  a ⋅ unit  == a ⊣ [unit::Scalar, a::M]                               # unit
 end
 
 # TODO gensymming afoot
 @theory ThBiModule begin
-  using ThMod
-  using ThRightMod: R as S
+  using ThLeftModule: Scalar as LeftScalar
+  using ThRightModule: Scalar as RightScalar
 end
+# TODO in this case, 
+#   1. ThRightModule and ThLeftModule both rename default to M, which gets a newscopetag, since
+#     1.a: it does not exist in the new theory
+#     1.b: it does not exist in the old theory
+#   2. ThBiModule contributes both Left and Right Modules. Since the scalars are being renamed (to the same name), they are checked if they have new 
 
-@theory ThVectorSpace begin
-  using ThMod: M as V
-  # using ThField: default as K
-end
+# TODO we do not change the idents, so M and Scalar show
+# @theory __ThModule begin
+#   using ThLeftModule
+#   using ThRightModule
+# end
+
+# @theory ThVectorSpace begin
+#   using ThModule: M as V
+#   # using ThField: default as K
+# end
 
 # TODO Fix axioms
-@theory ThCommRMod begin
-  using ThMod
-  x + y == y + x ⊣ [x::R, y::R]
-end
+# @theory ThCommRMod begin
+#   using ThLeftModule
+#   x + y == y + x ⊣ [x::Scalar, y::Scalar]
+# end
 
 ## bilinear operation is given by ⋅ but should be ⊕
-@theory ThDistributiveAlgebra begin
-  using ThCommRMod
-  #
-  (x ⊕ y) ⋅ z == (x ⋅ z) ⊕ (y ⋅ z) ⊣ [x::M, y::M, z::M]
-  x ⋅ (y ⊕ z) == (x ⋅ y) ⊕ (x ⋅ z) ⊣ [x::M, y::M, z::A]
-  (r ⋅ x) ⋅ (s ⋅ y) == (r ⋅ s) ⋅ (x ⋅ y) ⊣ [r::R, s::R, x::M, y::M]
-end
+#@theory ThDistributiveAlgebra begin
+#  using ThCommRMod
+#  #
+#  (x ⊕ y) ⋅ z == (x ⋅ z) ⊕ (y ⋅ z) ⊣ [x::M, y::M, z::M]
+#  x ⋅ (y ⊕ z) == (x ⋅ y) ⊕ (x ⋅ z) ⊣ [x::M, y::M, z::A]
+#  (r ⋅ x) ⋅ (s ⋅ y) == (r ⋅ s) ⋅ (x ⋅ y) ⊣ [r::R, s::R, x::M, y::M]
+#end
 
 # @theory ThAlternativeAlgebra begin
 #   using ThDistributiveAlgebra

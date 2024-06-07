@@ -181,18 +181,22 @@ This is used by the reident function, which will recurse through the GAT structu
 For example, suppose we are building a theory `ThRing` and require `ThCMonoid` for addition and `ThMonoid` for multiplication, along with their respective rename dictionaries. For each guest, we need the nametags for both host and guest so that we can check, for each entry in the dictionary, if the name we wish to change in the guest already exists in the host theory. This allows us to create ScopeTags only when necessary. 
 
 """
-function makeidentdict(host::GAT, guest::GAT, renames::Dict{Symbol,Symbol}; is_reident::Bool=true) 
+function makeidentdict(host::GAT, guest::GAT, renames::Dict{Symbol,Symbol}; is_reident::Bool=true)
   guest, host = nametag.([guest, host])
   merge(map(collect(keys(renames))) do old
     new = renames[old]
     if is_reident
-      tag = haskey(host, new) ? host[new] : (haskey(guest, new) ? guest[new] : newscopetag())
+      # if new name is in host, then use its ident in the host.
+      # otherwise, if the guest theory has the term, then use its ident in the host.
+      # otherwise, create a new scope tag
+      tag = haskey(host, new) ? host[new] : (haskey(guest, new) ? guest[new] : newscopetag()) # TODO we don't want to want to make new scopetag
       Dict(Ident(guest[old], LID(1), old) => Ident(tag, LID(1), new)) # TODO get lid
     else
       Dict(Ident(guest[old], LID(1), old) => Ident(guest[old], LID(1), new))
     end
   end...) 
 end
+# TODO if there is a collision, choose same scope tag
 
 function usetheory!(host::GAT, guest::GAT, renames::Dict{Symbol,Symbol}=Dict{Symbol,Symbol}())
   if !isempty(renames)

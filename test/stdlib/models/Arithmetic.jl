@@ -56,7 +56,7 @@ import .ThRing: zero, one, -, +, *
 
 @withmodel ZRing() (zero, one, -, +, *) begin
   @test 1 + 2 == 3
-  @test 1 - 1 == 0
+  @test 1 + (-1) == 0
   @test 2 * (1 + 1) == 4
 end
 
