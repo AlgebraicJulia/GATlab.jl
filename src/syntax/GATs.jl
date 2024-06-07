@@ -1,13 +1,15 @@
 module GATs
 export Constant, AlgTerm, AlgType, AlgAST,
   TypeScope, TypeCtx, AlgSort, AlgSorts,
-  AlgDeclaration, AlgTermConstructor, AlgTypeConstructor, AlgAccessor, AlgAxiom,
-  sortsignature, getdecl,
-  GATSegment, GAT, GATContext, gettheory, gettypecontext, allmethods, resolvemethod,
-  termcons,typecons, accessors,
+  AlgDeclaration, AlgTermConstructor, AbstractAlgSort,
+  AlgTypeConstructor, AlgAccessor, AlgAxiom, AlgStruct, AlgDot, AlgFunction,
+  typesortsignature, sortsignature, getdecl,
+  GATSegment, GAT, GATContext, gettheory, gettypecontext, allmethods, 
+  resolvemethod,
+  termcons,typecons, accessors, structs, primitive_sorts, struct_sorts,
   equations, build_infer_expr, compile, sortcheck, allnames, sorts, sortname,
   InCtx, TermInCtx, TypeInCtx, headof, argsof, methodof, bodyof, argcontext,
-  MethodApp, MethodResolver
+  infer_type
 
 using ..Scopes
 import ..ExprInterop: fromexpr, toexpr

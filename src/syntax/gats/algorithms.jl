@@ -4,18 +4,26 @@
 Throw an error if a the head of an AlgTerm (which refers to a term constructor)
 has arguments of the wrong sort. Returns the sort of the term.
 """
-function sortcheck(ctx::Context, t::AlgTerm)::AlgSort
+function sortcheck(ctx::Context, t::AlgTerm)::AbstractAlgSort
+  t_sub = substitute_funs(ctx, t)
+  if t_sub != t 
+    return sortcheck(ctx, t_sub)
+  end 
   if isapp(t)
     judgment = ctx[t.body.method] |> getvalue
     if judgment isa AlgTermConstructor
       argsorts = sortcheck.(Ref(ctx), t.body.args)
       argsorts == sortsignature(judgment) || error("Sorts don't match")
       AlgSort(judgment.type)
+    elseif judgment isa AlgStruct
+      AlgSort(headof(bodyof(t)), methodof(bodyof(t)))
     end
   elseif isvariable(t)
     type = ctx[t.body] |> getvalue
     AlgSort(type)
-  else
+  elseif isdot(t)
+    AlgSort(ctx, t)
+  elseif isconstant(t)
     AlgSort(t.body.type)
   end
 end
@@ -172,4 +180,28 @@ end
 
 function substitute_term(ma::MethodApp{AlgTerm}, subst::Dict{Ident, AlgTerm})
   MethodApp{AlgTerm}(ma.head, ma.method, substitute_term.(ma.args, Ref(subst)))
+end
+
+function substitute_term(ad::AlgDot, subst::Dict{Ident, AlgTerm})
+  AlgDot(ad.head, substitute_term(ad.body, subst))
+end
+
+
+"""Replace all functions with their desugared expressions"""
+function substitute_funs(ctx::Context, t::AlgTerm)
+  b = bodyof(t)
+  if isapp(t)
+    m = getvalue(ctx[methodof(b)])
+    if m isa AlgTermConstructor || m isa AlgStruct
+      args = substitute_funs.(Ref(ctx), argsof(b))
+      AlgTerm(MethodApp{AlgTerm}(headof(b), methodof(b), args))
+    elseif m isa AlgFunction 
+      subst = Dict(zip(idents(m.localcontext; lid=m.args), argsof(b)))
+      substitute_term(m.value, subst)
+    end
+  elseif isvariable(t) || isconstant(t)
+    t 
+  elseif isdot(t)
+    AlgTerm(AlgDot(headof(b), substitute_funs(ctx, bodyof(b))))
+  end
 end

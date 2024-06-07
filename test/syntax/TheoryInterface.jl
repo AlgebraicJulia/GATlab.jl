@@ -1,6 +1,6 @@
 module TestTheoryInterface
 
-using Test, GATlab
+using Test, GATlab, Markdown
 
 @theory ThCategoryTypes begin
   Ob::TYPE
@@ -46,11 +46,7 @@ end
   @op 1 + 1
 end
 
-# test that a theory with redundant using statements is equal to one which hasn't
-# @theory ThMagmaMagmaWithAssoc begin
-#   using ThMagma
-#   using ThMagma
-#   (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
-# end
+@test (@doc ThCMonoid.Meta.theory) isa Markdown.MD
+@test (@doc ThSet) == (@doc ThSet.Meta.theory)
 
 end

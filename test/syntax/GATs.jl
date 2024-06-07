@@ -2,6 +2,7 @@ module TestGATs
 
 using GATlab, Test
 
+
 # GAT ASTs
 ##########
 
@@ -22,6 +23,8 @@ three = AlgTerm(plus, plusmethod, [one, two])
 @test toexpr(scope, three) == :((1::number) + (2::number))
 
 @test fromexpr(GAT(:Empty), two.body, AlgTerm) == two
+
+@test GATs.substitute_funs(scope, one) == one
 
 @test basicprinted(two) == "AlgTerm(2::number)"
 
@@ -44,17 +47,26 @@ seg_expr = quote
     a::Ob, b::Ob, c::Ob, d::Ob,
     f::Hom(a, b), g::Hom(b, c), h::Hom(c, d)
   ]
+  struct Span(dom::Ob, codom::Ob)
+    apex::Ob
+    left::Hom(apex, dom)
+    right::Hom(apex, codom)
+  end
+  id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
 end
+
 
 thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 
-O, H, i, cmp = idents(thcat; name=[:Ob, :Hom, :id, :compose])
+O, H, i = idents(thcat; name=[:Ob, :Hom, :id])
 
 ob_decl = getvalue(thcat[O])
 
 ObT = fromexpr(thcat, :Ob, AlgType)
 ObS = AlgSort(ObT)
+@test headof(ObS) == O
 @test toexpr(GATContext(thcat), ObS) == :Ob
+
 
 # Extend seg with a context of (A: Ob)
 sortscope = TypeScope(:A => ObT)
@@ -77,6 +89,9 @@ HomS = AlgSort(HomT)
 @test retag(Dict(gettag(sortscope)=>newscopetag()), HomT) isa AlgType
 
 @test sortcheck(c, AlgTerm(A)) == ObS
+
+x = fromexpr(c, :(id_span(A)), AlgTerm)
+@test sortcheck(c, x) isa AlgSort
 
 # # Good term and bad term
 ida = fromexpr(c, :(id(A)), AlgTerm)
@@ -113,13 +128,21 @@ TG = ThGraph.Meta.theory
 #-------
 toexpr.(Ref(T), T.segments)
 
-# InCtx
-#----------
-# tic = fromexpr(T, :(compose(f,compose(id(b),id(b))) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TermInCtx);
-# tic2 = fromexpr(T,toexpr(T, tic), TermInCtx) # same modulo scope tags
+# @theory
+#########
+@theory ThI2 <: ThCategory begin
+  square(x) := f⋅f ⊣ [x::Ob, f::Hom(x,x)]
+end
+
+@theory ThSpan <: ThCategory begin
+  struct Span(dom::Ob, codom::Ob)
+    apex::Ob
+    left::Hom(apex, dom)
+    right::Hom(apex, codom)
+  end
+  id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
+end
 
 
-# typic = fromexpr(T, :(Hom(a,b) ⊣ [a::Ob, b::Ob, f::Hom(a,b)]), TypeInCtx)
-# typic2 = fromexpr(T,toexpr(T, typic), TypeInCtx) # same modulo scope tags
 
 end # module

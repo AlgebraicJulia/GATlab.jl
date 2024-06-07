@@ -5,20 +5,47 @@ import Base: +, *, zero, one
 @theory ThEmpty begin
 end
 
+""" The theory of a set with no operations
+
+A base theory for all algebraic theories so that multiple
+inheritance doesn't create multiple types.
+"""
 @theory ThSet begin
   default::TYPE
 end
 
+""" The theory of a set with a binary operation which does not guarantee associativity
+
+Examples:
+  - The integers with minus operation is not associative.
+
+    (a ⋅ b) ⋅ c = a - b - c
+
+    a ⋅ (b ⋅ c) = a - b + c 
+
+"""
 @theory ThMagma begin
   using ThSet
   (x ⋅ y) :: default ⊣ [x, y]
 end
 
+""" This theory contains an associative binary operation called multiplication. 
+
+Examples:
+  - The integers under multiplication
+  - Nonempty lists under concatenation
+"""
 @theory ThSemiGroup begin
   using ThMagma
   (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
 end
 
+""" The theory of a semigroup with identity.
+
+Examples:
+  - The integers under multiplication
+  - Lists (nonempty and empty) under concatenation
+"""
 @theory ThMonoid begin
   using ThSemiGroup
   e() :: default
@@ -26,6 +53,13 @@ end
   x ⋅ e() == x ⊣ [x]
 end
 
+""" The theory of a monoid with multiplicative inverse.
+
+Examples:
+  - The rationals (excluding zero) under multiplication
+  - E(n), the group of rigid transformations (translation and rotation)
+  - Bₙ, the braid group of n strands
+"""
 @theory ThGroup begin
   using ThMonoid
   i(x) :: default ⊣ [x]
@@ -33,12 +67,14 @@ end
   x ⋅ i(x) == e() ⊣ [x]
 end
 
-# TODO if I instead write "a" and "b" for "x" and "y", I think GATlab should coerce "a" and "b" to be "x" and "y"
-# it could do this by going into the args for all the axioms, determining the terms per TYPE, i.e.
-# DEFAULT: [x,y,z]
+""" The theory of a monoid where multiplication enjoys commutativity.
+
+Examples:
+  - The set of classical 1-knots under "knot sum"
+"""
 @theory ThCMonoid begin
   using ThMonoid
-  x ⋅ y == y ⋅ x ⊣ [x, y]
+  a ⋅ b == b ⋅ a ⊣ [a, b]
 end
 
 @theory ThAb begin
@@ -156,6 +192,15 @@ end
   sigmoid(x) ⊣ [x]
 end
 
+# TODO @op does not get repr
+""" The theory of sets which have a preorder.
+
+This is equivalent to the theory of thin categories (`ThThinCategory`) where ≤ is the composition operation.
+
+Examples:
+  - The set of natural numbers ordered by b-a ≥ 0
+  - The set of natural numbers ordered by "a divides b"
+"""
 @theory ThPreorder <: ThSet begin
   Leq(dom, codom)::TYPE ⊣ [dom, codom]
   @op (≤) := Leq

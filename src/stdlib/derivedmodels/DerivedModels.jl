@@ -6,12 +6,12 @@ using ...StdTheoryMaps
 using ...StdModels
 
 # Given a model of a category C, we can derive a model of Cᵒᵖ.
-@migrate OpFinSetC = OpCat(FinSetC)
+OpFinSetC = migrate_model(OpCat, FinSetC())
 
 # Interpret `e` as `0` and `⋅` as `+`.
-@migrate IntMonoid = NatPlusMonoid(IntNatPlus)
+IntMonoid = migrate_model(NatPlusMonoid, IntNatPlus())
 
 # Interpret `id` as reflexivity and `compose` as transitivity.
-@migrate IntPreorderCat = PreorderCat(IntPreorder)
+IntPreorderCat = migrate_model(PreorderCat, IntPreorder())
 
-end
+end # module

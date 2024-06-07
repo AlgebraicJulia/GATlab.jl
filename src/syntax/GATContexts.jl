@@ -46,4 +46,23 @@ function Base.show(io::IO, p::GATContext)
   end
 end
 
+struct SymbolicFunction
+  theory::GAT
+  dom::TypeScope
+  codom::TypeScope
+  substitution::Vector{AlgTerm}
+end
+
+"""
+```
+@symbolic ThRing function v(a, b, c)
+  (a*b, c, b)
+end
+```
+"""
+macro symbolic(head, body)
+  fun = parse_function(body)
+end
+
+
 end # module 

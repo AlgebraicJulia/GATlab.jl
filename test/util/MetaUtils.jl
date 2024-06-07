@@ -32,15 +32,17 @@ end
 @test (parse_fun(:(function f(x,y) x end)) ==
        JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, strip_all(quote x end)))
 
-@test parse_fun(strip_all((quote
+@test parse_fun(strip_all(quote
   """ My docstring
   """
   function f(x,y) x end
-end)).args[1]) == JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, strip_all(quote x end), " My docstring\n")
+end).args[1]) == JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, strip_all(quote x end), " My docstring\n")
 
+# TODO RHS has LNN between quote and x
 @test (parse_fun(:(function f(x::Int,y::Int)::Int x end)) ==
        JuliaFunction(:f, [:(x::Int),:(y::Int)], [], [], :Int, strip_all(quote x end)))
 
+# TODO RHS has LNN between quote and x
 @test (parse_fun(:(f(x,y) = x)) ==
        JuliaFunction(:f, [:(x::Any), :(y::Any)], [], [], nothing, strip_all(quote x end)))
 

@@ -1,13 +1,14 @@
 module TheoryInterface
 export @theory, @signature, @rename, Model, invoke_term, _rd, nametag, makerenamedict
 
-using ..Scopes, ..GATs, ..ExprInterop
+using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
+# using GATlab.Util
 
-using MLStyle
+using MLStyle, StructEquality, Markdown
 
 abstract type Model{Tup <: Tuple} end
 
-struct WithModel{M <: Model}
+@struct_hash_equal struct WithModel{M <: Model}
   model::M
 end
 
@@ -252,29 +253,27 @@ function theory_impl(head, body, __module__)
   parent = expand_theory(parentname, body, __module__)
 
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
-  newsegment = theory.segments.scopes[end] # TODO unused?
+  newsegment = theory.segments.scopes[end]
+  docstr = repr(theory)
 
   lines = Any[]
   newnames = Symbol[]
-
-  # XXX "for binding in segment" was "... in newsegment", and I wrapped this
-  # in a for-loop for segments. This was done to debug an issue with ModelInterface
-  # where the `default` function was not being declared.
-  #
-  # owen: this should be in newsegment as before
-  for segment in theory.segments.scopes
-    for binding in segment
-      judgment = getvalue(binding)
-      bname = nameof(binding)
-      if judgment isa Union{AlgDeclaration, Alias}
-        push!(lines, juliadeclaration(bname))
-        push!(newnames, bname)
-      end
+  structlines = Expr[]
+  structnames = Set([nameof(s.declaration) for s in structs(theory)])
+  for binding in newsegment
+    judgment = getvalue(binding)
+    bname = nameof(binding)
+    if judgment isa Union{AlgDeclaration, Alias} && bname ∉ structnames
+      push!(lines, juliadeclaration(bname))
+      push!(newnames, bname)
+    elseif judgment isa AlgStruct 
+      push!(structlines, mk_struct(judgment, fqmn(__module__)))
     end
   end
 
   modulelines = Any[]
 
+  # this exports the names of the module, e.g. :default, :⋅, :e 
   push!(modulelines, :(export $(allnames(theory; aliases=true)...)))
 
   push!(
@@ -291,27 +290,35 @@ function theory_impl(head, body, __module__)
   if !isnothing(parentname)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
   end
+  
+  doctarget = gensym()
 
   push!(modulelines, Expr(:toplevel, :(module Meta
     struct T end
+   
+    @doc ($(Markdown.MD)((@doc $(__module__).$doctarget), $docstr))
     const theory = $theory
+
     macro theory() $theory end
     macro theory_module() parentmodule(@__MODULE__) end
   end)))
 
-  # FIXME accidentally deprecated this. need to fix.
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
+
 
   esc(
     Expr(
       :toplevel,
       lines...,
+      :(const $(doctarget) = nothing),
+      :(Core.@__doc__ $(doctarget)),
       :(
         module $name
         $(modulelines...)
+        $(structlines...)
         end
       ),
-      :(Core.@__doc__ $(name)),
+      :(@doc ($(Markdown.MD)((@doc $doctarget), $docstr)) $name)
     )
   )
 end
@@ -344,6 +351,25 @@ function invoke_term(theory_module, types, name, args; model=nothing)
     method(args...)
   else
     method(WithModel(model), args...)
+  end
+end
+
+
+"""
+
+"""
+function mk_struct(s::AlgStruct, mod)
+  fields = map(argsof(s)) do b
+    Expr(:(::), nameof(b), nameof(AlgSort(getvalue(b))))
+  end 
+  sorts = unique([f.args[2] for f in fields])
+  she = Expr(:macrocall, GlobalRef(StructEquality, Symbol("@struct_hash_equal")), mod, nameof(s))
+  quote
+    struct $(nameof(s)){$(sorts...)}
+      $(fields...)
+    end
+
+    $she
   end
 end
 

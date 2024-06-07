@@ -33,7 +33,7 @@ end
 using .ThPreorder
 
 @withmodel IntPreorder() (Leq, refl, trans) begin
-  @test trans((1,3), (3,5)) == (1,5)
+  @test trans((1,3), (3,5)) == (1,5)  
   @test_throws TypeCheckFail Leq((5,3), 5, 3)
   @test refl(2) == (2,2)
 end

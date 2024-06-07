@@ -1,3 +1,5 @@
+using Markdown
+
 """
 `GATSegment`
 
@@ -77,24 +79,12 @@ function reident(reps::Dict{Ident}, key::Ident, bysignature::Dict{AlgSorts, Iden
     bysignature
   else
     merge(map(collect(bysignature)) do (algsorts, ident)
+      # @info "INSPECT" reps, algsorts, ident
+      @warn algsorts typeof(reident.(Ref(reps), algsorts))
       @match algsorts begin
         [] => Dict(reident.(Ref(reps), algsorts) => reident(gettag(key), ident))
         _  => Dict(reident.(Ref(reps), algsorts) => reident(reps, ident))
       end
-    end...)
-  end
-end
-
-function _reident(reps::Dict{Ident}, bysignature::Dict{AlgSorts, Ident})
-  @info "CHECKING IF BYSIGNATURE CHANGE IS TRIGGERED FOR ALGDECLARATION" bysignature
-  if length(bysignature) == 0
-    bysignature
-  else
-    # XXX this makes the correct tags
-    merge(map(collect(bysignature)) do (algsorts, ident)
-      @info "WHAT WILL WE REIDENT" (algsorts, ident)
-      @info "DEBUGGING ALGSORTS: " reident.(Ref(reps), algsorts) reident(reps, ident)
-      Dict(reident.(Ref(reps), algsorts) => reident(reps, ident))
     end...)
   end
 end
@@ -126,7 +116,7 @@ function Base.copy(theory::GAT; name=theory.name)
     deepcopy(theory.resolvers),
     copy(theory.sorts),
     deepcopy(theory.accessors),
-    copy(theory.axioms)
+    copy(theory.axioms),
   )
 end
 
@@ -134,10 +124,10 @@ function GAT(name::Symbol)
   GAT(
     name,
     ScopeList{Judgment}(),
-    Dict{Ident, MethodResolver}(),
+    OrderedDict{Ident, MethodResolver}(),
     AlgSort[],
-    Dict{Ident, Dict{Int, Ident}}(),
-    Ident[]
+    OrderedDict{Ident, Dict{Int, Ident}}(),
+    Ident[],
   )
 end
 
@@ -158,7 +148,6 @@ function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, gat::GAT)
 end
 
 function reident(reps::Dict{Ident}, gat::GAT)
-  # @info "GAT DEBUG" reps reident(reps, gat.resolvers)
   GAT(gat.name, 
       reident(reps, gat.segments),
       reident(reps, gat.resolvers),
@@ -220,16 +209,26 @@ function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgDeclaration)
 end
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgTermConstructor)
-  # @info "ATermC" judgment getdecl(judgment) argsof(judgment) getvalue.(argsof(judgment)) sortsignature(judgment) x
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
 end
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgTypeConstructor)
-  # @info "ATypeC" judgment getdecl(judgment) sortsignature(judgment) x
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
   push!(theory.sorts, AlgSort(getdecl(judgment), x))
   theory.accessors[x] = Dict{Int, Ident}()
 end
+
+function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgFunction)
+  addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
+end
+
+function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgStruct)
+  addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
+  addmethod!(theory.resolvers[getdecl(judgment)], typesortsignature(judgment), x) # Collision?
+  push!(theory.sorts, AlgSort(getdecl(judgment), x))
+  theory.accessors[x] = Dict{Int, Ident}()
+end
+
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgAccessor)
   # @info "AccessorC" getdecl(judgment) sortsignature(judgment) x
@@ -262,6 +261,28 @@ end
 
 # Pretty-printing
 
+function Base.repr(theory::GAT)
+  head = theory.name
+  vec = []
+  for seg in theory.segments.scopes
+    push!(vec, LineNumberNode)
+    block = toexpr(theory, seg)
+    for line in block.args
+      push!(vec, line, LineNumberNode)
+    end
+  end
+  # Newlines in Markdown just require inserting a new line in the string.
+  replace!(line -> line == LineNumberNode ? "
+          " : line, vec)
+  string = join(vec)
+  Markdown.parse("""
+  ## $head
+
+  $string
+
+  """)
+end
+
 function Base.show(io::IO, theory::GAT)
   println(io, "GAT(", theory.name, "):")
   for seg in theory.segments.scopes
@@ -285,6 +306,12 @@ function allnames(theory::GAT; aliases=false)
 end
 
 sorts(theory::GAT) = theory.sorts
+primitive_sorts(theory::GAT) = 
+  filter(s->getvalue(theory[methodof(s)]) isa AlgTypeConstructor, sorts(theory))
+
+# NOTE: AlgStruct is the only derived sort this returns.
+struct_sorts(theory::GAT) = 
+  filter(s->getvalue(theory[methodof(s)]) isa AlgStruct, sorts(theory))
 
 function termcons(theory::GAT)
   xs = Tuple{Ident, Ident}[]
@@ -363,3 +390,12 @@ function methodlookup(c::GATContext, x::Ident, sig::AlgSorts)
     error("no method of $x found with signature $(getdecl.(sig))")
   end
 end
+
+hasname!(theory::GAT, name::Symbol) = if hasname(theory, name)
+  ident(theory; name)
+else
+  Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(name, AlgDeclaration()))
+end
+
+"""Get all structs in a theory"""
+structs(t::GAT) = AlgStruct[getvalue(t[methodof(s)]) for s in struct_sorts(t)]

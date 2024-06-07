@@ -44,7 +44,8 @@ Base.getindex(tc::TrmTypConstructor, lid::LID) = getindex(tc.localcontext, lid)
 
 Base.getindex(tc::TrmTypConstructor, lids::AbstractVector{LID}) = getindex(tc.localcontext, lids)
 
-# TODO: make a judgment which is a subtheory judgment
+getdecl(tc::TrmTypConstructor) = tc.declaration
+
 """
 `AlgDeclaration`
 
@@ -70,9 +71,9 @@ A declaration of a type constructor.
   args::Vector{LID}
 end
 
-Scopes.getcontext(tc::AlgTypeConstructor) = tc.localcontext
+Scopes.getcontext(tc::TrmTypConstructor) = tc.localcontext
 
-getdecl(tc::AlgTypeConstructor) = tc.declaration
+abstract type AccessorField <: Judgment end
 
 rename(tag::ScopeTag, renames::Dict{Symbol,Symbol},tc::AlgTypeConstructor) = 
 AlgTypeConstructor(tc.declaration, rename(tag, renames, tc.localcontext), tc.args)
@@ -90,18 +91,18 @@ I.e., declaring `Hom(dom::Ob, codom::Ob)::TYPE` implicitly overloads a previous
 declaration for `dom` and `codom`, or creates declarations if none previously
 exist.
 """
-@struct_hash_equal struct AlgAccessor <: Judgment
+@struct_hash_equal struct AlgAccessor <: AccessorField
   declaration::Ident
   typecondecl::Ident
   typecon::Ident
   arg::Int
 end
 
-Scopes.getcontext(acc::AlgAccessor) = EmptyContext{AlgType}()
 
-getdecl(acc::AlgAccessor) = acc.declaration
+getdecl(acc::AccessorField) = acc.declaration
 
-sortsignature(acc::AlgAccessor) = [AlgSort(acc.typecondecl, acc.typecon)]
+sortsignature(acc::AccessorField) = [AlgSort(acc.typecondecl, acc.typecon)]
+
 
 rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, a::AlgAccessor) = 
 AlgAccessor(rename(tag, renames, a.declaration), rename(tag, renames, a.typecondecl), rename(tag, renames, a.typecon), a.arg)
@@ -118,14 +119,11 @@ A declaration of a term constructor as a method of an `AlgFunction`.
   declaration::Ident
   localcontext::TypeScope
   args::Vector{LID}
-  type::AlgType
+  type::Union{TypeScope,AlgType}
 end
 
-Scopes.getcontext(tc::AlgTermConstructor) = tc.localcontext
 
-getdecl(tc::AlgTermConstructor) = tc.declaration
-
-sortsignature(tc::Union{AlgTypeConstructor, AlgTermConstructor}) =
+sortsignature(tc::TrmTypConstructor) =
   AlgSort.(getvalue.(argsof(tc)))
 
 function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, term::AlgTermConstructor)
@@ -150,7 +148,6 @@ A declaration of an axiom
   equands::Vector{AlgTerm}
 end
 
-Scopes.getcontext(t::AlgAxiom) = t.localcontext
 
 rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, t::AlgAxiom) = 
 AlgAxiom(rename(tag, renames, t.localcontext), rename(tag, renames, t.sort), rename(tag, renames, t.equands))
@@ -165,8 +162,67 @@ end
 A description of the argument sorts for a term constructor, used to disambiguate
 multiple term constructors of the same name.
 """
-const AlgSorts = Vector{AlgSort}
 
 # rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, ts::Vector{AlgSort}) = map(ts) do t
 #   AlgSort
 
+const AlgSorts = Vector{<:AbstractAlgSort}
+
+"""
+`AlgStruct`
+
+A declaration which is sugar for an AlgTypeConstructor, an AlgTermConstructor 
+which constructs an element of that type, and projection term constructors. E.g.
+
+    struct Cospan(dom, codom) ⊣ [dom:Ob, codom::Ob]
+      apex::Ob
+      i1::dom->apex
+      i2::codom->apex
+    end
+
+Is tantamount to (in a vanilla GAT):
+
+    Cospan(dom::Ob, codom::Ob)::TYPE 
+
+    cospan(apex, i1, i2)::Cospan(dom, codom) 
+      ⊣ [(dom, codom, apex)::Ob, i1::dom->apex, i2::codom->apex]
+
+    apex(csp::Cospan(d::Ob, c::Ob))::Ob            
+    i1(csp::Cospan(d::Ob, c::Ob))::(d->apex(csp))
+    i2(csp::Cospan(d::Ob, c::Ob))::(c->apex(csp))
+
+    apex(cospan(a, i_1, i_2)) == a  
+      ⊣ [(dom, codom, apex)::Ob, i_1::dom->apex, i_2::codom->apex]
+    i1(cospan(a, i_1, i_2)) == i_1 
+      ⊣ [(dom, codom, apex)::Ob, i_1::dom->apex, i_2::codom->apex]
+    i2(cospan(a, i_1, i_2)) == i_2
+      ⊣ [(dom, codom, apex)::Ob, i_1::dom->apex, i_2::codom->apex]
+
+    cospan(apex(csp), i1(csp), i2(csp)) == csp
+      ⊣ [(dom, codom)::Ob, csp::Cospan(dom, codom)]
+
+"""
+@struct_hash_equal struct AlgStruct <: TrmTypConstructor
+  declaration::Ident
+  localcontext::TypeScope
+  typeargs::Vector{LID}
+  fields::TypeScope
+end
+
+Base.nameof(t::AlgStruct) = nameof(t.declaration)
+typeargsof(t::AlgStruct) = t[t.typeargs]
+typesortsignature(tc::AlgStruct) =
+  AlgSort.(getvalue.(typeargsof(tc)))
+argsof(t::AlgStruct) = getbindings(t.fields)
+
+"""
+A shorthand for a function, such as "square(x) := x * x".  It is relevant for 
+models but can be ignored by theory maps, as it is fully determined by other 
+judgments in the theory.
+"""
+@struct_hash_equal struct AlgFunction <: TrmTypConstructor
+  declaration::Ident
+  localcontext::TypeScope
+  args::Vector{LID}
+  value::AlgTerm
+end
