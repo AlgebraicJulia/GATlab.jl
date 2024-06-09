@@ -1,4 +1,4 @@
-export IntNat, IntNatPlus, IntPreorder, ZRing
+export IntNat, IntNatPlus, IntPreorder, ZRing, BoolRing
 
 using ...Models
 using ..StdTheories

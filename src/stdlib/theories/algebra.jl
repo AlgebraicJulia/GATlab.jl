@@ -1,4 +1,4 @@
-export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThSemiRing, ThRing, ThCRing, ThBooleanRing, ThDivisionRing, ThField, ThCRig, ThElementary, ThPreorder, ThLeftModule, ThRightModule, ThBiModule, ThModule, ThCommRMod
+export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThSemiRing, ThRing, ThCRing, ThDiffRing, ThBooleanRing, ThDivisionRing, ThField, ThCRig, ThElementary, ThPreorder, ThLeftModule, ThRightModule, ThBiModule, ThModule, ThCommRModule
 
 import Base: +, *, zero, one
 
@@ -127,6 +127,16 @@ Examples:
   x * y == y * x ⊣ [x,y]
 end
 
+"""
+A commutative ring equipped with a *derivation* operator `d` which fulfills linearity and the Leibniz product rule.
+"""
+@theory ThDiffRing begin
+  using ThCRing
+  d(x) :: default ⊣ [x::default]
+  d(x + y) == d(x) + d(y) ⊣ [x::default, y::default]
+  d(x*y) == d(x)*y + x*d(y) ⊣ [x::default, y::default]
+end
+
 """ The theory of a commutative ring with multiplicative idempotence.
 
 Examples:
@@ -176,7 +186,7 @@ end
   using ThDivisionRing
   using ThCRing
 end
-
+# TODO user needs to define inv as 0 when 0
 
 @theory ThCRig begin
   using ThRig
@@ -281,20 +291,20 @@ end
 #   using ThRightModule
 # end
 
-# @theory ThVectorSpace begin
-#   using ThModule: M as V
-#   # using ThField: default as K
-# end
+@theory ThVectorSpace begin
+  using ThModule
+  using ThField: default as Scalar, i as inv
+end
 
 # TODO Fix axioms
-# @theory ThCommRMod begin
-#   using ThLeftModule
-#   x + y == y + x ⊣ [x::Scalar, y::Scalar]
-# end
+@theory ThCommRModule begin
+  using ThModule
+  x + y == y + x ⊣ [x::Scalar, y::Scalar]
+end
 
 ## bilinear operation is given by ⋅ but should be ⊕
 #@theory ThDistributiveAlgebra begin
-#  using ThCommRMod
+#  using ThCommRModule
 #  #
 #  (x ⊕ y) ⋅ z == (x ⋅ z) ⊕ (y ⋅ z) ⊣ [x::M, y::M, z::M]
 #  x ⋅ (y ⊕ z) == (x ⋅ y) ⊕ (x ⋅ z) ⊣ [x::M, y::M, z::A]

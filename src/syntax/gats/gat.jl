@@ -71,16 +71,15 @@ function reident(reps::Dict{Ident, Ident}, key::Ident, m::MethodResolver)
   MethodResolver(reident(reps, key, m.bysignature))
 end
 
-# the [] => #2 dict entry is not being reidented because we don't have #2 in our reident dictionary.
-# we will need to pass the tag for the key in {Ident, MethodResolver} to the value, MethodResolver
-# XXX sort of close
 function reident(reps::Dict{Ident}, key::Ident, bysignature::Dict{AlgSorts, Ident})
   if length(bysignature) == 0
     bysignature
   else
     merge(map(collect(bysignature)) do (algsorts, ident)
       @match algsorts begin
-        [] => Dict(algsorts => reident(gettag(key), ident))
+        [] => begin
+          Dict(algsorts => reident(gettag(key), ident))
+        end
         _  => Dict(reident.(Ref(reps), algsorts) => reident(reps, ident))
       end
     end...)

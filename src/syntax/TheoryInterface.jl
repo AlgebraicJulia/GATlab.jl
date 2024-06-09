@@ -161,12 +161,19 @@ This allows us to safely check if a theory has a name (with `hastag`) and also r
 
 """
 function nametag(T::GAT)
-  if !isempty(T)
-    names, tags = T.segments.namelookup, T.segments.taglookup
-    Tags = merge(map(collect(keys(tags))) do key
-      Dict(tags[key] => key)
-    end...)
-    Dict(k => get(Tags, names[k], nothing) for k in keys(names))
+  if !isempty(T.segments.scopes)
+
+    merge(filter(!isnothing, map(T.segments.scopes) do scope
+      k = collect(keys(scope.scope.names));
+      if !isempty(k)
+        Dict(k[1] => scope.scope.tag)
+      end
+    end)...)
+    # names, tags = T.segments.namelookup, T.segments.taglookup
+    # Tags = merge(map(collect(keys(tags))) do key
+    #   Dict(tags[key] => key)
+    # end...)
+    # Dict(k => get(Tags, names[k], nothing) for k in keys(names))
   else
     Dict(:_EMPTY => newscopetag())
   end
@@ -183,17 +190,14 @@ For example, suppose we are building a theory `ThRing` and require `ThCMonoid` f
 
 """
 function makeidentdict(host::GAT, guest::GAT, renames::Dict{Symbol,Symbol}; is_reident::Bool=true)
-  guest, host = nametag.([guest, host])
+  host_nametag, guest_nametag = nametag(host), nametag(guest)
   merge(map(collect(keys(renames))) do old
     new = renames[old]
     if is_reident
-      # if new name is in host, then use its ident in the host.
-      # otherwise, if the guest theory has the term, then use its ident in the host.
-      # otherwise, create a new scope tag
-      tag = haskey(host, new) ? host[new] : (haskey(guest, new) ? guest[new] : newscopetag()) # TODO we don't want to want to make new scopetag
-      Dict(Ident(guest[old], LID(1), old) => Ident(tag, LID(1), new)) # TODO get lid
+      tag = haskey(host_nametag, new) ? host_nametag[new] : (haskey(guest_nametag, new) ? guest_nametag[new] : newscopetag()) # TODO we don't want to want to make new scopetag
+      Dict(Ident(guest_nametag[old], LID(1), old) => Ident(tag, LID(1), new)) # TODO get lid
     else
-      Dict(Ident(guest[old], LID(1), old) => Ident(guest[old], LID(1), new))
+      Dict(Ident(guest_nametag[old], LID(1), old) => Ident(guest_nametag[old], LID(1), new))
     end
   end...) 
 end
@@ -253,6 +257,8 @@ function theory_impl(head, body, __module__)
   parent = expand_theory(parentname, body, __module__)
 
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
+
+
   newsegment = theory.segments.scopes[end]
   # @info "NEWSEGMENT" newsegment
   docstr = repr(theory)
