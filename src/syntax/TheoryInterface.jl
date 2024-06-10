@@ -253,7 +253,7 @@ function theory_impl(head, body, __module__)
 
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
 
-  # newsegment = theory.segments.scopes[end]
+  newsegment = theory.segments.scopes[end]
   docstr = repr(theory)
 
   lines = Any[]
@@ -305,6 +305,7 @@ function theory_impl(head, body, __module__)
     macro theory_module() parentmodule(@__MODULE__) end
   end)))
 
+  # XXX
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
 
