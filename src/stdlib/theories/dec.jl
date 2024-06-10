@@ -14,6 +14,13 @@ end
   ap(α ⋅ x) == α ⋅ ap(x) ⊣ [x::DomVector]
 end
 
+# TODO current implementation of multiple-inheritance does not overload the axioms in Form1 and Form2 Modules, so they are treated as the same and therefore eliminated.
+#
+# @theory _CoChains begin
+#   using Module: M as Form0
+#   using Module: M as Form1
+#   using Module: M as Form2
+# end
 @theory CoChains begin
   using Module: Vector as Form0
   using Module: Vector as Form1

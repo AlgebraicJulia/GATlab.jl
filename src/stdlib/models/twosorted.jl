@@ -72,5 +72,3 @@ end
 @withmodel RMatricesTwo() (e, i, ⊕, zero, unit, *, +, -, ⋅) begin
     i(2⋅rand(2,2) ⊕ rand(2,2))
 end
-# @time -1*(2*rand(2,2) + rand(2,2))
-

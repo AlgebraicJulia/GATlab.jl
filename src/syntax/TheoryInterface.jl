@@ -82,12 +82,7 @@ function rename_impl(newname, body, __module__)
   #
   lines = Any[]
   newnames = Symbol[]
-
-  ## XXX "for binding in segment" was "... in newsegment", and I wrapped this
-  ## in a for-loop for segments. This was done to debug an issue with ModelInterface
-  ## where the `default` function was not being declared.
-  ##
-  ## owen: this should be in newsegment as before
+ 
   for segment in newtheory.segments.scopes
     for binding in segment
       judgment = getvalue(binding)
@@ -258,9 +253,7 @@ function theory_impl(head, body, __module__)
 
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
 
-
-  newsegment = theory.segments.scopes[end]
-  # @info "NEWSEGMENT" newsegment
+  # newsegment = theory.segments.scopes[end]
   docstr = repr(theory)
 
   lines = Any[]

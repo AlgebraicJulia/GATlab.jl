@@ -1,4 +1,4 @@
-export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThSemiRing, ThRing, ThCRing, ThDiffRing, ThBooleanRing, ThDivisionRing, ThField, ThCRig, ThElementary, ThPreorder, ThLeftModule, ThRightModule, ThBiModule, ThModule, ThCommRModule
+export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThSemiRing, ThRing, ThCommRing, ThDiffRing, ThBooleanRing, ThDivisionRing, ThCRig, ThElementary, ThPreorder, ThLeftModule, ThRightModule, ThModule, ThCommRModule
 
 import Base: +, *, zero, one
 
@@ -122,7 +122,7 @@ Examples:
   - 
 
 """
-@theory ThCRing begin
+@theory ThCommRing begin
   using ThRing
   x * y == y * x ⊣ [x,y]
 end
@@ -131,7 +131,7 @@ end
 A commutative ring equipped with a *derivation* operator `d` which fulfills linearity and the Leibniz product rule.
 """
 @theory ThDiffRing begin
-  using ThCRing
+  using ThCommRing
   d(x) :: default ⊣ [x::default]
   d(x + y) == d(x) + d(y) ⊣ [x::default, y::default]
   d(x*y) == d(x)*y + x*d(y) ⊣ [x::default, y::default]
@@ -144,7 +144,7 @@ Examples:
 
 """
 @theory ThBooleanRing begin
-  using ThCRing
+  using ThCommRing
   x * x == x ⊣ [x]
 end
 
@@ -160,41 +160,13 @@ end
   x * i(x) == one() ⊣ [x]
 end
 
-# TODO: how to handle cases where RHS of axiom must be a different sort (e.g., nonzero) than those on the LHS (e.g., default)? Can we define a sort which inherits axioms defined on another sort (default)?
-""" The theory of a commutative ring where multiplication by nonzero elements is nonzero 
-
- - 
-
-"""
-# @theory ThIntegralDomain begin
-#   using ThCRing
-#   nonzero::TYPE
-#   # using ThCRing: default as nonzero
-#   x * y == z ⊣ [x::nonzero, y::nonzero, z::nonzero]
-# end
-
-# using two theories which overlap considerably, we can still add unique elem
-# best to export default as K or something
-""" The theory of a commutative division ring
-
- - The rational numbers ℚ and algebraic extensions, i.e. ℚ[√2]
- - The real numbers ℝ and its algebraic completion, the complex numbers ℂ
- - 
-
-"""
-@theory ThField begin
-  using ThDivisionRing
-  using ThCRing
-end
-# TODO user needs to define inv as 0 when 0
-
 @theory ThCRig begin
   using ThRig
   a * b == b * a ⊣ [a,b]
 end
 
 @theory ThElementary begin
-  using ThCRing
+  using ThCommRing
   sin(x) ⊣ [x]
   cos(x) ⊣ [x]
   tan(x) ⊣ [x]
@@ -284,17 +256,6 @@ end
 #     1.a: it does not exist in the new theory
 #     1.b: it does not exist in the old theory
 #   2. ThBiModule contributes both Left and Right Modules. Since the scalars are being renamed (to the same name), they are checked if they have new 
-
-# TODO we do not change the idents, so M and Scalar show
-# @theory __ThModule begin
-#   using ThLeftModule
-#   using ThRightModule
-# end
-
-@theory ThVectorSpace begin
-  using ThModule
-  using ThField: default as Scalar, i as inv
-end
 
 # TODO Fix axioms
 @theory ThCommRModule begin
