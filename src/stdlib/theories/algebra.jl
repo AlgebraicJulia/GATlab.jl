@@ -29,6 +29,16 @@ Examples:
   (x ⋅ y) :: default ⊣ [x, y]
 end
 
+@theory ThAdditiveMagma begin
+  using ThSet
+  (x + y) :: default ⊣ [x, y]
+end
+
+@theory ThMultiplicativeMagma begin
+  using ThSet
+  (x * y) :: default ⊣ [x, y]
+end
+
 """ This theory contains an associative binary operation called multiplication. 
 
 Examples:
@@ -38,6 +48,16 @@ Examples:
 @theory ThSemiGroup begin
   using ThMagma
   (x ⋅ y) ⋅ z == (x ⋅ (y ⋅ z)) ⊣ [x, y, z]
+end
+
+@theory ThAdditiveSemiGroup begin
+  using ThAdditiveMagma
+  (x + y) + z == (x + (y + z)) ⊣ [x, y, z]
+end
+
+@theory ThMultiplicativeSemiGroup begin
+  using ThMultiplicativeMagma
+  (x * y) * z == (x * (y * z)) ⊣ [x, y, z]
 end
 
 """ The theory of a semigroup with identity.
@@ -51,6 +71,20 @@ Examples:
   e() :: default
   e() ⋅ x == x ⊣ [x]
   x ⋅ e() == x ⊣ [x]
+end
+
+@theory ThAdditiveMonoid begin
+  using ThAdditiveSemiGroup
+  zero() :: default
+  zero() + x == x ⊣ [x]
+  x + zero() == x ⊣ [x]
+end
+
+@theory ThMultiplicativeMonoid begin
+  using ThMultiplicativeSemiGroup
+  one() :: default
+  one() * x == x ⊣ [x]
+  x * one() == x ⊣ [x]
 end
 
 """ The theory of a monoid with multiplicative inverse.
@@ -67,6 +101,20 @@ Examples:
   x ⋅ i(x) == e() ⊣ [x]
 end
 
+@theory ThAdditiveGroup begin
+  using ThAdditiveMonoid
+  (-x) :: default ⊣ [x]
+  (-x) + x == zero() ⊣ [x]
+  x + (-x) == zero() ⊣ [x]
+end
+
+@theory ThMultiplicativeGroup begin
+  using ThMultiplicativeMonoid
+  inv(x) :: default ⊣ [x]
+  inv(x) * x == one() ⊣ [x]
+  x * inv(x) == one() ⊣ [x]
+end
+
 """ The theory of a monoid where multiplication enjoys commutativity.
 
 Examples:
@@ -77,9 +125,29 @@ Examples:
   a ⋅ b == b ⋅ a ⊣ [a, b]
 end
 
+@theory ThAdditiveCMonoid begin
+  using ThAdditiveMonoid
+  a + b == b + a ⊣ [a, b]
+end
+
+@theory ThMultiplicativeCMonoid begin
+  using ThMultiplicativeMonoid
+  a * b == b * a ⊣ [a, b]
+end
+
 @theory ThAb begin
   using ThGroup
   using ThCMonoid
+end
+
+@theory ThAdditiveAb begin
+  using ThAdditiveGroup
+  using ThAdditiveCMonoid
+end
+
+@theory ThMultiplicativeAb begin
+  using ThMultiplicativeGroup
+  using ThMultiplicativeCMonoid
 end
 
 """ The theory of a semiring
@@ -91,8 +159,8 @@ Examples:
 
 """
 @theory ThSemiRing begin
-  using ThCMonoid: ⋅ as +, e as zero
-  using ThMonoid: ⋅ as *, e as one
+  using ThAdditiveCMonoid
+  using ThMultiplicativeMonoid
   x * (y + z) == (x * y) + (x * y) ⊣ [x,y,z]
 end
 
@@ -111,9 +179,8 @@ Examples:
 A ring can also be obtaned by imposing additive inverses on a semiring.
 """
 @theory ThRing begin
-  using ThAb: ⋅ as +, i as -, e as zero
-  using ThMonoid: ⋅ as *, e as one
-  x * (y + z) == (x * y) + (x * z) ⊣ [x,y,z]
+  using ThSemiRing
+  using ThAdditiveAb
 end
 
 """ The theory of a ring where multiplicative is commutative.
@@ -124,7 +191,7 @@ Examples:
 """
 @theory ThCommRing begin
   using ThRing
-  x * y == y * x ⊣ [x,y]
+  using ThMultiplicativeCMonoid
 end
 
 """
@@ -206,62 +273,62 @@ end
 #   using ThAb: default as M =turnsinto=> import ThAb; @op M := ThAb.default
 # end
 
-@theory ThLeftModule begin
-  using ThAb: default as M, ⋅ as ⊕
-  using ThRing: default as Scalar, one as unit  
+# @theory ThLeftModule begin
+#   using ThAb: default as M, ⋅ as ⊕
+#   using ThRing: default as Scalar, one as unit
 
-  (r ⋅ a) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
-  (r ⋅ (a ⊕ b)) == ((r ⋅ a) ⊕ (r ⋅ b)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
-  ((r + s) ⋅ a) == ((r ⋅ a) ⊕ (s ⋅ a)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions 
-  (r * s) ⋅ a == r ⋅ (s ⋅ a) ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
-  unit ⋅ a == a ⊣ [unit::Scalar, a::M]                                # unit 
-end
+#   (r ⋅ a) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
+#   (r ⋅ (a ⊕ b)) == ((r ⋅ a) ⊕ (r ⋅ b)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
+#   ((r + s) ⋅ a) == ((r ⋅ a) ⊕ (s ⋅ a)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions
+#   (r * s) ⋅ a == r ⋅ (s ⋅ a) ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
+#   unit ⋅ a == a ⊣ [unit::Scalar, a::M]                                # unit
+# end
 
-@theory ThRightModule begin
-  using ThAb: default as M, ⋅ as ⊕
-  using ThRing: default as Scalar, one as unit
+# @theory ThRightModule begin
+#   using ThAb: default as M, ⋅ as ⊕
+#   using ThRing: default as Scalar, one as unit
 
-  (a ⋅ r) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
-  ((a ⊕ b) ⋅ r) == ((a ⋅ r) ⊕ (b ⋅ r)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
-  (a ⋅ (r + s)) == ((a ⋅ r) ⊕ (a ⋅ s)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions 
-  a ⋅ (r * s) == (a ⋅ r) ⋅ s ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
-  a ⋅ unit  == a ⊣ [unit::Scalar, a::M]                               # unit 
-end
+#   (a ⋅ r) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
+#   ((a ⊕ b) ⋅ r) == ((a ⋅ r) ⊕ (b ⋅ r)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
+#   (a ⋅ (r + s)) == ((a ⋅ r) ⊕ (a ⋅ s)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions
+#   a ⋅ (r * s) == (a ⋅ r) ⋅ s ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
+#   a ⋅ unit  == a ⊣ [unit::Scalar, a::M]                               # unit
+# end
 
-# XXX this exists because we need to fix a issue where terms with the same name have different idents
-@theory ThModule begin
-  using ThAb: default as M, ⋅ as ⊕
-  using ThRing: default as Scalar, one as unit
+# # XXX this exists because we need to fix a issue where terms with the same name have different idents
+# @theory ThModule begin
+#   using ThAb: default as M, ⋅ as ⊕
+#   using ThRing: default as Scalar, one as unit
 
-  (r ⋅ a) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
-  (r ⋅ (a ⊕ b)) == ((r ⋅ a) ⊕ (r ⋅ b)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
-  ((r + s) ⋅ a) == ((r ⋅ a) ⊕ (s ⋅ a)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions 
-  (r * s) ⋅ a == r ⋅ (s ⋅ a) ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
-  unit ⋅ a == a ⊣ [unit::Scalar, a::M]                                # unit
+#   (r ⋅ a) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
+#   (r ⋅ (a ⊕ b)) == ((r ⋅ a) ⊕ (r ⋅ b)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
+#   ((r + s) ⋅ a) == ((r ⋅ a) ⊕ (s ⋅ a)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions
+#   (r * s) ⋅ a == r ⋅ (s ⋅ a) ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
+#   unit ⋅ a == a ⊣ [unit::Scalar, a::M]                                # unit
 
-  (a ⋅ r) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
-  ((a ⊕ b) ⋅ r) == ((a ⋅ r) ⊕ (b ⋅ r)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
-  (a ⋅ (r + s)) == ((a ⋅ r) ⊕ (a ⋅ s)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions 
-  a ⋅ (r * s) == (a ⋅ r) ⋅ s ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
-  a ⋅ unit  == a ⊣ [unit::Scalar, a::M]                               # unit
-end
+#   (a ⋅ r) :: M ⊣ [r::Scalar, a::M]                                    # R-actions
+#   ((a ⊕ b) ⋅ r) == ((a ⋅ r) ⊕ (b ⋅ r)) ⊣ [r::Scalar, a::M, b::M]      # R-action left-distributes
+#   (a ⋅ (r + s)) == ((a ⋅ r) ⊕ (a ⋅ s)) ⊣ [r::Scalar, s::Scalar, a::M] # addition of R-actions
+#   a ⋅ (r * s) == (a ⋅ r) ⋅ s ⊣ [r::Scalar, s::Scalar, a::M]           # composition of R-action
+#   a ⋅ unit  == a ⊣ [unit::Scalar, a::M]                               # unit
+# end
 
-# TODO gensymming afoot
-@theory ThBiModule begin
-  using ThLeftModule: Scalar as LeftScalar
-  using ThRightModule: Scalar as RightScalar
-end
-# TODO in this case, 
-#   1. ThRightModule and ThLeftModule both rename default to M, which gets a newscopetag, since
-#     1.a: it does not exist in the new theory
-#     1.b: it does not exist in the old theory
-#   2. ThBiModule contributes both Left and Right Modules. Since the scalars are being renamed (to the same name), they are checked if they have new 
+# # TODO gensymming afoot
+# @theory ThBiModule begin
+#   using ThLeftModule: Scalar as LeftScalar
+#   using ThRightModule: Scalar as RightScalar
+# end
+# # TODO in this case,
+# #   1. ThRightModule and ThLeftModule both rename default to M, which gets a newscopetag, since
+# #     1.a: it does not exist in the new theory
+# #     1.b: it does not exist in the old theory
+# #   2. ThBiModule contributes both Left and Right Modules. Since the scalars are being renamed (to the same name), they are checked if they have new
 
-# TODO Fix axioms
-@theory ThCommRModule begin
-  using ThModule
-  x + y == y + x ⊣ [x::Scalar, y::Scalar]
-end
+# # TODO Fix axioms
+# @theory ThCommRModule begin
+#   using ThModule
+#   x + y == y + x ⊣ [x::Scalar, y::Scalar]
+# end
 
 ## bilinear operation is given by ⋅ but should be ⊕
 #@theory ThDistributiveAlgebra begin

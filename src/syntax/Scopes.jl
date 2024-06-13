@@ -751,6 +751,7 @@ end
 function ScopeList(scopes::Vector{<:HasScope{T}}) where {T}
   ScopeList{T}(scopes)
 end
+
 function ScopeList{T}(scopes::Vector{<:HasScope{T}}) where {T}
   allunique(gettag.(scopes)) || error("tags of scopes in ScopeList must all be unique")
   taglookup = Dict{ScopeTag, Int}()

@@ -1,5 +1,5 @@
 module TheoryInterface
-export @theory, @signature, @rename, Model, invoke_term, _rd, nametag, makerenamedict
+export @theory, @signature, Model, invoke_term
 
 using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
 # using GATlab.Util
@@ -50,86 +50,6 @@ macro theory(head, body)
 end
 
 """
-Renaming a theory can be done with the @theory macro:
-
-  ```
-  @theory ThNewName begin
-    using: ThTheory: using old as new, before as after
-  end
-  ```
-
-@rename simplifies this expression by one line:
-
-  ```
-  @rename ThNewName using ThTheory: using old as new, before as after
-  ```
-
-"""
-macro rename(newname, body)
-  rename_impl(newname, body, __module__)
-end
-
-# @rename ThM using ThMonoid using ⋅ as *
-function rename_impl(newname, body, __module__) 
- 
-  # validate head and body
-  newname isa Symbol || error("$newname must be a symbol")
-  !isdefined(__module__, newname) || error("$newname cannot be defined already")
-
-  parent = expand_theory(nothing, body, __module__)
-  newtheory = fromexpr(parent, body, GAT; name=newname, current_module=fqmn(__module__))
-
-  #
-  lines = Any[]
-  newnames = Symbol[]
- 
-  for segment in newtheory.segments.scopes
-    for binding in segment
-      judgment = getvalue(binding)
-      bname = nameof(binding)
-      if judgment isa Union{AlgDeclaration, Alias}
-        push!(lines, juliadeclaration(bname))
-        push!(newnames, bname)
-      end
-    end
-  end
-
-  modulelines = Any[]
-
-  push!(modulelines, :(export $(allnames(newtheory; aliases=true)...)))
-
-  push!(
-   modulelines,
-   Expr(:using,
-     Expr(:(:),
-       Expr(:(.), :(.), :(.), nameof(__module__)),
-       Expr.(Ref(:(.)), newnames)...
-     )
-   )
-  )
-
-  push!(modulelines, Expr(:toplevel, :(module Meta
-    struct T end
-    const theory = $newtheory
-    macro theory() $newtheory end
-    macro theory_module() parentmodule(@__MODULE__) end
-  end)))
-
-  esc(
-    Expr(
-      :toplevel,
-      lines...,
-      :(
-        module $newname
-        $(modulelines...)
-        end
-      ),
-      :(Core.@__doc__ $(newname)),
-     )
-   )
-end
-
-"""
 Fully Qualified Module Name
 """
 function fqmn(mod::Module)
@@ -142,66 +62,8 @@ function fqmn(mod::Module)
   reverse(names)
 end
 
-"""    
-`nametag(T::GAT) : Dict{Symbol, ScopeTag}`
 
-Given a GAT `T`, returns a dictionary of names associated with their ScopeTags.
-
-For example, `ThMagma` would yield
-
-    :default => ScopeTag(*)
-    :⋅       => ScopeTag(*)
-
-This allows us to safely check if a theory has a name (with `hastag`) and also retrieve the associated tag.
-
-"""
-function nametag(T::GAT)
-  if !isempty(T.segments.scopes)
-
-    merge(filter(!isnothing, map(T.segments.scopes) do scope
-      k = collect(keys(scope.scope.names));
-      if !isempty(k)
-        Dict(k[1] => scope.scope.tag)
-      end
-    end)...)
-    # names, tags = T.segments.namelookup, T.segments.taglookup
-    # Tags = merge(map(collect(keys(tags))) do key
-    #   Dict(tags[key] => key)
-    # end...)
-    # Dict(k => get(Tags, names[k], nothing) for k in keys(names))
-  else
-    Dict(:_EMPTY => newscopetag())
-  end
-end
-
-"""    
-`makeidentdict(host::GAT, guest::GAT, renames::Dict{Symbol} : Dict{Ident}`
-
-Accepts a new theory (the "guest"), the main theory we are building (the "host"), and a rename dictionary. Converts the rename dictionary to a reident dictionary. 
-
-This is used by the reident function, which will recurse through the GAT structure to replace idents.
-
-For example, suppose we are building a theory `ThRing` and require `ThCMonoid` for addition and `ThMonoid` for multiplication, along with their respective rename dictionaries. For each guest, we need the nametags for both host and guest so that we can check, for each entry in the dictionary, if the name we wish to change in the guest already exists in the host theory. This allows us to create ScopeTags only when necessary. 
-
-"""
-function makeidentdict(host::GAT, guest::GAT, renames::Dict{Symbol,Symbol}; is_reident::Bool=true)
-  host_nametag, guest_nametag = nametag(host), nametag(guest)
-  merge(map(collect(keys(renames))) do old
-    new = renames[old]
-    if is_reident
-      tag = haskey(host_nametag, new) ? host_nametag[new] : (haskey(guest_nametag, new) ? guest_nametag[new] : newscopetag()) # TODO we don't want to want to make new scopetag
-      Dict(Ident(guest_nametag[old], LID(1), old) => Ident(tag, LID(1), new)) # TODO get lid
-    else
-      Dict(Ident(guest_nametag[old], LID(1), old) => Ident(guest_nametag[old], LID(1), new))
-    end
-  end...) 
-end
-# TODO if there is a collision, choose same scope tag
-
-function usetheory!(host::GAT, guest::GAT, renames::Dict{Symbol,Symbol}=Dict{Symbol,Symbol}())
-  if !isempty(renames)
-    guest = reident(makeidentdict(host, guest, renames), guest)
-  end
+function usetheory!(host::GAT, guest::GAT)
   for segment in guest.segments.scopes
     if !hastag(host, gettag(segment))
       GATs.unsafe_pushsegment!(host, segment)
@@ -222,18 +84,9 @@ function expand_theory(parentname, body, __module__)
   # collect renames
   for line in body.args
     @match line begin
-      Expr(:using, Expr(:(:), Expr(:(.), other), renames...)) => begin
-        othertheory = macroexpand(__module__, :($other.Meta.@theory))
-        rename_dict = merge(map(renames) do expr
-          @match expr begin
-            Expr(:as, Expr(_, fst), snd) => Dict(fst => snd)
-            _ => nothing
-          end
-        end...)
-        usetheory!(theory, othertheory, rename_dict) 
-      end
       Expr(:using, Expr(:(.), other)) => begin
         othertheory = macroexpand(__module__, :($other.Meta.@theory))
+        # TODO: should also import Julia declarations from the module for othertheory
         usetheory!(theory, othertheory)
       end
       _ => nothing
