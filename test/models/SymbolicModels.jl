@@ -123,14 +123,6 @@ module CatTests
 
 using GATlab, Test
 
-# @theory ThCategory begin # should this be deleted?
-#   Ob::TYPE
-#   Hom(dom::Ob, codom::Ob)::TYPE
-
-#   id(X::Ob)::Hom(X,X)
-#   compose(f::Hom(X,Y), g::Hom(Y,Z))::Hom(X,Z) ⊣ [X::Ob, Y::Ob, Z::Ob]
-# end
-
 @symbolic_model FreeCategory{GATExpr, GATExpr} ThCategory begin
   compose(f::Hom, g::Hom) = associate(new(f,g))
 end

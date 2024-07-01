@@ -364,23 +364,6 @@ Scopes.AppendContext(c::GATContext, context::Context{AlgType}) =
 
 function methodlookup(c::GATContext, x::Ident, sig::AlgSorts)
   theory = c.theory
-  if theory.name == :ThTuple
-    @info theory.name
-    @info "DEBUG: SIG" theory.resolvers[x].bysignature sig haskey(theory.resolvers[x].bysignature, sig) sig∈keys(theory.resolvers[x].bysignature)
-  end
-  # note: in
-  #   @theory ThTuple begin
-  #     using ThMagma: default as M
-  #
-  #     x ⋅ (y ⋅ z) == ((x ⋅ y) ⋅ z) ⊣ [(x,y,z)::M]
-  #   end
-  #
-  #   issue:
-  #     Dict([AlgSort(Ma, #2b), AlgSort(M, #2b)] => #2c)
-  #     sig = [AlgSort(Ma, #2a), AlgSort(Ma, #2a)]
-  #
-  #     The 
-  #
   if haskey(theory.resolvers, x) && haskey(theory.resolvers[x].bysignature, sig)
     resolvemethod(theory.resolvers[x], sig)
   else
