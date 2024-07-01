@@ -16,6 +16,8 @@ import ..ExprInterop: fromexpr, toexpr
 
 import ..Scopes: retag, rename, reident
 
+import AlgebraicInterfaces: equations
+
 using StructEquality
 using MLStyle
 using DataStructures: OrderedDict

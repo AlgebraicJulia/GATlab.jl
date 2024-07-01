@@ -18,6 +18,7 @@ using MLStyle
 using StructEquality
 using Crayons
 import Base: rest
+import AlgebraicInterfaces: getvalue
 
 using ...Util
 
