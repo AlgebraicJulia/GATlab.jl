@@ -81,18 +81,21 @@ function expand_theory(parentname, body, __module__)
     GAT(:_EMPTY)
   end
 
+  usings = []
+
   # collect renames
   for line in body.args
     @match line begin
       Expr(:using, Expr(:(.), other)) => begin
         othertheory = macroexpand(__module__, :($other.Meta.@theory))
-        # TODO: should also import Julia declarations from the module for othertheory
+        push!(usings, :(using ..$other))
         usetheory!(theory, othertheory)
       end
       _ => nothing
     end
   end
-  theory
+
+  (theory, usings)
 end
 
 function theory_impl(head, body, __module__)
@@ -102,7 +105,7 @@ function theory_impl(head, body, __module__)
     _ => error("could not parse head of @theory: $head")
   end
 
-  parent = expand_theory(parentname, body, __module__)
+  (parent, usings) = expand_theory(parentname, body, __module__)
 
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
 
@@ -114,20 +117,23 @@ function theory_impl(head, body, __module__)
   structlines = Expr[]
   structnames = Set([nameof(s.declaration) for s in structs(theory)])
   for scope in theory.segments.scopes
-    for binding in scope # XXX newsegment
-      judgment = getvalue(binding)
-      bname = nameof(binding)
-      if judgment isa Union{AlgDeclaration, Alias} && bname ∉ structnames
-        push!(lines, juliadeclaration(bname))
-        push!(newnames, bname)
-      elseif judgment isa AlgStruct
-        push!(structlines, mk_struct(judgment, fqmn(__module__)))
+    if !hastag(parent, gettag(scope))
+      for binding in scope # XXX newsegment
+        judgment = getvalue(binding)
+        bname = nameof(binding)
+        if judgment isa Union{AlgDeclaration, Alias} && bname ∉ structnames
+          push!(lines, juliadeclaration(bname))
+          push!(newnames, bname)
+        elseif judgment isa AlgStruct
+          push!(structlines, mk_struct(judgment, fqmn(__module__)))
+        end
       end
     end
   end
 
   modulelines = Any[]
 
+  append!(modulelines, usings)
   # this exports the names of the module, e.g. :default, :⋅, :e 
   push!(modulelines, :(export $(allnames(theory; aliases=true)...)))
 
