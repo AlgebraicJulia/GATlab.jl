@@ -60,6 +60,10 @@ thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 
 O, H, i = idents(thcat; name=[:Ob, :Hom, :id])
 
+# test reidentification
+_O = retag(Dict(gettag(O) => newscopetag()), O)
+@test reident(gettag(O), _O) == O
+
 ob_decl = getvalue(thcat[O])
 
 ObT = fromexpr(thcat, :Ob, AlgType)
@@ -87,6 +91,7 @@ HomS = AlgSort(HomT)
 
 @test rename(gettag(sortscope), Dict(:A=>:Z), HomT) isa AlgType
 @test retag(Dict(gettag(sortscope)=>newscopetag()), HomT) isa AlgType
+# @test reident(Dict(A=>ident(sortscope; name=:B)), HomT) isa AlgType
 
 @test sortcheck(c, AlgTerm(A)) == ObS
 
@@ -143,6 +148,7 @@ end
   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
 end
 
+@test Base.isempty(GAT(:_EMPTY))
 
 
 end # module
