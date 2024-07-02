@@ -42,9 +42,7 @@ y = Ident(tag1, LID(1), :y)
 @test nameof(x) == :x
 @test isnamed(x)
 
-function basicprinted(x)
-  sprint(show, x; context=(:color=>false))
-end
+@test reident(Dict(x => y), x) == y
 
 @test basicprinted(x) == "x"
 
@@ -72,6 +70,9 @@ bind_y = Binding{String}(:y, "why")
 bind_z = Binding{String}(:x, "ex")
 
 @test getline(setline(bind_z, LineNumberNode(1))) == LineNumberNode(1)
+
+nameless2 = Ident(tag2, LID(1), nothing)
+@test reident(Dict(nameless => nameless2), bind_x) == bind_x
 
 # Context
 #########

@@ -173,7 +173,9 @@ function rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x::Ident)
   end
 end
 
-# XXX we need to make sure we match on just tag and name 
+reident(r::Dict{Ident}, x) = x
+
+# XXX we need to make sure we match on just tag and name
 function reident(r::Dict{Ident}, x::Ident)
   haskey(r, x) ? r[x] : x
 end
@@ -460,8 +462,6 @@ function reident(reps::Dict{Ident}, names::Dict{Symbol, LID})
 	end...) :
 	names
 end
-
-reident(reps::Dict{Ident}, Nothing) = nothing
 
 function Base.show(io::IO, s::Scope)
   n = length(s.bindings)

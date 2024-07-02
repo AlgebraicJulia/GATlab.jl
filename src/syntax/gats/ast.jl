@@ -53,6 +53,13 @@ function reident(reps::Dict{Ident}, a::AlgEqSort)
 end
 
 
+function reident(reps::Dict{Ident}, a::AlgEqSort)
+  newhead = reident(reps, headof(a))
+  newmethod = retag(Dict(a.head.tag => newhead.tag), methodof(a))
+  AlgEqSort(newhead, newmethod) 
+end
+
+
 """
 We need this to resolve a mutual reference loop; the only subtype is Constant
 """
