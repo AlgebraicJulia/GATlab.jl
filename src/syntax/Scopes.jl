@@ -4,7 +4,7 @@ export
   ScopeTagError,
   LID,
   Ident, Alias, gettag, getlid, isnamed,
-  Binding, getvalue, setvalue, getline, setline,
+  Binding, getvalue, setname, setvalue, getline, setline,
   Context, getscope, nscopes, getlevel, hasname, hastag, alltags, allscopes,
   HasContext, getcontext,
   hasident, ident, getidents, idents, canonicalize,
@@ -156,14 +156,14 @@ function Base.show(io::IO, x::Ident)
 end
 
 retag(replacements::Dict{ScopeTag, ScopeTag}, x::Ident) =
-  if gettag(x) ∈ keys(replacements)
+  if haskey(replacements, gettag(x))
     Ident(replacements[gettag(x)], getlid(x), nameof(x))
   else
     x
   end
 
 rename(tag::ScopeTag, replacements::Dict{Symbol, Symbol}, x::Ident) =
-  if gettag(x) == tag && nameof(x) ∈ keys(replacements)
+  if haskey(replacements, nameof(x)) && gettag(x) == tag
     Ident(tag, getlid(x), replacements[nameof(x)])
   else
     x
