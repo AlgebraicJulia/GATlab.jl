@@ -118,17 +118,10 @@ end
 # Category
 ##########
 
+
 module CatTests
 
 using GATlab, Test
-
-@theory ThCategory begin # should this be deleted?
-  Ob::TYPE
-  Hom(dom::Ob, codom::Ob)::TYPE
-
-  id(X::Ob)::Hom(X,X)
-  compose(f::Hom(X,Y), g::Hom(Y,Z))::Hom(X,Z) ⊣ [X::Ob, Y::Ob, Z::Ob]
-end
 
 @symbolic_model FreeCategory{GATExpr, GATExpr} ThCategory begin
   compose(f::Hom, g::Hom) = associate(new(f,g))
@@ -249,7 +242,6 @@ x, y, z = Elem.(Ref(FreeMonoid), [:x, :y, :z])
 
 # Categories
 
-
 A, B = Ob(FreeCategory, :A), Ob(FreeCategory, :B)
 f, g = Hom(:f, A, B), Hom(:g, B, A)
 
@@ -323,6 +315,8 @@ end
 """ Theory of *groupoids*.
 """
 @theory ThGroupoid <: ThCategory begin
+  # TODO change to using ThCategory
+
   invert(f::(A → B))::(B → A) ⊣ [A::Ob, B::Ob]
 
   f ⋅ invert(f) == id(A) ⊣ [A::Ob, B::Ob, f::(A → B)]

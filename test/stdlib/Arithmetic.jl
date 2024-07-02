@@ -3,6 +3,14 @@ module TestArithmetic
 using GATlab
 using Test
 
+# Peano arithmetic
+# -----------------------------
+# using .ThNat
+
+# @withmodel IntNat() (ℕ, Z, S) begin
+#   @test S(S(Z())) == 2
+# end
+
 # Integers as model of naturals
 #------------------------------
 using .ThNatPlus
@@ -39,6 +47,17 @@ using .ThCategory
   @test_throws TypeCheckFail Hom((5,3), 5, 3)
   @test_throws ErrorException compose((1,2), (3,5))
   @test id(2) == (2,2)
+end
+
+# Ring of integers
+# --------------------
+using .ThRing
+import .ThRing: zero, one, -, +, *
+
+@withmodel ZRing() (zero, one, -, +, *) begin
+  @test 1 + 2 == 3
+  @test 1 + (-1) == 0
+  @test 2 * (1 + 1) == 4
 end
 
 end # module 

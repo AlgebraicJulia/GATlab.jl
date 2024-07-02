@@ -16,6 +16,12 @@ A *sort*, which is essentially a type constructor without arguments
   method::Ident
 end
 
+function reident(reps::Dict{Ident}, a::AlgSort)
+  newhead = reident(reps, headof(a))
+  newmethod = retag(Dict(a.head.tag => newhead.tag), methodof(a))
+  AlgSort(newhead, newmethod) 
+end
+
 """
 `AlgSort`
 
@@ -34,6 +40,13 @@ methodof(a::AbstractAlgSort) = a.method
 Base.nameof(sort::AbstractAlgSort) = nameof(sort.head)
 
 getdecl(s::AbstractAlgSort) = s.head
+
+function reident(reps::Dict{Ident}, a::AlgEqSort)
+  newhead = reident(reps, headof(a))
+  newmethod = retag(Dict(a.head.tag => newhead.tag), methodof(a))
+  AlgEqSort(newhead, newmethod) 
+end
+
 
 """
 We need this to resolve a mutual reference loop; the only subtype is Constant
@@ -79,6 +92,16 @@ retag(reps::Dict{ScopeTag, ScopeTag}, t::MethodApp{T}) where {T} =
     retag.(Ref(reps), t.args)
   )
 
+# TODO can we make this more elegant?
+function reident(reps::Dict{Ident}, t::MethodApp{T}) where {T}
+  head = reident(reps, t.head)
+  MethodApp{T}(
+    head,
+    retag(Dict(t.head.tag => head.tag), t.method),
+    reident.(Ref(reps), t.args)
+  )
+end
+
 abstract type AlgAST end
 
 bodyof(t::AlgAST) = t.body
@@ -117,6 +140,8 @@ rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
 
 retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
 
+reident(reps::Dict{Ident}, t::AlgTerm) = AlgTerm(reident(reps, t.body))
+
 function AlgSort(c::Context, t::AlgTerm)
   t_sub = substitute_funs(c, t)
   if t_sub != t 
@@ -151,6 +176,8 @@ retag(reps::Dict{ScopeTag, ScopeTag}, eq::Eq) = Eq(retag.(Ref(reps), eq.equands)
 
 rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, eq::Eq) =
   Eq(retag.(Ref(tag), Ref(reps), eq.equands))
+
+reident(reps::Dict{Ident}, eq::Eq) = Eq(reident.(Ref(reps), eq.equands))
 
 """
 `AlgType`
@@ -187,6 +214,10 @@ retag(reps::Dict{ScopeTag,ScopeTag}, t::AlgType) =
 rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::AlgType) =
   AlgType(rename(tag, reps, t.body))
 
+function reident(reps::Dict{Ident}, t::AlgType)
+  AlgType(reident(reps, t.body))
+end
+
 AlgSort(t::AlgType) = if iseq(t)
   AlgEqSort(t.body.sort.head, t.body.sort.method)
 else 
@@ -221,8 +252,10 @@ Accessing a name from a term of tuple type
   head::Ident
   body::AlgTerm
 end
+
 headof(a::AlgDot) = a.head 
 bodyof(a::AlgDot) = a.body
+
 # Type Contexts
 ###############
 

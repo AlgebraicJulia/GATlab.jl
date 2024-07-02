@@ -25,6 +25,9 @@ function Base.show(io::IO, ts::TypeScope)
   print(io, toexpr(EmptyContext{AlgType}(), ts))
 end
 
+rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, t::TypeScope ) = TypeScope(rename(tag, renames, t.scope))
+
+reident(reps::Dict{Ident}, t::TypeScope) = TypeScope(reident(reps, t.scope))
 
 """
 A GAT is conceptually a bunch of `Judgment`s strung together.
@@ -55,6 +58,8 @@ end
 
 Scopes.getcontext(::AlgDeclaration) = EmptyContext{AlgType}()
 
+reident(reps::Dict{Ident}, a::AlgDeclaration) = a
+
 """
 `AlgTypeConstructor`
 
@@ -69,6 +74,12 @@ end
 Scopes.getcontext(tc::TrmTypConstructor) = tc.localcontext
 
 abstract type AccessorField <: Judgment end
+
+rename(tag::ScopeTag, renames::Dict{Symbol,Symbol},tc::AlgTypeConstructor) = 
+AlgTypeConstructor(tc.declaration, rename(tag, renames, tc.localcontext), tc.args)
+
+reident(reps::Dict{Ident}, tc::AlgTypeConstructor) =
+AlgTypeConstructor(reident(reps, tc.declaration), reident(reps, tc.localcontext), tc.args)
 
 """
 `AlgAccessor`
@@ -93,6 +104,12 @@ getdecl(acc::AccessorField) = acc.declaration
 sortsignature(acc::AccessorField) = [AlgSort(acc.typecondecl, acc.typecon)]
 
 
+rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, a::AlgAccessor) = 
+AlgAccessor(rename(tag, renames, a.declaration), rename(tag, renames, a.typecondecl), rename(tag, renames, a.typecon), a.arg)
+
+reident(reps::Dict{Ident}, a::AlgAccessor) = 
+AlgAccessor(reident(reps, a.declaration), reident(reps, a.typecondecl), reident(reps, a.typecon), a.arg)
+
 """
 `AlgTermConstructor`
 
@@ -109,6 +126,17 @@ end
 sortsignature(tc::TrmTypConstructor) =
   AlgSort.(getvalue.(argsof(tc)))
 
+function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, term::AlgTermConstructor)
+  AlgTermConstructor(rename(tag, renames, term.declaration),rename(tag, renames, term.localcontext),term.args,rename(tag, renames, term.type))
+end
+
+function reident(reps::Dict{Ident}, term::AlgTermConstructor)
+  AlgTermConstructor(reident(reps, term.declaration),
+                     reident(reps, term.localcontext),
+                     term.args,
+                     reident(reps, term.type))
+end
+
 """
 `AlgAxiom`
 
@@ -121,12 +149,23 @@ A declaration of an axiom
 end
 
 
+rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, t::AlgAxiom) = 
+AlgAxiom(rename(tag, renames, t.localcontext), rename(tag, renames, t.sort), rename(tag, renames, t.equands))
+
+function reident(reps::Dict{Ident}, a::AlgAxiom)
+  AlgAxiom(reident(reps, a.localcontext), reident(reps, a.sort), reident.(Ref(reps), a.equands))
+end
+
 """
 `AlgSorts`
 
 A description of the argument sorts for a term constructor, used to disambiguate
 multiple term constructors of the same name.
 """
+
+# rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, ts::Vector{AlgSort}) = map(ts) do t
+#   AlgSort
+
 const AlgSorts = Vector{<:AbstractAlgSort}
 
 """
