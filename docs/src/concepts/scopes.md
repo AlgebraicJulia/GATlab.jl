@@ -21,7 +21,7 @@ an identifier.
 [chit](https://github.com/davidad/chit))
 
 In general, naming is given by a *relation* between symbols and *bindings* (as
-refered to by local identifiers).  Each binding may be associated with zero or
+referred to by local identifiers).  Each binding may be associated with zero or
 more symbols, and each symbol might be associated with zero or more bindings.
 
 We name the failure of this relation to be a bijection in several ways.
@@ -65,7 +65,7 @@ scopes, and the most recent scope "wins".
 Parsing turns a `Symbol` into an `Ident`. The `Ident` contains the original
 `Symbol` for printing, but it also contains a reference to a scope via ScopeTag,
 and an local identifier ("lid") within that scope. Thus, the name in the `Ident`
-is never needed for later stages of programatic manipulation.
+is never needed for later stages of programmatic manipulation.
 
 Scopes cache the relation between names and bindings, by providing a way to go
 from binding (as reified by local identifier) to a set of aliases with

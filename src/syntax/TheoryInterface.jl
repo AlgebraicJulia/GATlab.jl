@@ -34,6 +34,7 @@ A macro called `@theory` which expands to the `GAT` data structure for the modul
 A constant called `Meta.theory` which is the `GAT` data structure.
 """
 
+# TODO is every contribution to a theory a new segment, or can a new theory introduce multiple segments? 
 """
 When we declare a new theory, we add the scope tag of its new segment to this
 dictionary pointing to the module corresponding to the new theory.
@@ -61,20 +62,53 @@ function fqmn(mod::Module)
   reverse(names)
 end
 
-function theory_impl(head, body, __module__)
-  (name, parentname) = @match head begin
-    (name::Symbol) => (name, nothing)
-    Expr(:(<:), name, parent) => (name, parent)
-    _ => error("could not parse head of @theory: $head")
-  end
 
-  parent = if !isnothing(parentname)
-    macroexpand(__module__, :($parentname.Meta.@theory))
+function usetheory!(host::GAT, guest::GAT)
+  for segment in guest.segments.scopes
+    if !hastag(host, gettag(segment))
+      GATs.unsafe_pushsegment!(host, segment)
+    end
+  end
+end
+
+"""
+Accepts a name, a theory body and returns a theory
+"""
+function expand_theory(parentname, body, __module__)
+  theory = if !isnothing(parentname)
+    copy(macroexpand(__module__, :($parentname.Meta.@theory)))
   else
     GAT(:_EMPTY)
   end
-  
+
+  usings = []
+
+  # collect renames
+  for line in body.args
+    @match line begin
+      Expr(:using, Expr(:(.), other)) => begin
+        othertheory = macroexpand(__module__, :($other.Meta.@theory))
+        push!(usings, :(using ..$other))
+        usetheory!(theory, othertheory)
+      end
+      _ => nothing
+    end
+  end
+
+  (theory, usings)
+end
+
+function theory_impl(head, body, __module__)
+  (name, parentname) = @match head begin
+    (name::Symbol) => (name, nothing)
+    Expr(:(<:), name, parent) => (name, parent) # TODO make parents
+    _ => error("could not parse head of @theory: $head")
+  end
+
+  (parent, usings) = expand_theory(parentname, body, __module__)
+
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
+
   newsegment = theory.segments.scopes[end]
   docstr = repr(theory)
 
@@ -82,19 +116,24 @@ function theory_impl(head, body, __module__)
   newnames = Symbol[]
   structlines = Expr[]
   structnames = Set([nameof(s.declaration) for s in structs(theory)])
-  for binding in newsegment
-    judgment = getvalue(binding)
-    bname = nameof(binding)
-    if judgment isa Union{AlgDeclaration, Alias} && bname ∉ structnames
-      push!(lines, juliadeclaration(bname))
-      push!(newnames, bname)
-    elseif judgment isa AlgStruct 
-      push!(structlines, mk_struct(judgment, fqmn(__module__)))
+  for scope in theory.segments.scopes
+    if !hastag(parent, gettag(scope))
+      for binding in scope # XXX newsegment
+        judgment = getvalue(binding)
+        bname = nameof(binding)
+        if judgment isa Union{AlgDeclaration, Alias} && bname ∉ structnames
+          push!(lines, juliadeclaration(bname))
+          push!(newnames, bname)
+        elseif judgment isa AlgStruct
+          push!(structlines, mk_struct(judgment, fqmn(__module__)))
+        end
+      end
     end
   end
 
   modulelines = Any[]
 
+  append!(modulelines, usings)
   # this exports the names of the module, e.g. :default, :⋅, :e 
   push!(modulelines, :(export $(allnames(theory; aliases=true)...)))
 
@@ -108,6 +147,7 @@ function theory_impl(head, body, __module__)
     )
   )
 
+  # TODO deprecated?
   if !isnothing(parentname)
     push!(modulelines, Expr(:using, Expr(:(.), :(.), :(.), parentname)))
   end
@@ -116,7 +156,8 @@ function theory_impl(head, body, __module__)
 
   push!(modulelines, Expr(:toplevel, :(module Meta
     struct T end
-   
+    $(constructor_module(theory))
+
     @doc ($(Markdown.MD)((@doc $(__module__).$doctarget), $docstr))
     const theory = $theory
 
@@ -124,6 +165,7 @@ function theory_impl(head, body, __module__)
     macro theory_module() parentmodule(@__MODULE__) end
   end)))
 
+  # XXX
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
 
@@ -175,10 +217,44 @@ function invoke_term(theory_module, types, name, args; model=nothing)
   end
 end
 
-
 """
-
+Produce a module with an AlgClosure for each declaration in the theory.
 """
+function constructor_module(theory::GAT)
+  closures = Dict{Ident, AlgClosure}()
+
+  for segment in allscopes(theory)
+    for (x, binding) in zip(getidents(segment), getbindings(segment))
+      judgment = getvalue(binding)
+      if judgment isa AlgDeclaration
+        closures[x] = AlgClosure(theory)
+      elseif judgment isa AlgTermConstructor
+        add_method!(
+          closures[judgment.declaration],
+          AlgMethod(
+            judgment.localcontext,
+            AlgTerm(
+              judgment.declaration,
+              x,
+              AlgTerm.(idents(judgment.localcontext; lid=judgment.args))
+            ),
+            "",
+            judgment.args,
+            judgment.type,
+          )
+        )
+      end
+    end
+  end
+
+  Expr(
+    :module,
+    true,
+    :Constructors,
+    Expr(:block, [:(const $(nameof(x)) = $f) for (x, f) in closures]...)
+  )
+end
+
 function mk_struct(s::AlgStruct, mod)
   fields = map(argsof(s)) do b
     Expr(:(::), nameof(b), nameof(AlgSort(getvalue(b))))
