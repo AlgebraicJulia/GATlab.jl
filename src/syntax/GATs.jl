@@ -15,7 +15,7 @@ using ..Scopes
 import ..ExprInterop: fromexpr, toexpr
 
 import ..Scopes: retag, rename, reident
-using ...Util.Tries
+using ...Util.Dtrys
 using AbstractTrees
 
 import AlgebraicInterfaces: equations

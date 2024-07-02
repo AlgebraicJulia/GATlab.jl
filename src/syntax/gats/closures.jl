@@ -38,10 +38,10 @@ function (m::AlgMethod)(argvals::Any...)
 end
 
 """
-This implements the Trie-algebra structure on the multicategory of types and
+This implements the Dtry-algebra structure on the multicategory of types and
 AlgMethods.
 """
-function tcompose(ms::Trie{AlgMethod}, argnames::Vector{Symbol})
+function tcompose(ms::Dtry{AlgMethod}, argnames::Vector{Symbol})
   # First check that all methods have argument contexts of the same
   # length/variable names
   # argnames = ...
@@ -62,7 +62,7 @@ function tcompose(ms::Trie{AlgMethod}, argnames::Vector{Symbol})
 
   # Finally, compose all of the bodies into an expression creating an
   # AlgNamedTuple
-  body = Tries.fold(
+  body = Dtrys.fold(
     AlgTerm(AlgNamedTuple(OrderedDict{Symbol, AlgTerm}())),
     x -> x,
     d -> AlgTerm(AlgNamedTuple{AlgTerm}(d)),
@@ -106,7 +106,7 @@ function add_method!(f::AlgClosure, m::AlgMethod)
   f.methods[sorts] = m
 end
 
-function tcompose(fs::Trie{AlgClosure}, argnames::Vector{Symbol})
+function tcompose(fs::Dtry{AlgClosure}, argnames::Vector{Symbol})
   ms = map(f -> only(values(f.methods)), fs)
   m = tcompose(ms, argnames)
   f = AlgClosure(first(fs).theory)

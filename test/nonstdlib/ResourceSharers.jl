@@ -2,8 +2,8 @@ module TestResourceSharers
 
 using Test
 
-using GATlab.Util.Tries
-using GATlab.Util.Tries: node, leaf
+using GATlab.Util.Dtrys
+using GATlab.Util.Dtrys: node, leaf
 using GATlab.NonStdlib.ResourceSharers
 using GATlab.NonStdlib.ResourceSharers: ocompose, oapply
 using GATlab
@@ -37,7 +37,7 @@ end
 
 @test sprint(show, rtop) isa String
 
-r = ocompose(rtop, Trie(■.X => rX, ■.Y => rY))
+r = ocompose(rtop, Dtry(■.X => rX, ■.Y => rY))
 
 @resource_sharer ThRing Spring begin
   variables = x, v
@@ -56,9 +56,9 @@ end;
   gravity(v)
 end
 
-@test sprint(show, Gravity) isa String
+@test sprint((io, r) -> show(io, r; theory=ThRing.Meta.theory), Gravity) isa String
 
-s = oapply(SpringGravity, Trie(■.spring => Spring, ■.gravity => Gravity));
+s = oapply(SpringGravity, Dtry(■.spring => Spring, ■.gravity => Gravity));
 
 body = toexpr(GATContext(ThRing.Meta.theory, s.update.context), s.update.body)
 

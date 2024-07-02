@@ -2,8 +2,8 @@ module ResourceSharers
 export Rhizome, @rhizome, ResourceSharer, @resource_sharer, Variable
 
 using ...Syntax
-using ...Util.Tries
-using ...Util.Tries: flatten, node
+using ...Util.Dtrys
+using ...Util.Dtrys: flatten, node
 using ...Syntax.GATs: tcompose
 using ...Util
 using MLStyle
@@ -33,10 +33,10 @@ Fields:
 """
 struct PortVariable
   type::AlgType
-  junction::TrieVar
+  junction::DtryVar
 end
 
-const Interface = Trie{AlgType}
+const Interface = Dtry{AlgType}
 
 """
 A rhizome is a variant of a UWD where the underlying cospan is epi-monic.
@@ -49,12 +49,12 @@ This also differs from the ACSet-based UWDs in the following ways
 1. We use tries instead of numbering things sequentially.
 2. All of the "functions out" of the tries are handled by just storing data in
 the leaves of the tries, rather than having external "column vectors".
-So e.g. we would use `Trie{Int}` rather than a pair of `Trie{Nothing}`,
-`Dict{TrieVar, Int}`.
+So e.g. we would use `Dtry{Int}` rather than a pair of `Dtry{Nothing}`,
+`Dict{DtryVar, Int}`.
 3. We use an indexed rather than fibered representation for inner ports
 on boxes. That is, we have a function Boxes -> Set rather than a function
 InnerPorts -> Boxes. Following 2., this is just stored in the leaf nodes
-of the trie of boxes, hence `Trie{Trie{PortVariable}}`.
+of the trie of boxes, hence `Dtry{Dtry{PortVariable}}`.
 4. We don't have separate sets for outer ports and junctions: rather each
 junction is marked as "exposed" or not. This simplifies naming. Also see
 [`Variable`](@ref).
@@ -66,11 +66,11 @@ of enforcing this would be to do something like
 
 ```
 struct Box
-  ports::Trie{PortVariable}
+  ports::Dtry{PortVariable}
 end
 
 struct Rhizome
-  stuff::Trie{Union{Variable, Box}}
+  stuff::Dtry{Union{Variable, Box}}
 end
 ```
 
@@ -81,36 +81,36 @@ struct Rhizome
   theory::GAT
   mcompose::AlgClosure
   mzero::AlgClosure
-  boxes::Trie{Trie{PortVariable}}
-  junctions::Trie{Variable}
+  boxes::Dtry{Dtry{PortVariable}}
+  junctions::Dtry{Variable}
 end
 
 """
-    ocompose(r::Rhizome, rs::Trie{Rhizome})
+    ocompose(r::Rhizome, rs::Dtry{Rhizome})
 
-This implements the composition operation for the Trie-multicategory of
+This implements the composition operation for the Dtry-multicategory of
 rhizomes. This is the better way of doing the [operad of undirected wiring][1].
 
-TODO: add link to arXiv paper on Trie-multicategories once it goes up.
+TODO: add link to arXiv paper on Dtry-multicategories once it goes up.
 
 See [2] for a reference on general T-multicategories, then trust me for now
-that Trie is a cartesian monoid.
+that Dtry is a cartesian monoid.
 
 [1]: [The operad of wiring diagrams: formalizing a graphical language for
 databases, recursion, and plug-and-play circuits](https://arxiv.org/abs/1305.0297)
 [2]: [Higher Operads, Higher Categories](https://arxiv.org/abs/math/0305049)
 """
-function ocompose(r::Rhizome, rs::Trie{Rhizome})
-  # paired :: Trie{Tuple{Trie{PortVariable}, Rhizome}}
+function ocompose(r::Rhizome, rs::Dtry{Rhizome})
+  # paired :: Dtry{Tuple{Dtry{PortVariable}, Rhizome}}
   paired = zip(r.boxes, rs)
-  boxes = flatten(mapwithkey(Trie{Trie{PortVariable}}, paired) do k, (interface, r′)
-    # k :: TrieVar
-    # interface :: Trie{PortVariable}
+  boxes = flatten(mapwithkey(Dtry{Dtry{PortVariable}}, paired) do k, (interface, r′)
+    # k :: DtryVar
+    # interface :: Dtry{PortVariable}
     # r′ :: Rhizome
     # We want to create the new collection of boxes
 
-    map(Trie{PortVariable}, r′.boxes) do b
-      # b :: Trie{PortVariable}
+    map(Dtry{PortVariable}, r′.boxes) do b
+      # b :: Dtry{PortVariable}
       map(PortVariable, b) do p
         # p :: PortVariable
         # p.junction :: namespace(b.junctions)
@@ -129,10 +129,10 @@ function ocompose(r::Rhizome, rs::Trie{Rhizome})
   end)
   # Add all unexposed junctions
   newjunctions = flatten(
-    map(Trie{Variable}, rs) do r′
+    map(Dtry{Variable}, rs) do r′
       internal_junctions = filter(j -> !j.exposed, r′.junctions)
       if isnothing(internal_junctions)
-        Tries.node(OrderedDict{Symbol, Trie{Variable}}())
+        Dtrys.node(OrderedDict{Symbol, Dtry{Variable}}())
       else
         internal_junctions
       end
@@ -215,7 +215,7 @@ macro rhizome(theorymod, head, body)
   # macroexpand `theory` to get the actual theory
   theory = macroexpand(__module__, :($theorymod.Meta.@theory))
   # parse the name and junctions out of `head`
-  junctions = OrderedDict{TrieVar, Variable}()
+  junctions = OrderedDict{DtryVar, Variable}()
   (name, args) = @match head begin
     Expr(:call, name::Symbol, args...) => (name, args)
   end
@@ -229,16 +229,16 @@ macro rhizome(theorymod, head, body)
     type = fromexpr(theory, typeexpr, AlgType)
     junctions[v] = Variable(true, type)
   end
-  junctions = Trie(junctions)
+  junctions = Dtry(junctions)
 
-  boxes = OrderedDict{TrieVar, Trie{PortVariable}}()
+  boxes = OrderedDict{DtryVar, Dtry{PortVariable}}()
   # for each line in body, add a box to boxes
   for line in body.args
     (box, args) = @match line begin
       _::LineNumberNode => continue
       Expr(:call, name, args...) => (parse_var(name), args)
     end
-    interface = OrderedDict{TrieVar, PortVariable}()
+    interface = OrderedDict{DtryVar, PortVariable}()
     for arg in args
       (pname, junction) = @match arg begin
         pname::Symbol => (pname, pname)
@@ -252,14 +252,14 @@ macro rhizome(theorymod, head, body)
       j = junctions[jvar]
       interface[v] = PortVariable(j.type, jvar)
     end
-    boxes[box] = Trie(interface)
+    boxes[box] = Dtry(interface)
   end
   :(
     $name = $Rhizome(
       $theory,
       $theorymod.Meta.Constructors.:(+),
       $theorymod.Meta.Constructors.zero,
-      $(Trie(boxes)),
+      $(Dtry(boxes)),
       $(junctions),
     )
   ) |> esc
@@ -273,7 +273,7 @@ TODO: there should be a smart constructor that takes an AlgClosure and finds
 the right method of it for the variables and params.
 """
 struct ResourceSharer
-  variables::Trie{Variable}
+  variables::Dtry{Variable}
   params::AlgType
   # (tcompose(variables[..].type), params) -> tcompose(variables)
   update::AlgMethod
@@ -309,7 +309,7 @@ macro resource_sharer(theory, name, body)
 end
 
 function parse_namespace(theory::GAT, expr::Expr0)
-  vs = OrderedDict{TrieVar, AlgType}()
+  vs = OrderedDict{DtryVar, AlgType}()
   argexprs = @match expr begin
     Expr(:tuple, args...) => args
     _ => [expr]
@@ -324,7 +324,7 @@ function parse_namespace(theory::GAT, expr::Expr0)
     type = fromexpr(theory, typeexpr, AlgType)
     vs[v] = type
   end
-  Trie(vs)
+  Dtry(vs)
 end
 
 function ResourceSharer(theory::GAT; variables::Expr0, params::Expr0, update::Expr0)
@@ -371,7 +371,7 @@ Arguments
 
 Produces an AlgMethod going from tcompose(t1) to tcompose(first.(t2))
 """
-function pullback(t1::Trie{AlgType}, t2::Trie{Tuple{AlgType, TrieVar}}; argname=:x)
+function pullback(t1::Dtry{AlgType}, t2::Dtry{Tuple{AlgType, DtryVar}}; argname=:x)
   ty1 = tcompose(t1)
   ty2 = tcompose(map(first, t2))
   ctx = TypeScope(argname => ty1)
@@ -399,13 +399,13 @@ Arguments
 Produces an AlgMethod going from tcompose(first.(t2)) to tcompose(t1)
 """
 function pushforward(
-  t1::Trie{AlgType},
-  t2::Trie{Tuple{AlgType, TrieVar}},
+  t1::Dtry{AlgType},
+  t2::Dtry{Tuple{AlgType, DtryVar}},
   mcompose::AlgClosure,
   mzero::AlgClosure;
   argname=:x
 )
-  preimages = Dict{TrieVar, Vector{TrieVar}}()
+  preimages = Dict{DtryVar, Vector{DtryVar}}()
   traversewithkey(t2) do k, (_, v)
     if haskey(preimages, v)
       push!(preimages[v], k)
@@ -429,7 +429,7 @@ function pushforward(
   AlgMethod(ctx, body, "", [LID(1)], ty1)
 end
 
-function oapply(r::Rhizome, sharers::Trie{ResourceSharer})
+function oapply(r::Rhizome, sharers::Dtry{ResourceSharer})
   new_variables = filter(v -> !v.exposed, flatten(
     map(sharers) do sharer
       sharer.variables
@@ -443,13 +443,13 @@ function oapply(r::Rhizome, sharers::Trie{ResourceSharer})
   state = map(v -> v.type, variables)
   state_type = tcompose(state)
 
-  # full_state : Trie{Tuple{AlgType, TrieVar}}
+  # full_state : Dtry{Tuple{AlgType, DtryVar}}
   # This is a trie mapping all the variables in all of the systems
   # to their type, and to the variable in the reduced system that they
   # map to
   full_state = flatten(
-    mapwithkey(Trie{Tuple{AlgType, TrieVar}}, zip(r.boxes, sharers)) do b, (interface, sharer)
-      mapwithkey(Tuple{AlgType, TrieVar}, sharer.variables) do k, v
+    mapwithkey(Dtry{Tuple{AlgType, DtryVar}}, zip(r.boxes, sharers)) do b, (interface, sharer)
+      mapwithkey(Tuple{AlgType, DtryVar}, sharer.variables) do k, v
         if v.exposed
           (v.type, interface[k].junction)
         else

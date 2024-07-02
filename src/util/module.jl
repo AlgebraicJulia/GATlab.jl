@@ -2,12 +2,12 @@ module Util
 
 using Reexport
 
-include("Tries.jl")
+include("Dtrys.jl")
 include("MetaUtils.jl")
 include("HashColor.jl")
 include("Eithers.jl")
 
-@reexport using .Tries
+@reexport using .Dtrys
 @reexport using .MetaUtils
 @reexport using .HashColor
 @reexport using .Eithers

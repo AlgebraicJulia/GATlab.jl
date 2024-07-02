@@ -163,14 +163,14 @@ retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
 
 reident(reps::Dict{Ident}, t::AlgTerm) = AlgTerm(reident(reps, t.body))
 
-function tcompose(t::AbstractTrie{AlgTerm})
+function tcompose(t::AbstractDtry{AlgTerm})
   @match t begin
-    Tries.Leaf(v) => v
-    Tries.Node(bs) => 
+    Dtrys.Leaf(v) => v
+    Dtrys.Node(bs) => 
       AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(
         (n, tcompose(v)) for (n, v) in bs
       )))
-    Tries.Empty() =>
+    Dtrys.Empty() =>
       AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}()))
   end
 end
@@ -270,12 +270,12 @@ function AlgSort(t::AlgType)
   end
 end
 
-function tcompose(t::AbstractTrie{AlgType})
+function tcompose(t::AbstractDtry{AlgType})
   @match t begin
-    Tries.Node(bs) =>
+    Dtrys.Node(bs) =>
       AlgType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (k,v) in AbstractTrees.children(t))))
-    Tries.Leaf(v) => v
-    Tries.Empty() => AlgType(AlgNamedTuple(OrderedDict{Symbol, AlgType}()))
+    Dtrys.Leaf(v) => v
+    Dtrys.Empty() => AlgType(AlgNamedTuple(OrderedDict{Symbol, AlgType}()))
   end
 end
   
@@ -327,10 +327,10 @@ end
 headof(a::AlgDot) = a.head 
 bodyof(a::AlgDot) = a.body
 
-function Base.getindex(a::AlgTerm, v::TrieVar)
+function Base.getindex(a::AlgTerm, v::DtryVar)
   @match v begin
-    Tries.Root() => a
-    Tries.Nested((n, v′)) => getindex(AlgTerm(AlgDot(n, a)), v′)
+    Dtrys.Root() => a
+    Dtrys.Nested((n, v′)) => getindex(AlgTerm(AlgDot(n, a)), v′)
   end
 end
 

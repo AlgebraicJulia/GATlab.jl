@@ -142,7 +142,7 @@ end
   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
 end
 
-# Tries
+# Dtrys
 
 tuplescope = fromexpr(ThMonoid.Meta.theory, :([x::(a::(s,t),b)]), TypeScope)
 

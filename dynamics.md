@@ -17,7 +17,7 @@
 
     Affordances:
     - [x] DSL for writing down functions, composing, etc.
-    - [ ] A function `tcompose(t::Trie{AlgebraicFunction})::AlgebraicFunction`, implementing the Trie-algebra structure on morphisms
+    - [ ] A function `tcompose(t::Dtry{AlgebraicFunction})::AlgebraicFunction`, implementing the Dtry-algebra structure on morphisms
     - [ ] Interpret/compile a symbolic function into a real function
     - [ ] Serialize symbolic functions
 - [ ] Compilation
@@ -35,12 +35,12 @@
     ```
 
     Affordances:
-    - A function `tcompose(arena::Trie{Arena})::Arena`, implementing the Trie-algebra structure on objects
+    - A function `tcompose(arena::Dtry{Arena})::Arena`, implementing the Dtry-algebra structure on objects
 - [ ] Multilenses
     Sketch:
     ```julia
     struct MultiLens
-        inner_boxes::Trie{Arena}
+        inner_boxes::Dtry{Arena}
         outer_box::Arena
         # used for namespacing `params` in composition, must not overlap with `inner_boxes`
         name::Symbol 
@@ -53,7 +53,7 @@
     ```
 
     Affordances:
-    - A function `ocompose(l::MultiLens, args::Trie{MultiLens})::MultiLens` implementing the Trie-multicategory structure
+    - A function `ocompose(l::MultiLens, args::Dtry{MultiLens})::MultiLens` implementing the Dtry-multicategory structure
 - [ ] Systems
     Sketch:
     ```julia
@@ -69,7 +69,7 @@
     ```
 
     Affordances:
-    - A function `oapply(l::MultiLens, args::Trie{System})::System` implementing the action of the Trie-multicategory of multilenses on systems.
+    - A function `oapply(l::MultiLens, args::Dtry{System})::System` implementing the action of the Dtry-multicategory of multilenses on systems.
 
 ## Resource sharers
 
@@ -82,20 +82,20 @@
     end
 
     struct Rhizome
-        boxes::Trie{Interface}
-        junctions::Trie{VariableType}
-        mapping::Dict{TrieVar, TrieVar}
+        boxes::Dtry{Interface}
+        junctions::Dtry{VariableType}
+        mapping::Dict{DtryVar, DtryVar}
     end
     ```
 
     Affordances:
-    - `ocompose(r::Rhizome, rs::Trie{Rhizome})::Rhizome`
+    - `ocompose(r::Rhizome, rs::Dtry{Rhizome})::Rhizome`
 
     In `ocompose`, the names of the junctions in the top-level rhizome dominate.
 - [ ] Systems
     ```julia
     struct ResourceSharer
-        variables::Trie{VariableType}
+        variables::Dtry{VariableType}
         params::AlgType
         output::AlgType
         # (params, state) -> state
@@ -106,6 +106,6 @@
     ```
 
     Affordances:
-    - `oapply(r::Rhizome, sharers::Trie{ResourceSharer})::ResourceSharer`
+    - `oapply(r::Rhizome, sharers::Dtry{ResourceSharer})::ResourceSharer`
 
     In `oapply`, variables get renamed to the junctions that they are attached to.
