@@ -39,13 +39,3 @@ struct ZRing <: Model{Tuple{Int}} end
   +(x::Int, y::Int) = x + y
   *(x::Int, y::Int) = x * y
 end
-
-struct BoolRing <: Model{Tuple{Int}} end
-
-@instance ThBooleanRing{Int} [model::BoolRing] begin
-  zero() = 0
-  one() = 1
-  -(x::Int) = -1 * x
-  +(x::Int, y::Int) = x + y
-  *(x::Int, y::Int) = max(x, y)
-end

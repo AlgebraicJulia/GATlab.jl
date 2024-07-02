@@ -5,11 +5,11 @@ using Test
 
 # Peano arithmetic
 # -----------------------------
-# using .ThNat
+using .ThNat
 
-# @withmodel IntNat() (ℕ, Z, S) begin
-#   @test S(S(Z())) == 2
-# end
+@withmodel IntNat() (ℕ, Z, S) begin
+  @test S(S(Z())) == 2
+end
 
 # Integers as model of naturals
 #------------------------------
@@ -50,11 +50,14 @@ using .ThCategory
 end
 
 # Ring of integers
-# --------------------
+#---------------------
 using .ThRing
 import .ThRing: zero, one, -, +, *
 
 @withmodel ZRing() (zero, one, -, +, *) begin
+  @test zero() == 0
+  @test one() == 1
+  @test -(one()) == -1
   @test 1 + 2 == 3
   @test 1 + (-1) == 0
   @test 2 * (1 + 1) == 4

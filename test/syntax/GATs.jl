@@ -73,13 +73,13 @@ ObS = AlgSort(ObT)
 
 
 # Extend seg with a context of (A: Ob)
-sortscope = TypeScope(:A => ObT)
+scope = TypeScope(:A => ObT, :B => ObT)
 
-A = ident(sortscope; name=:A)
+A = ident(scope; name=:A)
 
 ATerm = AlgTerm(A)
 
-c = GATContext(thcat, sortscope)
+c = GATContext(thcat, scope)
 
 HomT = fromexpr(c, :(Hom(A, A)), AlgType)
 
@@ -89,14 +89,24 @@ eqA = fromexpr(c, AA, AlgType)
 
 HomS = AlgSort(HomT)
 
-@test rename(gettag(sortscope), Dict(:A=>:Z), HomT) isa AlgType
-@test retag(Dict(gettag(sortscope)=>newscopetag()), HomT) isa AlgType
-# @test reident(Dict(A=>ident(sortscope; name=:B)), HomT) isa AlgType
+@test rename(gettag(scope), Dict(:A=>:Z), HomT) isa AlgType
+@test retag(Dict(gettag(scope)=>newscopetag()), HomT) isa AlgType
+@test reident(Dict(A=>ident(scope; name=:B)), HomS) isa AlgSort
+@test reident(Dict(A=>ident(scope; name=:B)), AlgEqSort(HomS.head, HomS.method)) ==
+      AlgEqSort(HomS.head, HomS.method)
 
 @test sortcheck(c, AlgTerm(A)) == ObS
 
 x = fromexpr(c, :(id_span(A)), AlgTerm)
+@test reident(Dict(A=>ident(scope; name=:B)), x) == fromexpr(c, :(id_span(B)), AlgTerm)
 @test sortcheck(c, x) isa AlgSort
+
+@test retag(Dict{ScopeTag, ScopeTag}(), thcat) isa GAT
+@test rename(gettag(thcat.segments.scopes[end]), Dict(:compose => :shmompose), thcat) isa GAT
+@test reident(Dict(A => A), thcat) isa GAT
+
+@test Scopes.getvalue(InCtx(scope, x)) == x
+@test Scopes.getcontext(InCtx(scope, x)) == scope
 
 # # Good term and bad term
 ida = fromexpr(c, :(id(A)), AlgTerm)
@@ -117,9 +127,9 @@ haia = AlgType(HomS.head, HomS.method, [ATerm, ida])
 @test_throws Exception sortcheck(c, haia)
 
 # Renaming 
-BTerm = rename(gettag(sortscope), Dict(:A=>:B), ATerm)
-Bsortscope = TypeScope([Binding{AlgType}(:B, ObT)]; tag=gettag(sortscope))
-BTerm_expected = AlgTerm(ident(Bsortscope;name=:B))
+BTerm = rename(gettag(scope), Dict(:A=>:B), ATerm)
+Bscope = TypeScope([Binding{AlgType}(:B, ObT)]; tag=gettag(scope))
+BTerm_expected = AlgTerm(ident(Bscope;name=:B))
 @test BTerm == BTerm_expected
 
 # Subset 
@@ -149,6 +159,5 @@ end
 end
 
 @test Base.isempty(GAT(:_EMPTY))
-
 
 end # module
