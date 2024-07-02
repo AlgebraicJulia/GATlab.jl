@@ -146,4 +146,8 @@ end
 
 tuplescope = fromexpr(ThMonoid.Meta.theory, :([x::(a::(s,t),b)]), TypeScope)
 
+@algebraic ThRing function f(x, y)
+  x * y + x * x
+end
+
 end # module

@@ -161,9 +161,8 @@ rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
 
 retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
 
-<<<<<<< HEAD
 reident(reps::Dict{Ident}, t::AlgTerm) = AlgTerm(reident(reps, t.body))
-=======
+
 function tcompose(t::AbstractTrie{AlgTerm})
   @match t begin
     Tries.Leaf(v) => v
@@ -175,7 +174,6 @@ function tcompose(t::AbstractTrie{AlgTerm})
       AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}()))
   end
 end
->>>>>>> ffeb88f (added basic packages data structure)
 
 function AlgSort(c::Context, t::AlgTerm)
   t_sub = substitute_funs(c, t)
@@ -258,16 +256,10 @@ retag(reps::Dict{ScopeTag,ScopeTag}, t::AlgType) =
 rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::AlgType) =
   AlgType(rename(tag, reps, t.body))
 
-<<<<<<< HEAD
 function reident(reps::Dict{Ident}, t::AlgType)
   AlgType(reident(reps, t.body))
 end
 
-AlgSort(t::AlgType) = if iseq(t)
-  AlgEqSort(t.body.sort.head, t.body.sort.method)
-else 
-  AlgSort(t.body.head, t.body.method)
-=======
 function AlgSort(t::AlgType)
   if iseq(t)
     AlgEqSort(headof(t.body.sort), methodof(t.body.sort))
@@ -285,7 +277,6 @@ function tcompose(t::AbstractTrie{AlgType})
     Tries.Leaf(v) => v
     Tries.Empty() => AlgType(AlgNamedTuple(OrderedDict{Symbol, AlgType}()))
   end
->>>>>>> ffeb88f (added basic packages data structure)
 end
   
 
@@ -336,8 +327,6 @@ end
 headof(a::AlgDot) = a.head 
 bodyof(a::AlgDot) = a.body
 
-<<<<<<< HEAD
-=======
 function Base.getindex(a::AlgTerm, v::TrieVar)
   @match v begin
     Tries.Root() => a
@@ -355,7 +344,6 @@ function Base.getproperty(a::AlgTerm, n::Symbol)
   end
 end
 
->>>>>>> ffeb88f (added basic packages data structure)
 # Type Contexts
 ###############
 
