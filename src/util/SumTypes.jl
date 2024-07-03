@@ -27,6 +27,10 @@ include("MyActive.jl") # a patched version of active patterns
 
 using ..MetaUtils
 
+struct VariantStorage{Name, Tup}
+  fields::Tup
+end
+
 struct TypeArg
   name::Symbol
   upper_bound::Union{Nothing, Expr0}
@@ -84,28 +88,21 @@ function fromexpr(e, ::Type{Field})
   end
 end
 
-function toexpr(f::Field, self_replacement)
-  :($(f.name)::$(replace_symbols(Dict(:Self => self_replacement), f.type)))
+function toexpr(f::Field)
+  :($(f.name)::$(f.type))
 end
 
 Base.nameof(f::Field) = f.name
 
 struct Variant
   name::Symbol
-  internal_name::Symbol
   fields::Vector{Field}
 end
 
-function internal_name(base_name::Symbol, variant_name::Symbol)
-  # We don't want to gensym, because then revise will complain
-  # about redefining structs
-  Symbol("##$base_name#$variant_name")
-end
-
-function fromexpr(e, ::Type{Variant}, base_name)
+function fromexpr(e, ::Type{Variant})
   @match e begin
-    v::Symbol => Variant(v, internal_name(base_name, v), Field[])
-    :($v($(fields...))) => Variant(v, internal_name(base_name, v), fromexpr.(fields, Ref(Field)))
+    v::Symbol => Variant(v, Field[])
+    :($v($(fields...))) => Variant(v, fromexpr.(fields, Ref(Field)))
     _ => error("Failed to parse variant from $e")
   end
 end
@@ -113,24 +110,22 @@ end
 struct SumType
   basetype::BaseType
   variants::Vector{Variant}
-  recursive_type_var::Symbol
 end
 
-function variant_struct(type::SumType, v::Variant)
-  quote
-    struct $(v.internal_name){$(toexpr.(type.basetype.args)...), $(type.recursive_type_var)}
-      $(toexpr.(v.fields, Ref(type.recursive_type_var))...)
-    end
-  end
+function variant_storage(v::Variant)
+   :($(SumTypes).VariantStorage{
+     $(Expr(:quote, v.name)),
+     NamedTuple{
+       $(Expr(:tuple, (Expr(:quote, f.name) for f in v.fields)...)),
+       Tuple{$((f.type for f in v.fields)...)}
+     }
+   })
 end
 
 function sumtype_struct(type::SumType)
-  variant_types = map(type.variants) do v
-    :($(v.internal_name){$(toexpr.(type.basetype.args)...), $(toexpr(type.basetype))})
-  end
   quote
     struct $(toexpr(type.basetype))
-      content::Union{$(variant_types...)}
+      content::Union{$(variant_storage.(type.variants)...)}
     end
   end
 end
@@ -151,14 +146,11 @@ function variant_constructor(type::SumType, v::Variant)
   quote
     struct $variant_type
       function $variant_constructor(
-        $(toexpr.(v.fields, Ref(toexpr(type.basetype)))...)
+        $(toexpr.(v.fields)...)
       ) where {$(toexpr.(type.basetype.args)...)}
         $(toexpr(type.basetype))(
-          $(v.internal_name){
-            $(nameof.(type.basetype.args)...),
-            $(toexpr(type.basetype))
-          }(
-            $(nameof.(v.fields)...)
+          $(variant_storage(v))(
+            $(Expr(:tuple, (:($n = $n) for n in nameof.(v.fields))...))
           )
         )
       end
@@ -170,16 +162,16 @@ function variant_matcher(type::SumType, v::Variant, mod, line)
   (good, bad) = if length(v.fields) == 0
     (true, false)
   elseif length(v.fields) == 1
-    (:(Some(content.$(nameof(v.fields[1])))), nothing)
+    (:(Some(content.fields.$(nameof(v.fields[1])))), nothing)
   else
-    (Expr(:tuple, (:(content.$(nameof(field))) for field in v.fields)...), nothing)
+    (Expr(:tuple, (:(content.fields.$(nameof(field))) for field in v.fields)...), nothing)
   end
   MyActive.active_def(
     :($(v.name)(t)),
     quote
       if t isa $(type.basetype.name)
         content = t.content
-        if content isa $(v.internal_name)
+        if content isa $(variant_storage(v))
           $good
         else
           $bad
@@ -229,16 +221,14 @@ macro sum(type_expr, variants)
 
   variants = @match variants begin
     Expr(:block, lines...) =>
-      Variant[fromexpr(line, Variant, basetype.name) for line in lines if line isa Expr0]
+      Variant[fromexpr(line, Variant) for line in lines if line isa Expr0]
     _ => error("Failed to parse variants from:\n$variants.\nExpected a block.")
   end
 
-  type = SumType(basetype, variants, gensym())
+  type = SumType(basetype, variants)
 
   esc(
     quote
-      $(variant_struct.(Ref(type), type.variants)...)
-
       $(sumtype_struct(type))
 
       $(variant_constructor.(Ref(type), type.variants)...)

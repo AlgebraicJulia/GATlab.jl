@@ -1,6 +1,15 @@
 # GAT ASTs
 ##########
 
+export
+  TypeApp, TypeEq, NamedTupleType,
+  Var, TermApp, Constant, DotAccess, Annot, NamedTupleTerm
+
+struct ResolvedMethod
+  head::Ident
+  method::Ident
+end
+
 @struct_hash_equal struct AlgNamedTuple{T}
   fields::OrderedDict{Symbol, T}
 end
@@ -10,373 +19,277 @@ function Base.map(f, t::AlgNamedTuple)
   AlgNamedTuple(newfields)
 end
 
-# AlgSorts
-#---------
-abstract type AbstractAlgSort end
-
 """
 `AlgSort`
 
 A *sort*, which is essentially a type constructor without arguments
 """
-@struct_hash_equal struct AlgSort <: AbstractAlgSort
-  body::Union{Tuple{Ident, Ident}, AlgNamedTuple{AlgSort}}
-end
 
-AlgSort(head::Ident, method::Ident) = AlgSort((head, method))
-
-iseq(::AlgSort) = false
-istuple(s::AlgSort) = s.body isa AlgNamedTuple
-
-function reident(reps::Dict{Ident}, s::AlgSort)
-  if istuple(s)
-    AlgSort(map(s -> reident(reps, s), s.body))
-  else
-    newhead = reident(reps, headof(s))
-    newmethod = retag(Dict(headof(s).tag => newhead.tag), methodof(s))
-    AlgSort(newhead, newmethod)
-  end
-end
-
-
-headof(a::AlgSort) = a.body[1]
-methodof(a::AlgSort) = a.body[2]
-
-
-"""
-`AlgSort`
-
-A sort for equality judgments of terms for a particular sort
-"""
-@struct_hash_equal struct AlgEqSort <: AbstractAlgSort
-  sort::AlgSort
-end
-
-AlgEqSort(head::Ident, method::Ident) = AlgEqSort(AlgSort(head, method))
-headof(s::AlgEqSort) = headof(s.sort)
-methodof(s::AlgEqSort) = methodof(s.sort)
-
-iseq(::AlgEqSort) = true
-
-Base.nameof(sort::AbstractAlgSort) = nameof(headof(sort))
-
-getdecl(s::AbstractAlgSort) = headof(s)
-
-function reident(reps::Dict{Ident}, a::AlgEqSort)
-  AlgEqSort(reident(reps, a.sort))
+@sum AlgSort begin
+  PrimSort(method::ResolvedMethod)
+  TupleSort(tuple::AlgNamedTuple{AlgSort})
 end
 
 """
-We need this to resolve a mutual reference loop; the only subtype is Constant
-"""
-abstract type AbstractConstant end
+In order to resolve a mutual-recurrence loop, we make non-recursive
+types that are generic over the type of terms.
 
+This has the side-benefit that we can very easily create a data structure
+for e-terms by substituting `EId` for `Tm`.
 """
-We need this to resolve a mutual reference loop; the only subtype is Dot
-"""
-abstract type AbstractDot end
+module Prims
+using ....Util.SumTypes
+import ..GATs: ResolvedMethod, AlgSort, AlgNamedTuple
+import ...Scopes: Ident
 
-"""
-`MethodApp`
-
-An application of a method of a constructor to arguments. We need a type parameter
-`T` because `AlgTerm` hasn't been defined yet, but the only type used for `T` will
-in fact be `AlgTerm`.
-
-`method` either points to an `AlgTermConstructor`, an `AlgTypeConstructor` or an
-`AlgAccessor`,
-"""
-@struct_hash_equal struct MethodApp{T}
-  head::Ident
-  method::Ident
-  args::Vector{T}
+@sum AlgType{Tm} begin
+  TypeApp(method::ResolvedMethod, args::Vector{Tm})
+  TypeEq(sort::AlgSort, equands::Vector{Tm})
+  NamedTupleType(tuple::AlgNamedTuple{AlgType{Tm}})
 end
 
-headof(t::MethodApp) = t.head
-methodof(t::MethodApp) = t.method
-argsof(t::MethodApp) = t.args
-
-rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::MethodApp{T}) where {T} =
-  MethodApp{T}(
-    rename(tag, reps, t.head),
-    rename(tag, reps, t.method),
-    rename.(Ref(tag), Ref(reps), t.args)
-  )
-
-retag(reps::Dict{ScopeTag, ScopeTag}, t::MethodApp{T}) where {T} =
-  MethodApp{T}(
-    retag(reps, t.head),
-    retag(reps, t.method),
-    retag.(Ref(reps), t.args)
-  )
-
-# TODO can we make this more elegant?
-function reident(reps::Dict{Ident}, t::MethodApp{T}) where {T}
-  head = reident(reps, t.head)
-  MethodApp{T}(
-    head,
-    retag(Dict(t.head.tag => head.tag), t.method),
-    reident.(Ref(reps), t.args)
-  )
+@sum AlgTerm{Tm} begin
+  Var(ident::Ident)
+  TermApp(method::ResolvedMethod, args::Vector{Tm})
+  Constant(oftype::AlgType{Tm}, value::Any)
+  DotAccess(to::Tm, field::Symbol)
+  Annot(on::Tm, type::AlgType{Tm})
+  NamedTupleTerm(tuple::AlgNamedTuple{Tm})
+end
 end
 
-abstract type AlgAST end
-
-bodyof(t::AlgAST) = t.body
-
-abstract type AbstractAlgAnnot end
-
-"""
-`AlgTerm`
-
-One syntax tree to rule all the terms.
-"""
-@struct_hash_equal struct AlgTerm <: AlgAST
-  body::Union{
-    Ident,
-    MethodApp{AlgTerm},
-    AbstractConstant,
-    AbstractDot,
-    AbstractAlgAnnot,
-    AlgNamedTuple{AlgTerm}
-  }
+struct AlgTerm
+  content::Prims.AlgTerm{AlgTerm}
 end
 
-
-const EMPTY_ARGS = AlgTerm[]
-
-function AlgTerm(fun::Ident, method::Ident, args::Vector{AlgTerm})
-  AlgTerm(MethodApp{AlgTerm}(fun, method, args))
+struct AlgType
+  content::Prims.AlgType{AlgTerm}
 end
 
-function AlgTerm(fun::Ident, method::Ident)
-  AlgTerm(MethodApp{AlgTerm}(fun, method, EMPTY_ARGS))
-end
-
-AlgTerm(t::AlgTerm) = t
-
-function AlgTerm(tup::NamedTuple)
-  AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(n => AlgTerm(v) for (n, v) in pairs(tup))))
-end
-
-isvariable(t::AlgTerm) = t.body isa Ident
-
-isapp(t::AlgTerm) = t.body isa MethodApp
-
-istuple(t::AlgTerm) = t.body isa AlgNamedTuple
-
-isdot(t::AlgAST) = t.body isa AlgDot
-
-isconstant(t::AlgTerm) = t.body isa AbstractConstant
-
-rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
-  AlgTerm(rename(tag, reps, t.body))
-
-retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
-
-reident(reps::Dict{Ident}, t::AlgTerm) = AlgTerm(reident(reps, t.body))
-
-function tcompose(t::AbstractDtry{AlgTerm})
-  @match t begin
-    Dtrys.Leaf(v) => v
-    Dtrys.Node(bs) => 
-      AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(
-        (n, tcompose(v)) for (n, v) in bs
-      )))
-    Dtrys.Empty() =>
-      AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}()))
-  end
-end
-
-function AlgSort(c::Context, t::AlgTerm)
-  t_sub = substitute_funs(c, t)
-  if t_sub != t 
-    return AlgSort(c, t_sub)
-  end
-  if isconstant(t)
-    AlgSort(t.body.type)
-  elseif isapp(t)
-    binding = c[t.body.method]
-    value = getvalue(binding)
-    AlgSort(value.type)
-  elseif isdot(t)
-    parentsort = AlgSort(c, bodyof(bodyof(t)))
-    if istuple(parentsort)
-      parentsort.body.fields[headof(bodyof(t))]
-    else
-      algstruct = c[methodof(AlgSort(c, bodyof(bodyof(t))))] |> getvalue
-      AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
-    end
-  elseif isannot(t)
-    AlgSort(t.body.type)
-  else # variable
-    binding = c[t.body]
-    AlgSort(getvalue(binding))
-  end
-end
-
-"""
-`Eq`
-
-The type of equality judgments.
-"""
-@struct_hash_equal struct Eq
-  equands::Tuple{AlgTerm, AlgTerm}
-  sort::AlgSort
-end
-
-retag(reps::Dict{ScopeTag, ScopeTag}, eq::Eq) = Eq(retag.(Ref(reps), eq.equands))
-
-rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, eq::Eq) =
-  Eq(retag.(Ref(tag), Ref(reps), eq.equands))
-
-reident(reps::Dict{Ident}, eq::Eq) = Eq(reident.(Ref(reps), eq.equands))
-
-"""
-`AlgType`
-
-One syntax tree to rule all the types.
-"""
-@struct_hash_equal struct AlgType <: AlgAST
-  body::Union{MethodApp{AlgTerm}, Eq, AlgNamedTuple{AlgType}}
-end
-
-function AlgType(fun::Ident, method::Ident)
-  AlgType(MethodApp{AlgTerm}(fun, method, EMPTY_ARGS))
-end
-
-bodyof(t::AlgType) = t.body
-
-isvariable(t::AlgType) = false
-
-isapp(t::AlgType) = t.body isa MethodApp
-
-iseq(t::AlgType) = t.body isa Eq
-
-istuple(t::AlgType) = t.body isa AlgNamedTuple
-
-isconstant(t::AlgType) = false
-
-AlgType(head::Ident, method::Ident, args::Vector{AlgTerm}) =
-  AlgType(MethodApp{AlgTerm}(head, method, args))
-
-AlgType(c::Context, lhs::AlgTerm, rhs::AlgTerm) =
-  AlgType(Eq((lhs, rhs), AlgSort(c, lhs)))
-
-retag(reps::Dict{ScopeTag,ScopeTag}, t::AlgType) =
-  AlgType(retag(reps, t.body))
-
-rename(tag::ScopeTag, reps::Dict{Symbol, Symbol}, t::AlgType) =
-  AlgType(rename(tag, reps, t.body))
-
-function reident(reps::Dict{Ident}, t::AlgType)
-  AlgType(reident(reps, t.body))
-end
-
-function AlgSort(t::AlgType)
-  if iseq(t)
-    AlgEqSort(headof(t.body.sort), methodof(t.body.sort))
-  elseif istuple(t)
-    AlgSort(AlgNamedTuple{AlgSort}(OrderedDict{Symbol, AlgSort}(k => AlgSort(v) for (k, v) in t.body.fields)))
-  else 
-    AlgSort(headof(t.body), methodof(t.body))
-  end
-end
-
-function tcompose(t::AbstractDtry{AlgType})
-  @match t begin
-    Dtrys.Node(bs) =>
-      AlgType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (k,v) in AbstractTrees.children(t))))
-    Dtrys.Leaf(v) => v
-    Dtrys.Empty() => AlgType(AlgNamedTuple(OrderedDict{Symbol, AlgType}()))
-  end
-end
-  
-
-"""
-Common methods for AlgType and AlgTerm
-"""
-function Base.show(io::IO, trm::T) where T<:Union{AlgTerm, AlgType}
-  print(io, "$(nameof(T))(")
-  print(io, toexpr(TypeScope(), trm))
-  print(io, ")")
-end
-
-"""
-`Constant`
-
-A Julia value in an algebraic context. Type checked elsewhere.
-"""
-@struct_hash_equal struct Constant <: AbstractConstant
-  value::Any
-  type::AlgType
-end
-
-"""
-An explicitly type-annotated value.
-"""
-@struct_hash_equal struct AlgAnnot <: AbstractAlgAnnot
-  term::AlgTerm
-  type::AlgType
-end
-
-isannot(t::AlgTerm) = t.body isa AbstractAlgAnnot
-
-"""
-Accessing a name from a term of tuple type
-"""
-@struct_hash_equal struct AlgDot <: AbstractDot
-  head::Symbol
-  body::AlgTerm
-  function AlgDot(head::Symbol, body::AlgTerm)
-    if istuple(body)
-      body.body.fields[head]
-    else
-      new(head, body)
+@active Var(t) begin
+  if t isa AlgTerm
+    @match t.content begin
+      Prims.Var(i) => Some(i)
+      _ => nothing
     end
   end
 end
 
-headof(a::AlgDot) = a.head 
-bodyof(a::AlgDot) = a.body
+Var(ident::Ident) =
+  AlgTerm(Prims.Var{AlgTerm}(ident))
 
-function Base.getindex(a::AlgTerm, v::DtryVar)
-  @match v begin
-    Dtrys.Root() => a
-    Dtrys.Nested((n, v′)) => getindex(AlgTerm(AlgDot(n, a)), v′)
+@active TermApp(t) begin
+  if t isa AlgTerm
+    @match t.content begin
+      Prims.TermApp(method, args) => (method, args)
+      _ => nothing
+    end
   end
 end
 
-function Base.getproperty(a::AlgTerm, n::Symbol)
-  if n == :body
-    # this is a hack: we should instead replace everywhere we use t.body
-    # with `getbody(t)` or something like it
-    getfield(a, :body)
-  else
-    AlgTerm(AlgDot(n, a))
+TermApp(method::ResolvedMethod, args::Vector{AlgTerm}) =
+  AlgTerm(Prims.TermApp{AlgTerm}(method, args))
+
+@active Constant(t) begin
+  if t isa AlgTerm
+    @match t.content begin
+      Prims.Constant(oftype, value) => (oftype, value)
+      _ => nothing
+    end
   end
 end
 
-# Type Contexts
-###############
+Constant(oftype::Type{AlgTerm}, value::Any) =
+  AlgTerm(Prims.Constant{AlgTerm}(oftype, value))
 
-const TypeCtx = Context{AlgType}
-
-"""
-A type or term with an accompanying type context, e.g.
-
- (a,b)::R        (a,b)::Ob
------------  or  ----------
-  a*(a+b)         Hom(a,b)
-"""
-
-@struct_hash_equal struct InCtx{T}
-  ctx::TypeCtx
-  val::T
+@active DotAccess(t) begin
+  if t isa AlgTerm
+    @match t.content begin
+      Prims.Constant(to, field) => (to, field)
+      _ => nothing
+    end
+  end
 end
 
-const TermInCtx = InCtx{AlgTerm}
-const TypeInCtx = InCtx{AlgType}
+DotAccess(to::AlgTerm, field::Symbol) =
+  AlgTerm(Prims.DotAccess{AlgTerm}(to, field))
 
-Scopes.getvalue(i::InCtx) = i.val
-Scopes.getcontext(i::InCtx) = i.ctx
+@active Annot(t) begin
+  if t isa AlgTerm
+    @match t.content begin
+      Prims.Annot(on, type) => (on, type)
+      _ => nothing
+    end
+  end
+end
+
+Annot(on::AlgTerm, type::AlgType) =
+  AlgTerm(Prims.Annot{AlgTerm}(on, type.content))
+
+@active NamedTupleTerm(t) begin
+  if t isa AlgTerm
+    @match t.content begin
+      Prims.NamedTupleTerm(tuple) => Some(tuple)
+      _ => nothing
+    end
+  end
+end
+
+NamedTupleTerm(tuple::AlgNamedTuple{AlgTerm}) =
+  AlgTerm(Prims.NamedTupleTerm{AlgTerm}(tuple))
+
+@active TypeApp(t) begin
+  if t isa AlgType
+    @match t.content begin
+      Prims.TypeApp(method, args) => (method, args)
+      _ => nothing
+    end
+  end
+end
+
+TypeApp(method::ResolvedMethod, args::Vector{AlgTerm}) =
+  AlgType(Prims.TypeApp{AlgTerm}(method, args))
+
+@active TypeEq(t) begin
+  if t isa AlgType
+    @match t.content begin
+      Prims.TypeEq(sort, equands) => (sort, equands)
+      _ => nothing
+    end
+  end
+end
+
+TypeEq(sort::AlgSort, equands::Vector{AlgTerm}) =
+  AlgType(Prims.TypeEq{AlgTerm}(sort, equands))
+
+@active NamedTupleType(t) begin
+  if t isa AlgType
+    @match t.content begin
+      Prims.NamedTupleType(tuple) => map(ty -> AlgType(ty), tuple)
+    end
+  end
+end
+
+NamedTupleType(tuple::AlgNamedTuple{AlgType}) =
+  AlgType(Prims.NamedTupleType{AlgTerm}(map(t -> t.content, tuple)))
+
+
+function Base.show(io::IO, t::AlgTerm)
+  function printvariant(v, args...)
+    show(io, v)
+    print(io, "(")
+    join(io, args, ", ")
+    print(io, ")::")
+    show(io, AlgTerm)
+  end
+  @match t begin
+    Var(i) => printvariant(Var, i)
+    TermApp(method, args) => printvariant(TermApp, method, args)
+    Constant(oftype, value) => printvariant(Constant, oftype, value)
+    DotAccess(to, field) => printvariant(DotAccess, to, field)
+    Annot(on, type) => printvariant(Annot, on, type)
+    NamedTupleTerm(tuple) => printvariant(NamedTupleTerm, tuple)
+  end
+end
+
+# const EMPTY_ARGS = AlgTerm[]
+
+# rename(tag::ScopeTag, reps::Dict{Symbol,Symbol}, t::AlgTerm) =
+#   AlgTerm(rename(tag, reps, t.body))
+
+# retag(reps::Dict{ScopeTag, ScopeTag}, t::AlgTerm) = AlgTerm(retag(reps, t.body))
+
+# reident(reps::Dict{Ident}, t::AlgTerm) = AlgTerm(reident(reps, t.body))
+
+# function tcompose(t::AbstractDtry{AlgTerm})
+#   @match t begin
+#     Dtrys.Leaf(v) => v
+#     Dtrys.Node(bs) =>
+#       AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(
+#         (n, tcompose(v)) for (n, v) in bs
+#       )))
+#     Dtrys.Empty() =>
+#       AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}()))
+#   end
+# end
+
+# function AlgSort(c::Context, t::AlgTerm)
+#   t_sub = substitute_funs(c, t)
+#   if t_sub != t
+#     return AlgSort(c, t_sub)
+#   end
+#   if isconstant(t)
+#     AlgSort(t.body.type)
+#   elseif isapp(t)
+#     binding = c[t.body.method]
+#     value = getvalue(binding)
+#     AlgSort(value.type)
+#   elseif isdot(t)
+#     parentsort = AlgSort(c, bodyof(bodyof(t)))
+#     if istuple(parentsort)
+#       parentsort.body.fields[headof(bodyof(t))]
+#     else
+#       algstruct = c[methodof(AlgSort(c, bodyof(bodyof(t))))] |> getvalue
+#       AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
+#     end
+#   elseif isannot(t)
+#     AlgSort(t.body.type)
+#   else # variable
+#     binding = c[t.body]
+#     AlgSort(getvalue(binding))
+#   end
+# end
+
+# function AlgSort(t::AlgType)
+#   if iseq(t)
+#     AlgEqSort(headof(t.body.sort), methodof(t.body.sort))
+#   elseif istuple(t)
+#     AlgSort(AlgNamedTuple{AlgSort}(OrderedDict{Symbol, AlgSort}(k => AlgSort(v) for (k, v) in t.body.fields)))
+#   else
+#     AlgSort(headof(t.body), methodof(t.body))
+#   end
+# end
+
+# function tcompose(t::AbstractDtry{AlgType})
+#   @match t begin
+#     Dtrys.Node(bs) =>
+#       AlgType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (k,v) in AbstractTrees.children(t))))
+#     Dtrys.Leaf(v) => v
+#     Dtrys.Empty() => AlgType(AlgNamedTuple(OrderedDict{Symbol, AlgType}()))
+#   end
+# end
+
+# function Prims.getindex(a::AlgTerm, v::DtryVar)
+#   @match v begin
+#     Dtrys.Root() => a
+#     Dtrys.Nested((n, v′)) => getindex(AlgTerm(AlgDot(n, a)), v′)
+#   end
+# end
+
+# function Prims.getproperty(a::AlgTerm, n::Symbol)
+#   AlgTerm(AlgDot(n, a))
+# end
+
+# # Type Contexts
+# ###############
+
+# const TypeCtx = Context{AlgType}
+
+# """
+# A type or term with an accompanying type context, e.g.
+
+#  (a,b)::R        (a,b)::Ob
+# -----------  or  ----------
+#   a*(a+b)         Hom(a,b)
+# """
+
+# @struct_hash_equal struct InCtx{T}
+#   ctx::TypeCtx
+#   val::T
+# end
+
+# const TermInCtx = InCtx{AlgTerm}
+# const TypeInCtx = InCtx{AlgType}
+
+# Scopes.getvalue(i::InCtx) = i.val
+# Scopes.getcontext(i::InCtx) = i.ctx
