@@ -379,3 +379,5 @@ end
 
 """Get all structs in a theory"""
 structs(t::GAT) = AlgStruct[getvalue(t[methodof(s)]) for s in struct_sorts(t)]
+
+declarations(t::GAT) = keys(t.resolvers)

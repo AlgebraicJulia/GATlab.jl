@@ -9,12 +9,15 @@ export Constant, AlgTerm, AlgType, AlgAST,
   termcons,typecons, accessors, structs, primitive_sorts, struct_sorts,
   equations, build_infer_expr, compile, sortcheck, allnames, sorts, sortname,
   InCtx, TermInCtx, TypeInCtx, headof, argsof, methodof, bodyof, argcontext,
-  infer_type
+  infer_type,
+  tcompose
 
 using ..Scopes
 import ..ExprInterop: fromexpr, toexpr
 
 import ..Scopes: retag, rename, reident
+using ...Util.Dtrys
+using AbstractTrees
 
 import AlgebraicInterfaces: equations
 
@@ -27,5 +30,6 @@ include("gats/judgments.jl")
 include("gats/gat.jl")
 include("gats/exprinterop.jl")
 include("gats/algorithms.jl")
+include("gats/closures.jl")
 
 end

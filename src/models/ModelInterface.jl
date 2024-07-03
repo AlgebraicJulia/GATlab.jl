@@ -644,12 +644,12 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
   _x = gensym("val")
 
   # Map CODOM sorts to whereparam symbols
-  whereparamdict = OrderedDict(s=>gensym(s.head.name) for s in sorts(codom_theory))
+  whereparamdict = OrderedDict(s=>gensym(headof(s).name) for s in sorts(codom_theory))
   # New model is parameterized by these types
   whereparams = collect(values(whereparamdict))
   # Julia types of domain sorts determined by theorymap 
   jltype_by_sort = Dict(map(sorts(dom_theory)) do v
-    v => whereparamdict[AlgSort(tmap(v.method).val)]
+    v => whereparamdict[AlgSort(tmap(methodof(v)).val)]
   end)
 
   # Create input for instance_code
@@ -758,13 +758,9 @@ function to_call_impl(t::AlgTerm, theory::GAT, mod::Union{Symbol,Module}, migrat
   b = bodyof(t)
   if GATs.isvariable(t)
     nameof(b)
-  elseif  GATs.isdot(t)
+  elseif GATs.isdot(t)
     impl = to_call_impl(b.body, theory, mod, migrate)
-    if isnamed(b.head)
-      Expr(:., impl, QuoteNode(nameof(b.head)))
-    else 
-      Expr(:ref, impl, getlid(b.head).val)
-    end
+    Expr(:., impl, QuoteNode(b.head))
   else
     args = to_call_impl.(argsof(b), Ref(theory), Ref(mod), migrate)
     name = nameof(headof(b))

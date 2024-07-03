@@ -156,7 +156,8 @@ function theory_impl(head, body, __module__)
 
   push!(modulelines, Expr(:toplevel, :(module Meta
     struct T end
-   
+    $(constructor_module(theory))
+
     @doc ($(Markdown.MD)((@doc $(__module__).$doctarget), $docstr))
     const theory = $theory
 
@@ -216,10 +217,44 @@ function invoke_term(theory_module, types, name, args; model=nothing)
   end
 end
 
-
 """
-
+Produce a module with an AlgClosure for each declaration in the theory.
 """
+function constructor_module(theory::GAT)
+  closures = Dict{Ident, AlgClosure}()
+
+  for segment in allscopes(theory)
+    for (x, binding) in zip(getidents(segment), getbindings(segment))
+      judgment = getvalue(binding)
+      if judgment isa AlgDeclaration
+        closures[x] = AlgClosure(theory)
+      elseif judgment isa AlgTermConstructor
+        add_method!(
+          closures[judgment.declaration],
+          AlgMethod(
+            judgment.localcontext,
+            AlgTerm(
+              judgment.declaration,
+              x,
+              AlgTerm.(idents(judgment.localcontext; lid=judgment.args))
+            ),
+            "",
+            judgment.args,
+            judgment.type,
+          )
+        )
+      end
+    end
+  end
+
+  Expr(
+    :module,
+    true,
+    :Constructors,
+    Expr(:block, [:(const $(nameof(x)) = $f) for (x, f) in closures]...)
+  )
+end
+
 function mk_struct(s::AlgStruct, mod)
   fields = map(argsof(s)) do b
     Expr(:(::), nameof(b), nameof(AlgSort(getvalue(b))))
