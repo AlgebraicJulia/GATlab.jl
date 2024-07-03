@@ -19,8 +19,8 @@ function toexpr(c::Context, m::MethodApp)
   Expr(:call, toexpr(c, m.head), toexpr.(Ref(c), m.args)...)
 end
 
-function toexpr(c::Context, m::AlgDot)
-  Expr(:.,  toexpr(c, m.body), QuoteNode(m.head))
+function toexpr(c::Context, m::AlgDot; kw...)
+  Expr(:., toexpr(c, m.body; kw...), QuoteNode(m.head))
 end
 
 function fromexpr(c::GATContext, e, ::Type{AlgTerm})
@@ -36,11 +36,22 @@ function fromexpr(c::GATContext, e, ::Type{AlgTerm})
     end
     Expr(:., body, QuoteNode(head)) => begin 
       t = fromexpr(c, body, AlgTerm)
-      algstruct = c[AlgSort(c, t).method] |> getvalue
-      AlgTerm(AlgDot(ident(algstruct.fields; name=head), t))# , str))
-  end
+      AlgTerm(AlgDot(head, t))
+    end
     Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(c, head, argexprs))
     Expr(:(::), val, type) => AlgTerm(Constant(val, fromexpr(c, type, AlgType)))
+    Expr(:tuple, kvs...) => AlgTerm(
+      AlgNamedTuple{AlgTerm}(
+        OrderedDict{Symbol, AlgTerm}(
+          map(kvs) do kv
+            @match kv begin
+              Expr(:(=), k, v) => (k => fromexpr(c, v, AlgTerm))
+              _ => error("expected key-value pairs inside tuple")
+            end
+          end
+        )
+      )
+    )
     e::Expr => error("could not parse AlgTerm from $e")
     constant::Constant => AlgTerm(constant)
   end
@@ -57,6 +68,13 @@ function fromexpr(p::GATContext, e, ::Type{AlgType})::AlgType
       AlgType(parse_methodapp(p, head, args))
     Expr(:call, :(==), lhs, rhs) =>
       AlgType(p, fromexpr(p, lhs, AlgTerm), fromexpr(p, rhs, AlgTerm))
+    Expr(:tuple, args...) => begin
+      fields = OrderedDict{Symbol, AlgType}()
+      for arg in args
+        parse_binding_expr!(p, b -> (fields[nameof(b)] = getvalue(b)), arg)
+      end
+      AlgType(AlgNamedTuple{AlgType}(fields))
+    end
     _ => error("could not parse AlgType from $e")
   end
 end
@@ -70,6 +88,8 @@ function toexpr(c::Context, type::AlgType)
     end
   elseif iseq(type)
     Expr(:call, :(==), toexpr.(Ref(c), type.body.equands)...)
+  elseif istuple(type)
+    Expr(:tuple, [Expr(:(::), k, toexpr(c, v)) for (k, v) in type.body.fields]...)
   end
 end
 
@@ -86,6 +106,14 @@ end
 
 toexpr(c::Context, constant::Constant; kw...) =
   Expr(:(::), constant.value, toexpr(c, constant.type; kw...))
+
+toexpr(c::Context, annot::AlgAnnot; kw...) =
+  Expr(:(::), toexpr(c, annot.term; kw...), toexpr(c, annot.type; kw...))
+
+# toexpr(c::Context, annot::AlgAnnot; kw...) = toexpr(c, annot.term; kw...)
+
+toexpr(c::Context, t::AlgNamedTuple{AlgTerm}; kw...) =
+  Expr(:tuple, [Expr(:(=), k, toexpr(c, v; kw...)) for (k, v) in t.fields]...)
 
 function fromexpr(c::GATContext, e, ::Type{InCtx{T}}; kw...) where T
   (termexpr, localcontext) = @match e begin

@@ -328,13 +328,13 @@ end
 
 function internal_accessors(theory::GAT)
   map(theory.sorts) do sort
-    typecon = getvalue(theory[sort.method])
-    map(collect(pairs(theory.accessors[sort.method]))) do (i, acc)
+    typecon = getvalue(theory[methodof(sort)])
+    map(collect(pairs(theory.accessors[methodof(sort)]))) do (i, acc)
       accessor = getvalue(theory[acc])
       return_type = getvalue(typecon[typecon.args[i]])
       JuliaFunction(
         name=esc(nameof(getdecl(accessor))),
-        args=[:(x::$(esc(nameof(sort.head))))],
+        args=[:(x::$(esc(nameof(sort))))],
         return_type = typename(theory, return_type),
         impl=:(x.type_args[$i])
       )
@@ -415,11 +415,11 @@ function symbolic_instance_methods(
   type_con_funs = []
   accessors_funs = []
   for sort in sorts(theory)
-    type_con = getvalue(theory[sort.method])
-    symgen = symbolic_generator(theorymodule, syntaxname, sort.method, type_con, theory)
+    type_con = getvalue(theory[methodof(sort)])
+    symgen = symbolic_generator(theorymodule, syntaxname, methodof(sort), type_con, theory)
     push!(type_con_funs, symgen)
     for binding in argsof(type_con)
-      push!(accessors_funs, symbolic_accessor(theorymodule, theory, syntaxname, sort.method, binding))
+      push!(accessors_funs, symbolic_accessor(theorymodule, theory, syntaxname, methodof(sort), binding))
     end
   end
 
@@ -614,7 +614,7 @@ function parse_json_sexpr(syntax_module::Module, sexpr;
   theory = theory_module.Meta.theory
   type_lens = Dict(
     nameof(getdecl(getvalue(binding))) => length(getvalue(binding).args)
-    for binding in [theory[sort.method] for sort in sorts(theory)]
+    for binding in [theory[methodof(sort)] for sort in sorts(theory)]
   )
 
   function parse_impl(sexpr::Vector, ::Type{Val{:expr}})

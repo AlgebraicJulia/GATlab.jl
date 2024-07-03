@@ -55,7 +55,6 @@ seg_expr = quote
   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
 end
 
-
 thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 
 O, H, i = idents(thcat; name=[:Ob, :Hom, :id])
@@ -92,8 +91,8 @@ HomS = AlgSort(HomT)
 @test rename(gettag(scope), Dict(:A=>:Z), HomT) isa AlgType
 @test retag(Dict(gettag(scope)=>newscopetag()), HomT) isa AlgType
 @test reident(Dict(A=>ident(scope; name=:B)), HomS) isa AlgSort
-@test reident(Dict(A=>ident(scope; name=:B)), AlgEqSort(HomS.head, HomS.method)) ==
-      AlgEqSort(HomS.head, HomS.method)
+@test reident(Dict(A=>ident(scope; name=:B)), AlgEqSort(HomS)) ==
+      AlgEqSort(HomS)
 
 @test sortcheck(c, AlgTerm(A)) == ObS
 
@@ -122,7 +121,7 @@ iida = AlgTerm(i, im, [AlgTerm(i, im, [AlgTerm(A)])])
 
 # Good type and bad type
 haa = HomT
-haia = AlgType(HomS.head, HomS.method, [ATerm, ida])
+haia = AlgType(headof(HomS), methodof(HomS), [ATerm, ida])
 @test sortcheck(c, haa)
 @test_throws Exception sortcheck(c, haia)
 
@@ -156,6 +155,14 @@ end
     right::Hom(apex, codom)
   end
   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
+end
+
+# Dtrys
+
+tuplescope = fromexpr(ThMonoid.Meta.theory, :([x::(a::(s,t),b)]), TypeScope)
+
+@algebraic ThRing function f(x, y)
+  x * y + x * x
 end
 
 @test Base.isempty(GAT(:_EMPTY))
