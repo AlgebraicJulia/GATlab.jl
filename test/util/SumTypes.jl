@@ -4,6 +4,24 @@ using MLStyle
 using GATlab.Util.SumTypes
 using Test
 
+# Unit tests of parsing
+
+@test SumTypes.fromexpr(:(x<:Int), SumTypes.TypeArg) isa SumTypes.TypeArg
+@test_throws ErrorException SumTypes.fromexpr(:(x::Int), SumTypes.TypeArg)
+
+@test SumTypes.toexpr(SumTypes.fromexpr(:(x<:Int), SumTypes.TypeArg)) == :(x<:Int)
+
+@test SumTypes.toexpr(SumTypes.fromexpr(:(X{Y}), SumTypes.BaseType)) == :(X{Y})
+@test_throws ErrorException SumTypes.fromexpr(:(1+1), SumTypes.BaseType)
+
+@test SumTypes.fromexpr(:(x::Int), SumTypes.Field) isa SumTypes.Field
+@test_throws ErrorException SumTypes.fromexpr(:(1+1), SumTypes.Field)
+
+@test SumTypes.fromexpr(:(V(x::Int)), SumTypes.Variant, :T) isa SumTypes.Variant
+@test_throws ErrorException SumTypes.fromexpr(:(V{}), SumTypes.Variant, :T)
+
+# Integration tests
+
 @sum AlgebraExpr{T} begin
   Const(x::T)
   Sum(summands::Vector{Self})
@@ -20,7 +38,7 @@ expr_type = sprint(show, AlgebraExpr)
       "$sum_type($expr_type{Int64}[$const_type(3)::$expr_type{Int64}])::$expr_type{Int64}"
 
 @sum MonoidExpr begin
-  Zero()
+  Zero
   Plus(t1::Self, t2::Self)
 end
 
