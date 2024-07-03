@@ -11,8 +11,13 @@ using Test
 end
 
 @test typeof(Const{Int}(2)) == AlgebraExpr{Int}
+
+sum_type = sprint(show, Sum)
+const_type = sprint(show, Const)
+expr_type = sprint(show, AlgebraExpr)
+
 @test sprint(show, (Sum{Int}([Const{Int}(3)]))) ==
-      "Sum(AlgebraExpr{Int64}[Const(3)::AlgebraExpr{Int64}])::AlgebraExpr{Int64}"
+      "$sum_type($expr_type{Int64}[$const_type(3)::$expr_type{Int64}])::$expr_type{Int64}"
 
 @sum MonoidExpr begin
   Zero()
