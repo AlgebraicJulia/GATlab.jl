@@ -157,6 +157,8 @@ end
   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
 end
 
+@test Base.isempty(GAT(:_EMPTY))
+
 # Dtrys
 
 tuplescope = fromexpr(ThMonoid.Meta.theory, :([x::(a::(s,t),b)]), TypeScope)
@@ -165,6 +167,14 @@ tuplescope = fromexpr(ThMonoid.Meta.theory, :([x::(a::(s,t),b)]), TypeScope)
   x * y + x * x
 end
 
-@test Base.isempty(GAT(:_EMPTY))
+@test only(f.methods)[2](1, 2) isa AlgTerm
+@test_throws ErrorException f(1, 2)
+@test_throws ErrorException f()
+
+@test sprint(show, f) isa String
+
+@test tcompose(
+    Dtrys.node(:a => Dtrys.leaf(f), :b => Dtrys.leaf(f)), [:x, :y]
+  ) isa AlgClosure
 
 end # module

@@ -115,8 +115,10 @@ function tcompose(fs::Dtry{AlgClosure}, argnames::Vector{Symbol})
 end
 
 function (f::AlgClosure)(argvals::Any...)
-  if length(f.methods) > 1 && any(!(x isa AlgTerm) for x in argvals)
-    error("cannot infer type of non-AlgTerm value $x")
+  for x in argvals
+    if !(x isa AlgTerm)
+      error("cannot infer type of non-AlgTerm value $x")
+    end
   end
   sorts = AlgSort[sortcheck.(Ref(f.theory), argvals)...]
   if !haskey(f.methods, sorts)
