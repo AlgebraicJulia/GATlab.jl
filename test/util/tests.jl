@@ -6,6 +6,10 @@ using Test
   include("MetaUtils.jl")
 end
 
+@testset "SumTypes" begin
+  include("SumTypes.jl")
+end
+
 @testset "Dtrys" begin
   include("Dtrys.jl")
 end
