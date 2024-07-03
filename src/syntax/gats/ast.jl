@@ -5,6 +5,11 @@
   fields::OrderedDict{Symbol, T}
 end
 
+function Base.map(f, t::AlgNamedTuple)
+  newfields = OrderedDict((x, f(v)) for (x,v) in t.fields)
+  AlgNamedTuple(newfields)
+end
+
 # AlgSorts
 #---------
 abstract type AbstractAlgSort end
@@ -18,13 +23,25 @@ A *sort*, which is essentially a type constructor without arguments
   body::Union{Tuple{Ident, Ident}, AlgNamedTuple{AlgSort}}
 end
 
-function reident(reps::Dict{Ident}, a::AlgSort)
-  newhead = reident(reps, headof(a))
-  newmethod = retag(Dict(a.head.tag => newhead.tag), methodof(a))
-  AlgSort(newhead, newmethod) 
+AlgSort(head::Ident, method::Ident) = AlgSort((head, method))
+
+iseq(::AlgSort) = false
+istuple(s::AlgSort) = s.body isa AlgNamedTuple
+
+function reident(reps::Dict{Ident}, s::AlgSort)
+  if istuple(s)
+    AlgSort(map(s -> reident(reps, s), s.body))
+  else
+    newhead = reident(reps, headof(s))
+    newmethod = retag(Dict(headof(s).tag => newhead.tag), methodof(s))
+    AlgSort(newhead, newmethod)
+  end
 end
 
-AlgSort(head::Ident, method::Ident) = AlgSort((head, method))
+
+headof(a::AlgSort) = a.body[1]
+methodof(a::AlgSort) = a.body[2]
+
 
 """
 `AlgSort`
@@ -32,33 +49,22 @@ AlgSort(head::Ident, method::Ident) = AlgSort((head, method))
 A sort for equality judgments of terms for a particular sort
 """
 @struct_hash_equal struct AlgEqSort <: AbstractAlgSort
-  head::Ident
-  method::Ident
+  sort::AlgSort
 end
 
+AlgEqSort(head::Ident, method::Ident) = AlgEqSort(AlgSort(head, method))
+headof(s::AlgEqSort) = headof(s.sort)
+methodof(s::AlgEqSort) = methodof(s.sort)
+
 iseq(::AlgEqSort) = true
-iseq(::AlgSort) = false
-istuple(s::AlgSort) = s.body isa AlgNamedTuple
-headof(a::AbstractAlgSort) = a.body[1]
-methodof(a::AbstractAlgSort) = a.body[2]
 
 Base.nameof(sort::AbstractAlgSort) = nameof(headof(sort))
 
 getdecl(s::AbstractAlgSort) = headof(s)
 
 function reident(reps::Dict{Ident}, a::AlgEqSort)
-  newhead = reident(reps, headof(a))
-  newmethod = retag(Dict(a.head.tag => newhead.tag), methodof(a))
-  AlgEqSort(newhead, newmethod) 
+  AlgEqSort(reident(reps, a.sort))
 end
-
-
-function reident(reps::Dict{Ident}, a::AlgEqSort)
-  newhead = reident(reps, headof(a))
-  newmethod = retag(Dict(a.head.tag => newhead.tag), methodof(a))
-  AlgEqSort(newhead, newmethod) 
-end
-
 
 """
 We need this to resolve a mutual reference loop; the only subtype is Constant

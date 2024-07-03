@@ -91,8 +91,8 @@ HomS = AlgSort(HomT)
 @test rename(gettag(scope), Dict(:A=>:Z), HomT) isa AlgType
 @test retag(Dict(gettag(scope)=>newscopetag()), HomT) isa AlgType
 @test reident(Dict(A=>ident(scope; name=:B)), HomS) isa AlgSort
-@test reident(Dict(A=>ident(scope; name=:B)), AlgEqSort(HomS.head, HomS.method)) ==
-      AlgEqSort(HomS.head, HomS.method)
+@test reident(Dict(A=>ident(scope; name=:B)), AlgEqSort(HomS)) ==
+      AlgEqSort(HomS)
 
 @test sortcheck(c, AlgTerm(A)) == ObS
 
