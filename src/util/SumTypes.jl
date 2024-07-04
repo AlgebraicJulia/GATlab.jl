@@ -171,7 +171,7 @@ function variant_matcher(type::SumType, v::Variant, mod, line)
     quote
       if t isa $(type.basetype.name)
         content = t.content
-        if content isa $(variant_storage(v))
+        if content isa $(VariantStorage){$(Expr(:quote, v.name))}
           $good
         else
           $bad

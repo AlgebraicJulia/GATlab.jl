@@ -51,7 +51,7 @@ end
 @sum AlgTerm{Tm} begin
   Var(ident::Ident)
   TermApp(method::ResolvedMethod, args::Vector{Tm})
-  Constant(oftype::AlgType{Tm}, value::Any)
+  Constant(value::Any, oftype::AlgType{Tm})
   DotAccess(to::Tm, field::Symbol)
   Annot(on::Tm, type::AlgType{Tm})
   NamedTupleTerm(tuple::AlgNamedTuple{Tm})
@@ -65,6 +65,9 @@ end
 struct AlgType
   content::Prims.AlgType{AlgTerm}
 end
+
+# Constructors and destructors for AlgTerm/AlgType
+##################################################
 
 @active Var(t) begin
   if t isa AlgTerm
@@ -93,19 +96,19 @@ TermApp(method::ResolvedMethod, args::Vector{AlgTerm}) =
 @active Constant(t) begin
   if t isa AlgTerm
     @match t.content begin
-      Prims.Constant(oftype, value) => (oftype, value)
+      Prims.Constant(value, oftype) => (value, AlgType(oftype))
       _ => nothing
     end
   end
 end
 
-Constant(oftype::Type{AlgTerm}, value::Any) =
-  AlgTerm(Prims.Constant{AlgTerm}(oftype, value))
+Constant(value::Any, oftype::AlgType) =
+  AlgTerm(Prims.Constant{AlgTerm}(value, oftype.content))
 
 @active DotAccess(t) begin
   if t isa AlgTerm
     @match t.content begin
-      Prims.Constant(to, field) => (to, field)
+      Prims.DotAccess(to, field) => (to, field)
       _ => nothing
     end
   end
@@ -173,22 +176,144 @@ end
 NamedTupleType(tuple::AlgNamedTuple{AlgType}) =
   AlgType(Prims.NamedTupleType{AlgTerm}(map(t -> t.content, tuple)))
 
+# Utility methods for AlgTerm/AlgType
+#####################################
+
+function _printvariant(io, v, T, args...)
+  show(io, v)
+  print(io, "(")
+  join(io, args, ", ")
+  print(io, ")::")
+  show(io, T)
+end
 
 function Base.show(io::IO, t::AlgTerm)
-  function printvariant(v, args...)
-    show(io, v)
-    print(io, "(")
-    join(io, args, ", ")
-    print(io, ")::")
-    show(io, AlgTerm)
-  end
+  p(v, args...) = _printvariant(io, v, AlgTerm, args...)
   @match t begin
-    Var(i) => printvariant(Var, i)
-    TermApp(method, args) => printvariant(TermApp, method, args)
-    Constant(oftype, value) => printvariant(Constant, oftype, value)
-    DotAccess(to, field) => printvariant(DotAccess, to, field)
-    Annot(on, type) => printvariant(Annot, on, type)
-    NamedTupleTerm(tuple) => printvariant(NamedTupleTerm, tuple)
+    Var(i) => p(Var, AlgTerm, i)
+    TermApp(method, args) => p(TermApp, method, args)
+    Constant(value, oftype) => p(Constant, value, oftype)
+    DotAccess(to, field) => p(DotAccess, to, field)
+    Annot(on, type) => p(Annot, on, type)
+    NamedTupleTerm(tuple) => p(NamedTupleTerm, tuple)
+  end
+end
+
+function Base.show(io::IO, t::AlgType)
+  p(v, args...) = _printvariant(io, v, AlgType, args...)
+  @match t begin
+    TypeApp(method, args) => p(TypeApp, method, args)
+    TypeEq(sort, equands) => p(TypeEq, sort, equands)
+    NamedTupleType(tuple) => p(NamedTupleType, tuple)
+  end
+end
+
+# Parsing for AlgTerm/AlgType
+#############################
+
+function toexpr(c::Context, t::AlgTerm)
+  @match t begin
+    Var(i) => toexpr(c, i)
+    TermApp(method, args) => Expr(:call, toexpr(c, method.head), toexpr.(Ref(c), args)...)
+    Constant(value, oftype) => Expr(:(::), value, toexpr(c, oftype))
+    DotAccess(to, field) => Expr(:(.), toexpr(c, to), field)
+    Annot(on, type) => Expr(:(::), toexpr(c, on), toexpr(c, type))
+    NamedTupleTerm(tuple) =>
+      Expr(:tuple, (:($n = $(toexpr(t))) for (n,t) in pairs(tuple.fields))...)
+  end
+end
+
+function resolve_method(c::Context, head::Symbol, argexprs)
+  args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
+  fun = fromexpr(c, head, Ident)
+  signature = AlgSort.(Ref(c), args)
+  method = try
+    methodlookup(c, fun, signature)
+  catch e
+    error("couldn't find method for $(Expr(:call, head, argexprs...))")
+  end
+  (ResolvedMethod(fun, method), args)
+end
+
+function fromexpr(c::Context, e, ::Type{AlgTerm})
+  @match e begin
+    s::Symbol => begin
+      x = fromexpr(c, s, Ident)
+      value = getvalue(c[x])
+      if value isa AlgType
+        Var(fromexpr(c, s, Ident))
+      else
+        error("the symbol $e references a constructor not a variable, and must be explicitly called to produce a term")
+      end
+    end
+    Expr(:., body, QuoteNode(field)) => begin
+      t = fromexpr(c, body, AlgTerm)
+      DotAccess(t, field)
+    end
+    Expr(:call, head::Symbol, argexprs...) => begin
+      (method, args) = resolve_method(c, head, argexprs)
+      TermApp(method, args)
+    end
+    Expr(:tuple, kvs...) =>
+      NamedTupleTerm(
+        AlgNamedTuple{AlgTerm}(
+          OrderedDict{Symbol, AlgTerm}(
+            map(kvs) do kv
+              @match kv begin
+                Expr(:(=), k, v) => (k => fromexpr(c, v, AlgTerm))
+                _ => error("expected key-value pairs inside tuple")
+              end
+            end
+          )
+        )
+      )
+    term::AlgTerm => term
+    _ => error("could not parse AlgTerm from $e")
+  end
+end
+
+function toexpr(c::Context, type::AlgType)
+  @match type begin
+    TypeApp(method, args) =>
+      if length(args) == 0
+        toexpr(c, method.head)
+      else
+        Expr(:call, toexpr(c, method.head), toexpr.(Ref(c), args))
+      end
+    TypeEq(_sort, equands) =>
+      Expr(:call, :(==), toexpr.(Ref(c), equands))
+    NamedTupleType(tuple) =>
+      Expr(:tuple, (Expr(:(::), k, toexpr(c, t)) for (k, v) in pairs(tuple.fields))...)
+  end
+end
+
+function fromexpr(c::Context, e, ::Type{AlgType})
+  @match e begin
+    s::Symbol => begin
+      (method, _) = resolve_method(c, s, [])
+      TypeApp(method, AlgTerm[])
+    end
+    Expr(:call, :(==), lhs_expr, rhs_expr) => begin
+      (lhs, rhs) = fromexpr.(Ref(c), (lhs_expr, rhs_expr), Ref(AlgTerm))
+      (lhs_sort, rhs_sort) = AlgSort.((lhs, rhs))
+      if lhs_sort == rhs_sort
+        TypeEq(lhs_sort, [lhs, rhs])
+      else
+        error("could not match sorts of $lhs_expr and $rhs_expr")
+      end
+    end
+    Expr(:call, head, argexprs...) => begin
+      (method, args) = resolve_method(c, head, argsexprs)
+      TypeApp(method, args)
+    end
+    Expr(:tuple, args...) => begin
+      fields = OrderedDict{Symbol, AlgType}()
+      for arg in args
+        parse_binding_expr!(c, b -> (fields[nameof(b)] = getvalue(b)), arg)
+      end
+      NamedTupleType(AlgNamedTuple{AlgType}(fields))
+    end
+    _ => error("could not parse AlgType from $e")
   end
 end
 
