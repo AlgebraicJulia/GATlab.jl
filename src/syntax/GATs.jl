@@ -1,5 +1,5 @@
 module GATs
-export Constant, AlgTerm, AlgType, AlgAST,
+export Constant, AlgTerm, AlgType,
   TypeScope, TypeCtx, AlgSort, AlgEqSort, AlgSorts,
   AlgDeclaration, AlgTermConstructor, AbstractAlgSort,
   AlgTypeConstructor, AlgAccessor, AlgAxiom, AlgStruct, AlgDot, AlgFunction,
@@ -27,9 +27,10 @@ using MLStyle
 using DataStructures: OrderedDict
 
 include("gats/ast.jl")
-# include("gats/judgments.jl")
-# include("gats/gat.jl")
-# include("gats/algorithms.jl")
+include("gats/judgments.jl")
+include("gats/gat.jl")
+include("gats/algorithms.jl")
+include("gats/exprinterop.jl")
 # include("gats/closures.jl")
 
 end

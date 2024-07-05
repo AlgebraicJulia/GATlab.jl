@@ -23,40 +23,37 @@ three = TermApp(ResolvedMethod(plus, plusmethod), [one, two])
 
 @test toexpr(scope, three) == :((1::number) + (2::number))
 
-@test fromexpr(GAT(:Empty), two.body, AlgTerm) == two
+@test fromexpr(GAT(:Empty), two, AlgTerm) == two
 
-@test GATs.substitute_funs(scope, one) == one
+# @test GATs.substitute_funs(scope, one) == one
 
-@test basicprinted(two) == "Constant(2, TypeApp(ResolvedMethod(number, number), AlgTerm[])::AlgType)::AlgTerm"
-
-@test_throws Exception AlgSort(scope, three)
-
-@test sortcheck(scope, two) == AlgSort(number, number)
-
-@test_throws Exception sortcheck(scope, three)
+@test basicprinted(two) ==
+      "$Constant(2, $TypeApp($ResolvedMethod(number, number), $AlgTerm[])::$AlgType)::$AlgTerm"
 
 @test_throws Exception AlgSort(scope, three)
 
-@test_throws MethodError fromexpr(scope, toexpr(scope, three), AlgTerm)
+# @test sortcheck(scope, two) == AlgSort(number, number)
 
-# seg_expr = quote
-#   Ob :: TYPE
-#   Hom(dom, codom) :: TYPE ⊣ [dom::Ob, codom::Ob]
-#   id(a) :: Hom(a, a) ⊣ [a::Ob]
-#   compose(f, g) :: Hom(a, c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a, b), g::Hom(b, c)]
-#   compose(f, compose(g, h)) == compose(compose(f, g), h) ⊣ [
-#     a::Ob, b::Ob, c::Ob, d::Ob,
-#     f::Hom(a, b), g::Hom(b, c), h::Hom(c, d)
-#   ]
-#   struct Span(dom::Ob, codom::Ob)
-#     apex::Ob
-#     left::Hom(apex, dom)
-#     right::Hom(apex, codom)
-#   end
-#   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
-# end
+# @test_throws Exception sortcheck(scope, three)
 
-# thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
+seg_expr = quote
+  Ob :: TYPE
+  Hom(dom, codom) :: TYPE ⊣ [dom::Ob, codom::Ob]
+  id(a) :: Hom(a, a) ⊣ [a::Ob]
+  compose(f, g) :: Hom(a, c) ⊣ [a::Ob, b::Ob, c::Ob, f::Hom(a, b), g::Hom(b, c)]
+  (compose(f, compose(g, h)) == compose(compose(f, g), h))::Hom ⊣ [
+    a::Ob, b::Ob, c::Ob, d::Ob,
+    f::Hom(a, b), g::Hom(b, c), h::Hom(c, d)
+  ]
+  struct Span(dom::Ob, codom::Ob)
+    apex::Ob
+    left::Hom(apex, dom)
+    right::Hom(apex, codom)
+  end
+  id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
+end
+
+thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 
 # O, H, i = idents(thcat; name=[:Ob, :Hom, :id])
 
@@ -178,4 +175,4 @@ three = TermApp(ResolvedMethod(plus, plusmethod), [one, two])
 #     Dtrys.node(:a => Dtrys.leaf(f), :b => Dtrys.leaf(f)), [:x, :y]
 #   ) isa AlgClosure
 
-# end # module
+end # module

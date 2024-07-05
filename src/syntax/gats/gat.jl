@@ -211,7 +211,7 @@ end
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgTypeConstructor)
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
-  push!(theory.sorts, AlgSort(getdecl(judgment), x))
+  push!(theory.sorts, PrimSort(ResolvedMethod(getdecl(judgment), x)))
   theory.accessors[x] = Dict{Int, Ident}()
 end
 
@@ -222,7 +222,7 @@ end
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgStruct)
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
   addmethod!(theory.resolvers[getdecl(judgment)], typesortsignature(judgment), x) # Collision?
-  push!(theory.sorts, AlgSort(getdecl(judgment), x))
+  push!(theory.sorts, PrimSort(ResolvedMethod(getdecl(judgment), x)))
   theory.accessors[x] = Dict{Int, Ident}()
 end
 

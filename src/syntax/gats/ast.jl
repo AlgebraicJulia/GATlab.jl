@@ -2,6 +2,7 @@
 ##########
 
 export
+  AlgSort, PrimSort, TupleSort,
   TypeApp, TypeEq, NamedTupleType,
   Var, TermApp, Constant, DotAccess, Annot, NamedTupleTerm
 
@@ -211,111 +212,6 @@ end
 # Parsing for AlgTerm/AlgType
 #############################
 
-function toexpr(c::Context, t::AlgTerm)
-  @match t begin
-    Var(i) => toexpr(c, i)
-    TermApp(method, args) => Expr(:call, toexpr(c, method.head), toexpr.(Ref(c), args)...)
-    Constant(value, oftype) => Expr(:(::), value, toexpr(c, oftype))
-    DotAccess(to, field) => Expr(:(.), toexpr(c, to), field)
-    Annot(on, type) => Expr(:(::), toexpr(c, on), toexpr(c, type))
-    NamedTupleTerm(tuple) =>
-      Expr(:tuple, (:($n = $(toexpr(t))) for (n,t) in pairs(tuple.fields))...)
-  end
-end
-
-function resolve_method(c::Context, head::Symbol, argexprs)
-  args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
-  fun = fromexpr(c, head, Ident)
-  signature = AlgSort.(Ref(c), args)
-  method = try
-    methodlookup(c, fun, signature)
-  catch e
-    error("couldn't find method for $(Expr(:call, head, argexprs...))")
-  end
-  (ResolvedMethod(fun, method), args)
-end
-
-function fromexpr(c::Context, e, ::Type{AlgTerm})
-  @match e begin
-    s::Symbol => begin
-      x = fromexpr(c, s, Ident)
-      value = getvalue(c[x])
-      if value isa AlgType
-        Var(fromexpr(c, s, Ident))
-      else
-        error("the symbol $e references a constructor not a variable, and must be explicitly called to produce a term")
-      end
-    end
-    Expr(:., body, QuoteNode(field)) => begin
-      t = fromexpr(c, body, AlgTerm)
-      DotAccess(t, field)
-    end
-    Expr(:call, head::Symbol, argexprs...) => begin
-      (method, args) = resolve_method(c, head, argexprs)
-      TermApp(method, args)
-    end
-    Expr(:tuple, kvs...) =>
-      NamedTupleTerm(
-        AlgNamedTuple{AlgTerm}(
-          OrderedDict{Symbol, AlgTerm}(
-            map(kvs) do kv
-              @match kv begin
-                Expr(:(=), k, v) => (k => fromexpr(c, v, AlgTerm))
-                _ => error("expected key-value pairs inside tuple")
-              end
-            end
-          )
-        )
-      )
-    term::AlgTerm => term
-    _ => error("could not parse AlgTerm from $e")
-  end
-end
-
-function toexpr(c::Context, type::AlgType)
-  @match type begin
-    TypeApp(method, args) =>
-      if length(args) == 0
-        toexpr(c, method.head)
-      else
-        Expr(:call, toexpr(c, method.head), toexpr.(Ref(c), args))
-      end
-    TypeEq(_sort, equands) =>
-      Expr(:call, :(==), toexpr.(Ref(c), equands))
-    NamedTupleType(tuple) =>
-      Expr(:tuple, (Expr(:(::), k, toexpr(c, t)) for (k, v) in pairs(tuple.fields))...)
-  end
-end
-
-function fromexpr(c::Context, e, ::Type{AlgType})
-  @match e begin
-    s::Symbol => begin
-      (method, _) = resolve_method(c, s, [])
-      TypeApp(method, AlgTerm[])
-    end
-    Expr(:call, :(==), lhs_expr, rhs_expr) => begin
-      (lhs, rhs) = fromexpr.(Ref(c), (lhs_expr, rhs_expr), Ref(AlgTerm))
-      (lhs_sort, rhs_sort) = AlgSort.((lhs, rhs))
-      if lhs_sort == rhs_sort
-        TypeEq(lhs_sort, [lhs, rhs])
-      else
-        error("could not match sorts of $lhs_expr and $rhs_expr")
-      end
-    end
-    Expr(:call, head, argexprs...) => begin
-      (method, args) = resolve_method(c, head, argsexprs)
-      TypeApp(method, args)
-    end
-    Expr(:tuple, args...) => begin
-      fields = OrderedDict{Symbol, AlgType}()
-      for arg in args
-        parse_binding_expr!(c, b -> (fields[nameof(b)] = getvalue(b)), arg)
-      end
-      NamedTupleType(AlgNamedTuple{AlgType}(fields))
-    end
-    _ => error("could not parse AlgType from $e")
-  end
-end
 
 # const EMPTY_ARGS = AlgTerm[]
 
@@ -338,42 +234,44 @@ end
 #   end
 # end
 
-# function AlgSort(c::Context, t::AlgTerm)
-#   t_sub = substitute_funs(c, t)
-#   if t_sub != t
-#     return AlgSort(c, t_sub)
-#   end
-#   if isconstant(t)
-#     AlgSort(t.body.type)
-#   elseif isapp(t)
-#     binding = c[t.body.method]
-#     value = getvalue(binding)
-#     AlgSort(value.type)
-#   elseif isdot(t)
-#     parentsort = AlgSort(c, bodyof(bodyof(t)))
-#     if istuple(parentsort)
-#       parentsort.body.fields[headof(bodyof(t))]
-#     else
-#       algstruct = c[methodof(AlgSort(c, bodyof(bodyof(t))))] |> getvalue
-#       AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
-#     end
-#   elseif isannot(t)
-#     AlgSort(t.body.type)
-#   else # variable
-#     binding = c[t.body]
-#     AlgSort(getvalue(binding))
-#   end
-# end
+function AlgSort(c::Context, t::AlgTerm)
+  # t_sub = substitute_funs(c, t)
+  # if t_sub != t
+  #   return AlgSort(c, t_sub)
+  # end
+  @match t begin
+    Var(i) => begin
+      binding = c[i]
+      AlgSort(getvalue(binding))
+    end
+    Constant(_, oftype) => AlgSort(oftype)
+    TermApp(method, args) => begin
+      binding = c[method.method]
+      value = getvalue(binding)
+      AlgSort(value.type)
+    end
+    DotAccess(to, field) => begin
+      parentsort = AlgSort(c, bodyof(bodyof(t)))
+      if istuple(parentsort)
+        parentsort.body.fields[headof(bodyof(t))]
+      else
+        algstruct = c[methodof(AlgSort(c, bodyof(bodyof(t))))] |> getvalue
+        AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
+      end
+    end
+    Annot(_, type) => AlgSort(type)
+    # NamedTupleTerm??
+  end
+end
 
-# function AlgSort(t::AlgType)
-#   if iseq(t)
-#     AlgEqSort(headof(t.body.sort), methodof(t.body.sort))
-#   elseif istuple(t)
-#     AlgSort(AlgNamedTuple{AlgSort}(OrderedDict{Symbol, AlgSort}(k => AlgSort(v) for (k, v) in t.body.fields)))
-#   else
-#     AlgSort(headof(t.body), methodof(t.body))
-#   end
-# end
+function AlgSort(t::AlgType)
+  @match t begin
+    TypeApp(method, args) => PrimSort(method)
+    TypeEq(sort, equands) => error("haven't refactored AlgEq yet")
+    NamedTupleType(tuple) =>
+      TupleSort(map(AlgSort, tuple))
+  end
+end
 
 # function tcompose(t::AbstractDtry{AlgType})
 #   @match t begin
@@ -418,3 +316,28 @@ end
 
 # Scopes.getvalue(i::InCtx) = i.val
 # Scopes.getcontext(i::InCtx) = i.ctx
+
+
+# Type Contexts
+###############
+
+const TypeCtx = Context{AlgType}
+
+"""
+A type or term with an accompanying type context, e.g.
+
+ (a,b)::R        (a,b)::Ob
+-----------  or  ----------
+  a*(a+b)         Hom(a,b)
+"""
+
+@struct_hash_equal struct InCtx{T}
+  ctx::TypeCtx
+  val::T
+end
+
+const TermInCtx = InCtx{AlgTerm}
+const TypeInCtx = InCtx{AlgType}
+
+Scopes.getvalue(i::InCtx) = i.val
+Scopes.getcontext(i::InCtx) = i.ctx

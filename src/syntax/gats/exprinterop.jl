@@ -1,9 +1,19 @@
 # AST
 #####
-"""Coerce GATs to GAT contexts"""
-fromexpr(g::GAT, e, t) = fromexpr(GATContext(g), e, t)
 
-function parse_methodapp(c::GATContext, head::Symbol, argexprs)
+function toexpr(c::Context, t::AlgTerm)
+  @match t begin
+    Var(i) => toexpr(c, i)
+    TermApp(method, args) => Expr(:call, toexpr(c, method.head), toexpr.(Ref(c), args)...)
+    Constant(value, oftype) => Expr(:(::), value, toexpr(c, oftype))
+    DotAccess(to, field) => Expr(:(.), toexpr(c, to), field)
+    Annot(on, type) => Expr(:(::), toexpr(c, on), toexpr(c, type))
+    NamedTupleTerm(tuple) =>
+      Expr(:tuple, (:($n = $(toexpr(t))) for (n,t) in pairs(tuple.fields))...)
+  end
+end
+
+function resolve_method(c::GATContext, head::Symbol, argexprs)
   args = Vector{AlgTerm}(fromexpr.(Ref(c), argexprs, Ref(AlgTerm)))
   fun = fromexpr(c, head, Ident)
   signature = AlgSort.(Ref(c), args)
@@ -12,84 +22,88 @@ function parse_methodapp(c::GATContext, head::Symbol, argexprs)
   catch e
     error("couldn't find method for $(Expr(:call, head, argexprs...))")
   end
-  MethodApp{AlgTerm}(fun, method, args)
+  (ResolvedMethod(fun, method), args)
 end
 
-function toexpr(c::Context, m::MethodApp)
-  Expr(:call, toexpr(c, m.head), toexpr.(Ref(c), m.args)...)
-end
-
-function toexpr(c::Context, m::AlgDot; kw...)
-  Expr(:., toexpr(c, m.body; kw...), QuoteNode(m.head))
-end
-
-function fromexpr(c::GATContext, e, ::Type{AlgTerm})
+function fromexpr(c::Context, e, ::Type{AlgTerm})
   @match e begin
     s::Symbol => begin
       x = fromexpr(c, s, Ident)
       value = getvalue(c[x])
       if value isa AlgType
-        AlgTerm(fromexpr(c, s, Ident))
+        Var(fromexpr(c, s, Ident))
       else
-        error("nullary constructors must be explicitly called: $e")
+        error("the symbol $e references a constructor not a variable, and must be explicitly called to produce a term")
       end
     end
-    Expr(:., body, QuoteNode(head)) => begin 
+    Expr(:., body, QuoteNode(field)) => begin
       t = fromexpr(c, body, AlgTerm)
-      AlgTerm(AlgDot(head, t))
+      DotAccess(t, field)
     end
-    Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(c, head, argexprs))
-    Expr(:(::), val, type) => AlgTerm(Constant(val, fromexpr(c, type, AlgType)))
-    Expr(:tuple, kvs...) => AlgTerm(
-      AlgNamedTuple{AlgTerm}(
-        OrderedDict{Symbol, AlgTerm}(
-          map(kvs) do kv
-            @match kv begin
-              Expr(:(=), k, v) => (k => fromexpr(c, v, AlgTerm))
-              _ => error("expected key-value pairs inside tuple")
+    Expr(:call, head::Symbol, argexprs...) => begin
+      (method, args) = resolve_method(c, head, argexprs)
+      TermApp(method, args)
+    end
+    Expr(:tuple, kvs...) =>
+      NamedTupleTerm(
+        AlgNamedTuple{AlgTerm}(
+          OrderedDict{Symbol, AlgTerm}(
+            map(kvs) do kv
+              @match kv begin
+                Expr(:(=), k, v) => (k => fromexpr(c, v, AlgTerm))
+                _ => error("expected key-value pairs inside tuple")
+              end
             end
-          end
+          )
         )
       )
-    )
-    e::Expr => error("could not parse AlgTerm from $e")
-    constant::Constant => AlgTerm(constant)
-  end
-end
-
-function toexpr(c::Context, term::AlgTerm)
-  toexpr(c, term.body)
-end
-
-function fromexpr(p::GATContext, e, ::Type{AlgType})::AlgType
-  @match e begin
-    s::Symbol => AlgType(parse_methodapp(p, s, []))
-    Expr(:call, head, args...) && if head != :(==) end =>
-      AlgType(parse_methodapp(p, head, args))
-    Expr(:call, :(==), lhs, rhs) =>
-      AlgType(p, fromexpr(p, lhs, AlgTerm), fromexpr(p, rhs, AlgTerm))
-    Expr(:tuple, args...) => begin
-      fields = OrderedDict{Symbol, AlgType}()
-      for arg in args
-        parse_binding_expr!(p, b -> (fields[nameof(b)] = getvalue(b)), arg)
-      end
-      AlgType(AlgNamedTuple{AlgType}(fields))
-    end
-    _ => error("could not parse AlgType from $e")
+    term::AlgTerm => term
+    _ => error("could not parse AlgTerm from $e")
   end
 end
 
 function toexpr(c::Context, type::AlgType)
-  if isapp(type)
-    if length(type.body.args) == 0
-      toexpr(c, type.body.head)
-    else
-      Expr(:call, toexpr(c, type.body.head), toexpr.(Ref(c), type.body.args)...)
+  @match type begin
+    TypeApp(method, args) =>
+      if length(args) == 0
+        toexpr(c, method.head)
+      else
+        Expr(:call, toexpr(c, method.head), toexpr.(Ref(c), args))
+      end
+    TypeEq(_sort, equands) =>
+      Expr(:call, :(==), toexpr.(Ref(c), equands))
+    NamedTupleType(tuple) =>
+      Expr(:tuple, (Expr(:(::), k, toexpr(c, t)) for (k, v) in pairs(tuple.fields))...)
+  end
+end
+
+function fromexpr(c::GATContext, e, ::Type{AlgType})
+  @match e begin
+    s::Symbol => begin
+      (method, _) = resolve_method(c, s, [])
+      TypeApp(method, AlgTerm[])
     end
-  elseif iseq(type)
-    Expr(:call, :(==), toexpr.(Ref(c), type.body.equands)...)
-  elseif istuple(type)
-    Expr(:tuple, [Expr(:(::), k, toexpr(c, v)) for (k, v) in type.body.fields]...)
+    Expr(:call, :(==), lhs_expr, rhs_expr) => begin
+      (lhs, rhs) = fromexpr.(Ref(c), (lhs_expr, rhs_expr), Ref(AlgTerm))
+      (lhs_sort, rhs_sort) = AlgSort.((lhs, rhs))
+      if lhs_sort == rhs_sort
+        TypeEq(lhs_sort, [lhs, rhs])
+      else
+        error("could not match sorts of $lhs_expr and $rhs_expr")
+      end
+    end
+    Expr(:call, head, argexprs...) => begin
+      (method, args) = resolve_method(c, head, argexprs)
+      TypeApp(method, args)
+    end
+    Expr(:tuple, args...) => begin
+      fields = OrderedDict{Symbol, AlgType}()
+      for arg in args
+        parse_binding_expr!(c, b -> (fields[nameof(b)] = getvalue(b)), arg)
+      end
+      NamedTupleType(AlgNamedTuple{AlgType}(fields))
+    end
+    _ => error("could not parse AlgType from $e")
   end
 end
 
@@ -97,39 +111,11 @@ function fromexpr(c::GATContext, e, ::Type{AlgSort})
   e isa Symbol || error("expected a Symbol to parse a sort, got: $e")
   decl = ident(c.theory; name=e)
   method = only(allmethods(c.theory.resolvers[decl]))[2]
-  AlgSort(decl, method)
+  PrimSort(ResolvedMethod(decl, method))
 end
 
 function toexpr(c::GATContext, s::AlgSort)
   toexpr(c, getdecl(s))
-end
-
-toexpr(c::Context, constant::Constant; kw...) =
-  Expr(:(::), constant.value, toexpr(c, constant.type; kw...))
-
-toexpr(c::Context, annot::AlgAnnot; kw...) =
-  Expr(:(::), toexpr(c, annot.term; kw...), toexpr(c, annot.type; kw...))
-
-# toexpr(c::Context, annot::AlgAnnot; kw...) = toexpr(c, annot.term; kw...)
-
-toexpr(c::Context, t::AlgNamedTuple{AlgTerm}; kw...) =
-  Expr(:tuple, [Expr(:(=), k, toexpr(c, v; kw...)) for (k, v) in t.fields]...)
-
-function fromexpr(c::GATContext, e, ::Type{InCtx{T}}; kw...) where T
-  (termexpr, localcontext) = @match e begin
-    Expr(:call, :(⊣), binding, tscope) => (binding, fromexpr(c, tscope, TypeScope))
-    e => (e, TypeScope())
-  end
-  term = fromexpr(AppendContext(c, localcontext), termexpr, T)
-  InCtx{T}(localcontext, term)
-end
-
-function toexpr(c::Context, tic::InCtx; kw...)
-  c′ = AppendContext(c, tic.ctx)
-  etrm = toexpr(c′, tic.val; kw...)
-  flat = TypeScope(tic.ctx)
-  ectx = toexpr(c, flat; kw...)
-  Expr(:call, :(⊣), etrm, ectx)
 end
 
 # Judgments
@@ -202,8 +188,6 @@ function toexpr(theory::GAT, judgment::AlgStruct)
     return Expr(:call, :⊣, stexpr, toexpr(theory, lc))
   end
 end
-
-
 
 function toexpr(c::GAT, binding::Binding{Judgment})
   judgment = getvalue(binding)
@@ -369,7 +353,7 @@ function parse_binding_line!(theory::GAT, e, linenumber)
 
   (binding, localcontext) = @match e begin
     Expr(:call, :(⊣), binding, ctxexpr) && if ctxexpr.head == :vect end =>
-      (binding, fromexpr(theory, ctxexpr, TypeScope))
+      (binding, fromexpr(GATContext(theory), ctxexpr, TypeScope))
     e => (e, TypeScope())
   end
 
@@ -390,7 +374,7 @@ function parse_binding_line!(theory::GAT, e, linenumber)
   end
 end
 
-function  parsefunction!(theory::GAT, localcontext, sort_expr, call, e)
+function parsefunction!(theory::GAT, localcontext, sort_expr, call, e)
   isnothing(sort_expr) || error("No explicit sort for functions $call :: $sort_expr")
   name, args′ = @match call begin
     Expr(:call, name, args...) => (name, args)
@@ -424,7 +408,6 @@ function parse_struct!(theory::GAT, e, linenumber, ctx=nothing)
     Scopes.unsafe_pushbinding!(theory, b)
   end
 end
-
 
 
 # GATs
