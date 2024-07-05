@@ -71,7 +71,7 @@ function toexpr(c::Context, type::AlgType)
         Expr(:call, toexpr(c, method.head), toexpr.(Ref(c), args))
       end
     TypeEq(_sort, equands) =>
-      Expr(:call, :(==), toexpr.(Ref(c), equands))
+      Expr(:call, :(==), toexpr.(Ref(c), equands)...)
     NamedTupleType(tuple) =>
       Expr(:tuple, (Expr(:(::), k, toexpr(c, t)) for (k, v) in pairs(tuple.fields))...)
   end
@@ -85,7 +85,7 @@ function fromexpr(c::GATContext, e, ::Type{AlgType})
     end
     Expr(:call, :(==), lhs_expr, rhs_expr) => begin
       (lhs, rhs) = fromexpr.(Ref(c), (lhs_expr, rhs_expr), Ref(AlgTerm))
-      (lhs_sort, rhs_sort) = AlgSort.((lhs, rhs))
+      (lhs_sort, rhs_sort) = AlgSort.(Ref(c), (lhs, rhs))
       if lhs_sort == rhs_sort
         TypeEq(lhs_sort, [lhs, rhs])
       else
@@ -107,6 +107,8 @@ function fromexpr(c::GATContext, e, ::Type{AlgType})
   end
 end
 
+fromexpr(c::GAT, e, ::Type{AlgType}) = fromexpr(GATContext(c), e, AlgType)
+
 function fromexpr(c::GATContext, e, ::Type{AlgSort})
   e isa Symbol || error("expected a Symbol to parse a sort, got: $e")
   decl = ident(c.theory; name=e)
@@ -114,8 +116,14 @@ function fromexpr(c::GATContext, e, ::Type{AlgSort})
   PrimSort(ResolvedMethod(decl, method))
 end
 
+toexpr(c::GAT, s::AlgSort) = toexpr(GATContext(c), s)
+
 function toexpr(c::GATContext, s::AlgSort)
-  toexpr(c, getdecl(s))
+  @match s begin
+    PrimSort(method) => toexpr(c, method.head)
+    TupleSort(tuple) =>
+      Expr(:tuple, (:($k::$(toexpr(c, s))) for (k, s) in tuple.fields))
+  end
 end
 
 # Judgments
@@ -248,6 +256,8 @@ function parse_binding_expr!(c::GATContext, pushbinding!, e)
     _ => error("invalid binding expression $e")
   end
 end
+
+fromexpr(p::GAT, e, ::Type{TypeScope}) = fromexpr(GATContext(p), e, TypeScope)
 
 function fromexpr(p::GATContext, e, ::Type{TypeScope})
   ts = TypeScope()

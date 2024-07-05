@@ -2,6 +2,7 @@
 ##########
 
 export
+  ResolvedMethod,
   AlgSort, PrimSort, TupleSort,
   TypeApp, TypeEq, NamedTupleType,
   Var, TermApp, Constant, DotAccess, Annot, NamedTupleTerm
@@ -42,11 +43,35 @@ module Prims
 using ....Util.SumTypes
 import ..GATs: ResolvedMethod, AlgSort, AlgNamedTuple
 import ...Scopes: Ident
+using MLStyle
 
 @sum AlgType{Tm} begin
   TypeApp(method::ResolvedMethod, args::Vector{Tm})
   TypeEq(sort::AlgSort, equands::Vector{Tm})
   NamedTupleType(tuple::AlgNamedTuple{AlgType{Tm}})
+end
+
+"""
+The functor instance for AlgType{_}.
+
+Arguments:
+- `f::Tm -> Tm′`
+- `t::AlgType{Tm}`
+
+The return type Tm′ can either be passed in via into_type or
+can be inferred via code_typed.
+"""
+function Base.map(f, t::AlgType{Tm}; into_type=nothing) where {Tm}
+  Tm′ = if isnothing(into_type)
+    code_typed(f, Tuple{Tm})[1].second
+  else
+    into_type
+  end
+  @match t begin
+    TypeApp(method, args) => TypeApp{Tm′}(method, f.(args))
+    TypeEq(sort, equands) => TypeEq{Tm′}(sort, f.(equands))
+    NamedTupleType(tuple) => NamedTupleType{Tm′}(map(tm -> map(f, tm), tuple))
+  end
 end
 
 @sum AlgTerm{Tm} begin
@@ -57,6 +82,33 @@ end
   Annot(on::Tm, type::AlgType{Tm})
   NamedTupleTerm(tuple::AlgNamedTuple{Tm})
 end
+
+"""
+The functor instance for AlgTerm{_}
+
+Arguments:
+- `f::Tm -> Tm′`
+- `t::AlgTerm{Tm}`
+
+The return type Tm′ can either be passed in via into_type or
+can be inferred via code_typed.
+"""
+function Base.map(f, t::AlgTerm{Tm}; into_type=nothing) where {Tm}
+  Tm′ = if isnothing(into_type)
+    code_typed(f, Tuple{Tm})[1].second
+  else
+    into_type
+  end
+  @match t begin
+    Var(i) => t
+    TermApp(method, args) => TermApp{Tm′}(method, f.(args))
+    Constant(value, oftype) => Constant{Tm′}(map(f, oftype))
+    DotAccess(to, field) => DotAccess{Tm′}(f(to), field)
+    Annot(on, type) => Annot{Tm′}(f(on), map(f, type))
+    NamedTupleTerm(tuple) => NamedTupleTerm{Tm′}(map(t -> map(f, t), tuple))
+  end
+end
+
 end
 
 struct AlgTerm
@@ -121,7 +173,7 @@ DotAccess(to::AlgTerm, field::Symbol) =
 @active Annot(t) begin
   if t isa AlgTerm
     @match t.content begin
-      Prims.Annot(on, type) => (on, type)
+      Prims.Annot(on, type) => (on, AlgType(type))
       _ => nothing
     end
   end
@@ -169,7 +221,7 @@ TypeEq(sort::AlgSort, equands::Vector{AlgTerm}) =
 @active NamedTupleType(t) begin
   if t isa AlgType
     @match t.content begin
-      Prims.NamedTupleType(tuple) => map(ty -> AlgType(ty), tuple)
+      Prims.NamedTupleType(tuple) => Some(map(ty -> AlgType(ty), tuple))
     end
   end
 end
@@ -209,6 +261,28 @@ function Base.show(io::IO, t::AlgType)
   end
 end
 
+"""
+Applies `f` to the direct subterms of `t`. See the implementation of `map` for `Prims.AlgTerm`.
+
+Arguments:
+- `f::AlgTerm -> AlgTerm`
+- `t::AlgTerm`
+"""
+function Base.map(f, t::AlgTerm)
+  AlgTerm(map(f, t.content; into_type=AlgTerm))
+end
+
+"""
+Applies `f` to the direct subterms of `t`. See the implementation of `map` for `Prims.AlgType`.
+
+Arguments:
+- `f::AlgTerm -> AlgTerm`
+- `t::AlgType`
+"""
+function Base.map(f, t::AlgType)
+  AlgTerm(map(f, t.content; into_type=AlgTerm))
+end
+
 # Parsing for AlgTerm/AlgType
 #############################
 
@@ -222,17 +296,17 @@ end
 
 # reident(reps::Dict{Ident}, t::AlgTerm) = AlgTerm(reident(reps, t.body))
 
-# function tcompose(t::AbstractDtry{AlgTerm})
-#   @match t begin
-#     Dtrys.Leaf(v) => v
-#     Dtrys.Node(bs) =>
-#       AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(
-#         (n, tcompose(v)) for (n, v) in bs
-#       )))
-#     Dtrys.Empty() =>
-#       AlgTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}()))
-#   end
-# end
+function tcompose(t::AbstractDtry{AlgTerm})
+  @match t begin
+    Dtrys.Leaf(v) => v
+    Dtrys.Node(bs) =>
+      NamedTupleTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(
+        (n, tcompose(v)) for (n, v) in bs
+      )))
+    Dtrys.Empty() =>
+      NamedTupleTerm(AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}()))
+  end
+end
 
 function AlgSort(c::Context, t::AlgTerm)
   # t_sub = substitute_funs(c, t)
@@ -248,15 +322,24 @@ function AlgSort(c::Context, t::AlgTerm)
     TermApp(method, args) => begin
       binding = c[method.method]
       value = getvalue(binding)
-      AlgSort(value.type)
+      if value isa AlgTermConstructor
+        AlgSort(value.type)
+      elseif value isa AlgFunction
+        AlgSort(AppendContext(c, value.localcontext), value.value)
+      elseif value isa AlgStruct
+        PrimSort(method)
+      else
+        error("expected a term constructor or a function as the head of a TermApp: got $value")
+      end
     end
     DotAccess(to, field) => begin
-      parentsort = AlgSort(c, bodyof(bodyof(t)))
-      if istuple(parentsort)
-        parentsort.body.fields[headof(bodyof(t))]
-      else
-        algstruct = c[methodof(AlgSort(c, bodyof(bodyof(t))))] |> getvalue
-        AlgSort(getvalue(algstruct.fields[headof(bodyof(t))]))
+      parentsort = AlgSort(c, to)
+      @match parentsort begin
+        PrimSort(method) => begin
+          algstruct = c[method.method]
+          AlgSort(getvalue(algstruct.fields[field]))
+        end
+        TupleSort(tuple) => tuple.fields[field]
       end
     end
     Annot(_, type) => AlgSort(type)
@@ -273,21 +356,21 @@ function AlgSort(t::AlgType)
   end
 end
 
-# function tcompose(t::AbstractDtry{AlgType})
-#   @match t begin
-#     Dtrys.Node(bs) =>
-#       AlgType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (k,v) in AbstractTrees.children(t))))
-#     Dtrys.Leaf(v) => v
-#     Dtrys.Empty() => AlgType(AlgNamedTuple(OrderedDict{Symbol, AlgType}()))
-#   end
-# end
+function tcompose(t::AbstractDtry{AlgType})
+  @match t begin
+    Dtrys.Node(bs) =>
+      NamedTupleType(AlgNamedTuple(OrderedDict(k => tcompose(v) for (k,v) in AbstractTrees.children(t))))
+    Dtrys.Leaf(v) => v
+    Dtrys.Empty() => NamedTupleType(AlgNamedTuple(OrderedDict{Symbol, AlgType}()))
+  end
+end
 
-# function Prims.getindex(a::AlgTerm, v::DtryVar)
-#   @match v begin
-#     Dtrys.Root() => a
-#     Dtrys.Nested((n, v′)) => getindex(AlgTerm(AlgDot(n, a)), v′)
-#   end
-# end
+function Prims.getindex(a::AlgTerm, v::DtryVar)
+  @match v begin
+    Dtrys.Root() => a
+    Dtrys.Nested((n, v′)) => getindex(DotAccess(a, n), v′)
+  end
+end
 
 # function Prims.getproperty(a::AlgTerm, n::Symbol)
 #   AlgTerm(AlgDot(n, a))

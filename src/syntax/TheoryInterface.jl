@@ -125,7 +125,7 @@ function theory_impl(head, body, __module__)
           push!(lines, juliadeclaration(bname))
           push!(newnames, bname)
         elseif judgment isa AlgStruct
-          push!(structlines, mk_struct(judgment, fqmn(__module__)))
+          push!(structlines, mk_struct(theory, judgment, fqmn(__module__)))
         end
       end
     end
@@ -233,10 +233,9 @@ function constructor_module(theory::GAT)
           closures[judgment.declaration],
           AlgMethod(
             judgment.localcontext,
-            AlgTerm(
-              judgment.declaration,
-              x,
-              AlgTerm.(idents(judgment.localcontext; lid=judgment.args))
+            TermApp(
+              ResolvedMethod(judgment.declaration, x),
+              Var.(idents(judgment.localcontext; lid=judgment.args))
             ),
             "",
             judgment.args,
@@ -255,9 +254,9 @@ function constructor_module(theory::GAT)
   )
 end
 
-function mk_struct(s::AlgStruct, mod)
+function mk_struct(ctx, s::AlgStruct, mod)
   fields = map(argsof(s)) do b
-    Expr(:(::), nameof(b), nameof(AlgSort(getvalue(b))))
+    Expr(:(::), nameof(b), toexpr(ctx, AlgSort(getvalue(b))))
   end 
   sorts = unique([f.args[2] for f in fields])
   she = Expr(:macrocall, GlobalRef(StructEquality, Symbol("@struct_hash_equal")), mod, nameof(s))

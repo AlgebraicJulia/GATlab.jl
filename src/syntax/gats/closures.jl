@@ -13,12 +13,12 @@ struct AlgMethod
   ret::Union{AlgType, Nothing}
   function AlgMethod(
     context::TypeScope,
-    body::Any,
+    body::AlgTerm,
     docstring::String="",
     args::Vector{LID}=LID.(1:length(context)),
     ret::Union{AlgType, Nothing}=nothing,
   )
-    new(context, AlgTerm(body), docstring, args, ret)
+    new(context, body, docstring, args, ret)
   end
 end
 
@@ -31,7 +31,7 @@ function (m::AlgMethod)(argvals::Any...)
     if val isa AlgTerm
       arg => val
     else
-      arg => AlgTerm(Constant(val, getvalue(m.context, arg)))
+      arg => Constant(val, getvalue(m.context, arg))
     end
   end)
   substitute_term(m.body, substitution)
@@ -57,15 +57,15 @@ function tcompose(ms::Dtry{AlgMethod}, argnames::Vector{Symbol})
   # Then for each method, create a new body by applying it to the variables
   # in the new scope with the appropriate AlgDots added
   bodies = mapwithkey(AlgTerm, ms) do k, m
-    m([AlgTerm(x)[k] for x in getidents(context)]...)
+    m([Var(x)[k] for x in getidents(context)]...)
   end
 
   # Finally, compose all of the bodies into an expression creating an
   # AlgNamedTuple
   body = Dtrys.fold(
-    AlgTerm(AlgNamedTuple(OrderedDict{Symbol, AlgTerm}())),
+    NamedTupleTerm(AlgNamedTuple(OrderedDict{Symbol, AlgTerm}())),
     x -> x,
-    d -> AlgTerm(AlgNamedTuple{AlgTerm}(d)),
+    d -> NamedTupleTerm(AlgNamedTuple{AlgTerm}(d)),
     bodies
   )
 
@@ -144,10 +144,9 @@ function Base.show(io::IO, m::AlgMethod; theory)
 end
 
 function strip_annot(t::AlgTerm)
-  if isannot(t)
-    strip_annot(t.body.term)
-  else
-    map(strip_annot, t)
+  @match t begin
+    Annot(t, _) => map(strip_annot, t)
+    _ => map(strip_annot, t)
   end
 end
 
@@ -227,8 +226,8 @@ macro algebraic(theorymodule, fn)
         Expr(
           :block,
           [:($n = $theorymodule.Meta.Constructors.$n) for n in nameof.(declarations(theory))]...,
-          [:($(nameof(x)) = $(AlgTerm(AlgAnnot(AlgTerm(x), getvalue(scope, x))))) for x in getidents(scope)]...,
-          :(__body = $strip_annot($AlgTerm($(fn.impl)))),
+          [:($(nameof(x)) = $(Annot(Var(x), getvalue(scope, x)))) for x in getidents(scope)]...,
+          :(__body = $strip_annot($(fn.impl))),
           :(__f = $AlgClosure($theory)),
           :(__m = $AlgMethod($scope, __body))
         ),

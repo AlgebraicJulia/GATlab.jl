@@ -1,6 +1,7 @@
 module TestGATs 
 
 using GATlab, Test
+using MLStyle
 
 import GATlab.Syntax.GATs: ResolvedMethod
 
@@ -55,36 +56,40 @@ end
 
 thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 
-# O, H, i = idents(thcat; name=[:Ob, :Hom, :id])
+O, H, i = idents(thcat; name=[:Ob, :Hom, :id])
 
-# # test reidentification
+# test reidentification
 # _O = retag(Dict(gettag(O) => newscopetag()), O)
 # @test reident(gettag(O), _O) == O
 
-# ob_decl = getvalue(thcat[O])
+ob_decl = getvalue(thcat[O])
 
-# ObT = fromexpr(thcat, :Ob, AlgType)
-# ObS = AlgSort(ObT)
-# @test headof(ObS) == O
-# @test toexpr(GATContext(thcat), ObS) == :Ob
+ObT = fromexpr(thcat, :Ob, AlgType)
+ObS = AlgSort(ObT)
+
+@test (@match ObS begin
+  PrimSort(method) => method
+end).head == O
+
+@test toexpr(GATContext(thcat), ObS) == :Ob
 
 
 # # Extend seg with a context of (A: Ob)
-# scope = TypeScope(:A => ObT, :B => ObT)
+scope = TypeScope(:A => ObT, :B => ObT)
 
-# A = ident(scope; name=:A)
+A = ident(scope; name=:A)
 
-# ATerm = AlgTerm(A)
+ATerm = Var(A)
 
-# c = GATContext(thcat, scope)
+c = GATContext(thcat, scope)
 
-# HomT = fromexpr(c, :(Hom(A, A)), AlgType)
+HomT = fromexpr(c, :(Hom(A, A)), AlgType)
 
-# AA = :(A == A)
-# eqA = fromexpr(c, AA, AlgType)
-# @test toexpr(c, eqA) == AA
+AA = :(A == A)
+eqA = fromexpr(c, AA, AlgType)
+@test toexpr(c, eqA) == AA
 
-# HomS = AlgSort(HomT)
+HomS = AlgSort(HomT)
 
 # @test rename(gettag(scope), Dict(:A=>:Z), HomT) isa AlgType
 # @test retag(Dict(gettag(scope)=>newscopetag()), HomT) isa AlgType
@@ -92,36 +97,44 @@ thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 # @test reident(Dict(A=>ident(scope; name=:B)), AlgEqSort(HomS)) ==
 #       AlgEqSort(HomS)
 
-# @test sortcheck(c, AlgTerm(A)) == ObS
+@test sortcheck(c, Var(A)) == ObS
 
-# x = fromexpr(c, :(id_span(A)), AlgTerm)
+x = fromexpr(c, :(id_span(A)), AlgTerm)
 # @test reident(Dict(A=>ident(scope; name=:B)), x) == fromexpr(c, :(id_span(B)), AlgTerm)
-# @test sortcheck(c, x) isa AlgSort
+@test sortcheck(c, x) isa AlgSort
 
 # @test retag(Dict{ScopeTag, ScopeTag}(), thcat) isa GAT
 # @test rename(gettag(thcat.segments.scopes[end]), Dict(:compose => :shmompose), thcat) isa GAT
 # @test reident(Dict(A => A), thcat) isa GAT
 
-# @test Scopes.getvalue(InCtx(scope, x)) == x
-# @test Scopes.getcontext(InCtx(scope, x)) == scope
+@test Scopes.getvalue(InCtx(scope, x)) == x
+@test Scopes.getcontext(InCtx(scope, x)) == scope
 
-# # # Good term and bad term
-# ida = fromexpr(c, :(id(A)), AlgTerm)
+# Good term and bad term
+ida = fromexpr(c, :(id(A)), AlgTerm)
 
-# im = ida.body.method
+im = @match ida begin
+  TermApp(m, _) => ResolvedMethod(i, m.method)
+end
 
-# iida = AlgTerm(i, im, [AlgTerm(i, im, [AlgTerm(A)])])
 
-# @test AlgSort(c, ida) == HomS
-# @test sortcheck(c, ida) == HomS
-# @test AlgSort(c, iida) == HomS
-# @test_throws Exception sortcheck(c, iida)
+iida = TermApp(im, [TermApp(im, [Var(A)])])
 
-# # Good type and bad type
-# haa = HomT
-# haia = AlgType(headof(HomS), methodof(HomS), [ATerm, ida])
-# @test sortcheck(c, haa)
-# @test_throws Exception sortcheck(c, haia)
+@test AlgSort(c, ida) == HomS
+@test sortcheck(c, ida) == HomS
+@test AlgSort(c, iida) == HomS
+@test_throws Exception sortcheck(c, iida)
+
+# Good type and bad type
+haa = HomT
+
+hm = @match haa begin
+  TypeApp(m, _) => m
+end
+
+haia = TypeApp(hm, [ATerm, ida])
+@test sortcheck(c, haa)
+@test_throws Exception sortcheck(c, haia)
 
 # # Renaming
 # BTerm = rename(gettag(scope), Dict(:A=>:B), ATerm)
@@ -129,50 +142,50 @@ thcat = fromexpr(GAT(:ThCat), seg_expr, GAT; current_module=[:Foo, :Bar])
 # BTerm_expected = AlgTerm(ident(Bscope;name=:B))
 # @test BTerm == BTerm_expected
 
-# # Subset
-# #-------
-# T = ThCategory.Meta.theory
-# TG = ThGraph.Meta.theory
-# @test TG ⊆ T
-# @test T ⊈ TG
+# Subset
+#-------
+T = ThCategory.Meta.theory
+TG = ThGraph.Meta.theory
+@test TG ⊆ T
+@test T ⊈ TG
 
-# # ToExpr
-# #-------
-# toexpr.(Ref(T), T.segments)
+# ToExpr
+#-------
+toexpr.(Ref(T), T.segments)
 
-# # @theory
-# #########
-# @theory ThI2 <: ThCategory begin
-#   square(x) := f⋅f ⊣ [x::Ob, f::Hom(x,x)]
-# end
+# @theory
+#########
+@theory ThI2 <: ThCategory begin
+  square(x) := f⋅f ⊣ [x::Ob, f::Hom(x,x)]
+end
 
-# @theory ThSpan <: ThCategory begin
-#   struct Span(dom::Ob, codom::Ob)
-#     apex::Ob
-#     left::Hom(apex, dom)
-#     right::Hom(apex, codom)
-#   end
-#   id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
-# end
+@theory ThSpan <: ThCategory begin
+  struct Span(dom::Ob, codom::Ob)
+    apex::Ob
+    left::Hom(apex, dom)
+    right::Hom(apex, codom)
+  end
+  id_span(x) := Span(x, id(x),id(x)) ⊣ [x::Ob]
+end
 
-# @test Base.isempty(GAT(:_EMPTY))
+@test Base.isempty(GAT(:_EMPTY))
 
-# # Dtrys
+# Dtrys
 
-# tuplescope = fromexpr(ThMonoid.Meta.theory, :([x::(a::(s,t),b)]), TypeScope)
+tuplescope = fromexpr(ThMonoid.Meta.theory, :([x::(a::(s,t),b)]), TypeScope)
 
-# @algebraic ThRing function f(x, y)
-#   x * y + x * x
-# end
+@algebraic ThRing function f(x, y)
+  x * y + x * x
+end
 
-# @test only(f.methods)[2](1, 2) isa AlgTerm
-# @test_throws ErrorException f(1, 2)
-# @test_throws ErrorException f()
+@test only(f.methods)[2](1, 2) isa AlgTerm
+@test_throws ErrorException f(1, 2)
+@test_throws ErrorException f()
 
-# @test sprint(show, f) isa String
+@test sprint(show, f) isa String
 
-# @test tcompose(
-#     Dtrys.node(:a => Dtrys.leaf(f), :b => Dtrys.leaf(f)), [:x, :y]
-#   ) isa AlgClosure
+@test tcompose(
+    Dtrys.node(:a => Dtrys.leaf(f), :b => Dtrys.leaf(f)), [:x, :y]
+  ) isa AlgClosure
 
 end # module
