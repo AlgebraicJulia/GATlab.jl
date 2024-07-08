@@ -3,7 +3,7 @@
 
 export
   ResolvedMethod,
-  AlgSort, PrimSort, TupleSort,
+  AlgSort, PrimSort, EqSort, TupleSort,
   TypeApp, TypeEq, NamedTupleType,
   Var, TermApp, Constant, DotAccess, Annot, NamedTupleTerm
 
@@ -11,6 +11,8 @@ struct ResolvedMethod
   head::Ident
   method::Ident
 end
+
+Base.nameof(m::ResolvedMethod) = nameof(m.head)
 
 @struct_hash_equal struct AlgNamedTuple{T}
   fields::OrderedDict{Symbol, T}
@@ -25,10 +27,15 @@ end
 `AlgSort`
 
 A *sort*, which is essentially a type constructor without arguments
+
+NOTE: In theory, this could be `Prims.AlgType{Nothing}`... Might be a productive
+refactor. However TypeEq references AlgSort, unfortunately, so it's not trivial
+to do this.
 """
 
 @sum AlgSort begin
   PrimSort(method::ResolvedMethod)
+  EqSort(between::AlgSort)
   TupleSort(tuple::AlgNamedTuple{AlgSort})
 end
 
@@ -119,12 +126,14 @@ struct AlgType
   content::Prims.AlgType{AlgTerm}
 end
 
+_content(t::Union{AlgTerm, AlgType}) = getfield(t, :content)
+
 # Constructors and destructors for AlgTerm/AlgType
 ##################################################
 
 @active Var(t) begin
   if t isa AlgTerm
-    @match t.content begin
+    @match _content(t) begin
       Prims.Var(i) => Some(i)
       _ => nothing
     end
@@ -136,7 +145,7 @@ Var(ident::Ident) =
 
 @active TermApp(t) begin
   if t isa AlgTerm
-    @match t.content begin
+    @match _content(t) begin
       Prims.TermApp(method, args) => (method, args)
       _ => nothing
     end
@@ -148,7 +157,7 @@ TermApp(method::ResolvedMethod, args::Vector{AlgTerm}) =
 
 @active Constant(t) begin
   if t isa AlgTerm
-    @match t.content begin
+    @match _content(t) begin
       Prims.Constant(value, oftype) => (value, AlgType(oftype))
       _ => nothing
     end
@@ -160,7 +169,7 @@ Constant(value::Any, oftype::AlgType) =
 
 @active DotAccess(t) begin
   if t isa AlgTerm
-    @match t.content begin
+    @match _content(t) begin
       Prims.DotAccess(to, field) => (to, field)
       _ => nothing
     end
@@ -172,7 +181,7 @@ DotAccess(to::AlgTerm, field::Symbol) =
 
 @active Annot(t) begin
   if t isa AlgTerm
-    @match t.content begin
+    @match _content(t) begin
       Prims.Annot(on, type) => (on, AlgType(type))
       _ => nothing
     end
@@ -184,7 +193,7 @@ Annot(on::AlgTerm, type::AlgType) =
 
 @active NamedTupleTerm(t) begin
   if t isa AlgTerm
-    @match t.content begin
+    @match _content(t) begin
       Prims.NamedTupleTerm(tuple) => Some(tuple)
       _ => nothing
     end
@@ -196,7 +205,7 @@ NamedTupleTerm(tuple::AlgNamedTuple{AlgTerm}) =
 
 @active TypeApp(t) begin
   if t isa AlgType
-    @match t.content begin
+    @match _content(t) begin
       Prims.TypeApp(method, args) => (method, args)
       _ => nothing
     end
@@ -208,7 +217,7 @@ TypeApp(method::ResolvedMethod, args::Vector{AlgTerm}) =
 
 @active TypeEq(t) begin
   if t isa AlgType
-    @match t.content begin
+    @match _content(t) begin
       Prims.TypeEq(sort, equands) => (sort, equands)
       _ => nothing
     end
@@ -220,14 +229,14 @@ TypeEq(sort::AlgSort, equands::Vector{AlgTerm}) =
 
 @active NamedTupleType(t) begin
   if t isa AlgType
-    @match t.content begin
+    @match _content(t) begin
       Prims.NamedTupleType(tuple) => Some(map(ty -> AlgType(ty), tuple))
     end
   end
 end
 
 NamedTupleType(tuple::AlgNamedTuple{AlgType}) =
-  AlgType(Prims.NamedTupleType{AlgTerm}(map(t -> t.content, tuple)))
+  AlgType(Prims.NamedTupleType{AlgTerm}(map(t -> _content(t), tuple)))
 
 # Utility methods for AlgTerm/AlgType
 #####################################
@@ -269,7 +278,7 @@ Arguments:
 - `t::AlgTerm`
 """
 function Base.map(f, t::AlgTerm)
-  AlgTerm(map(f, t.content; into_type=AlgTerm))
+  AlgTerm(map(f, _content(t); into_type=AlgTerm))
 end
 
 """
@@ -280,7 +289,7 @@ Arguments:
 - `t::AlgType`
 """
 function Base.map(f, t::AlgType)
-  AlgTerm(map(f, t.content; into_type=AlgTerm))
+  AlgTerm(map(f, _content(t); into_type=AlgTerm))
 end
 
 # Parsing for AlgTerm/AlgType
@@ -309,10 +318,7 @@ function tcompose(t::AbstractDtry{AlgTerm})
 end
 
 function AlgSort(c::Context, t::AlgTerm)
-  # t_sub = substitute_funs(c, t)
-  # if t_sub != t
-  #   return AlgSort(c, t_sub)
-  # end
+  t = substitute_funs(c, t)
   @match t begin
     Var(i) => begin
       binding = c[i]
@@ -336,8 +342,12 @@ function AlgSort(c::Context, t::AlgTerm)
       parentsort = AlgSort(c, to)
       @match parentsort begin
         PrimSort(method) => begin
-          algstruct = c[method.method]
-          AlgSort(getvalue(algstruct.fields[field]))
+          j = getvalue(c[method.method])
+          if j isa AlgStruct
+            AlgSort(getvalue(j.fields[field]))
+          else
+            error("tried to access a field of a type which is not a tuple or a struct: $j")
+          end
         end
         TupleSort(tuple) => tuple.fields[field]
       end
@@ -350,7 +360,7 @@ end
 function AlgSort(t::AlgType)
   @match t begin
     TypeApp(method, args) => PrimSort(method)
-    TypeEq(sort, equands) => error("haven't refactored AlgEq yet")
+    TypeEq(sort, equands) => EqSort(sort)
     NamedTupleType(tuple) =>
       TupleSort(map(AlgSort, tuple))
   end
@@ -368,37 +378,16 @@ end
 function Prims.getindex(a::AlgTerm, v::DtryVar)
   @match v begin
     Dtrys.Root() => a
-    Dtrys.Nested((n, v′)) => getindex(DotAccess(a, n), v′)
+    Dtrys.Nested((n, v′)) => getindex(getproperty(a, n), v′)
   end
 end
 
-# function Prims.getproperty(a::AlgTerm, n::Symbol)
-#   AlgTerm(AlgDot(n, a))
-# end
-
-# # Type Contexts
-# ###############
-
-# const TypeCtx = Context{AlgType}
-
-# """
-# A type or term with an accompanying type context, e.g.
-
-#  (a,b)::R        (a,b)::Ob
-# -----------  or  ----------
-#   a*(a+b)         Hom(a,b)
-# """
-
-# @struct_hash_equal struct InCtx{T}
-#   ctx::TypeCtx
-#   val::T
-# end
-
-# const TermInCtx = InCtx{AlgTerm}
-# const TypeInCtx = InCtx{AlgType}
-
-# Scopes.getvalue(i::InCtx) = i.val
-# Scopes.getcontext(i::InCtx) = i.ctx
+function Base.getproperty(a::AlgTerm, n::Symbol)
+  @match a begin
+    NamedTupleTerm(tuple) => tuple.fields[n]
+    _ => DotAccess(a, n)
+  end
+end
 
 
 # Type Contexts

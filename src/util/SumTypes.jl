@@ -23,13 +23,18 @@ export @sum
 
 
 using MLStyle
+using StructEquality
 include("MyActive.jl") # a patched version of active patterns
 
 using ..MetaUtils
 
-struct VariantStorage{Name, Tup}
+@struct_hash_equal struct VariantStorage{Name, Tup}
   fields::Tup
+  function VariantStorage{Name, Tup}(tup) where {Name, Tup}
+    new{Name, Tup}(Tup(tup))
+  end
 end
+
 
 struct TypeArg
   name::Symbol
@@ -124,7 +129,7 @@ end
 
 function sumtype_struct(type::SumType)
   quote
-    struct $(toexpr(type.basetype))
+    $StructEquality.@struct_hash_equal struct $(toexpr(type.basetype))
       content::Union{$(variant_storage.(type.variants)...)}
     end
   end

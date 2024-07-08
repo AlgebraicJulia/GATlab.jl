@@ -6,10 +6,10 @@ function toexpr(c::Context, t::AlgTerm)
     Var(i) => toexpr(c, i)
     TermApp(method, args) => Expr(:call, toexpr(c, method.head), toexpr.(Ref(c), args)...)
     Constant(value, oftype) => Expr(:(::), value, toexpr(c, oftype))
-    DotAccess(to, field) => Expr(:(.), toexpr(c, to), field)
+    DotAccess(to, field) => Expr(:(.), toexpr(c, to), QuoteNode(field))
     Annot(on, type) => Expr(:(::), toexpr(c, on), toexpr(c, type))
     NamedTupleTerm(tuple) =>
-      Expr(:tuple, (:($n = $(toexpr(t))) for (n,t) in pairs(tuple.fields))...)
+      Expr(:tuple, (:($n = $(toexpr(c, t))) for (n,t) in pairs(tuple.fields))...)
   end
 end
 
@@ -57,6 +57,7 @@ function fromexpr(c::Context, e, ::Type{AlgTerm})
           )
         )
       )
+    Expr(:(::), v, type_expr) => Constant(v, fromexpr(c, type_expr, AlgType))
     term::AlgTerm => term
     _ => error("could not parse AlgTerm from $e")
   end
@@ -73,7 +74,7 @@ function toexpr(c::Context, type::AlgType)
     TypeEq(_sort, equands) =>
       Expr(:call, :(==), toexpr.(Ref(c), equands)...)
     NamedTupleType(tuple) =>
-      Expr(:tuple, (Expr(:(::), k, toexpr(c, t)) for (k, v) in pairs(tuple.fields))...)
+      Expr(:tuple, (Expr(:(::), k, toexpr(c, v)) for (k, v) in pairs(tuple.fields))...)
   end
 end
 
@@ -249,10 +250,17 @@ function parse_binding_expr!(c::GATContext, pushbinding!, e)
     Expr(:tuple, names...) => p!.(names, Ref(:default))
     Expr(:(::), Expr(:tuple, names...), T) => p!.(names, Ref(T))
     Expr(:(::), name, T) => p!(name, T)
-    Expr(:call, :(==), lhs, rhs) =>
+    Expr(:call, :(==), lhs, rhs) => begin
+      t1, t2 = fromexpr(c, lhs, AlgTerm), fromexpr(c, rhs, AlgTerm)
+      s1, s2 = AlgSort(c, t1), AlgSort(c, t2)
+      if s1 != s2
+        error("cannot form an equality type between two terms of different sorts: $t1 and $t2")
+      end
       pushbinding!(Binding{AlgType}(
-        nothing, AlgType(c, fromexpr(c, lhs, AlgTerm), fromexpr(c, rhs, AlgTerm))
+        nothing, TypeEq(s1, [t1, t2])
       ))
+    end
+
     _ => error("invalid binding expression $e")
   end
 end

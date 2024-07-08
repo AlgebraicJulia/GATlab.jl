@@ -6,9 +6,9 @@ export Constant, AlgTerm, AlgType,
   typesortsignature, sortsignature, getdecl,
   GATSegment, GAT, GATContext, gettheory, gettypecontext, allmethods, 
   resolvemethod,
-  termcons,typecons, accessors, structs, primitive_sorts, struct_sorts,
+  termcons, typecons, accessors, structs, constructor_sorts, struct_sorts,
   equations, build_infer_expr, compile, sortcheck, allnames, sorts, sortname,
-  InCtx, TermInCtx, TypeInCtx, headof, argsof, methodof, bodyof, argcontext,
+  InCtx, TermInCtx, TypeInCtx, argsof, argcontext,
   infer_type,
   tcompose
 

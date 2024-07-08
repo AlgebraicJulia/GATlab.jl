@@ -375,7 +375,7 @@ function pullback(t1::Dtry{AlgType}, t2::Dtry{Tuple{AlgType, DtryVar}}; argname=
   ty1 = tcompose(t1)
   ty2 = tcompose(map(first, t2))
   ctx = TypeScope(argname => ty1)
-  x = AlgTerm(ident(ctx; name=argname))
+  x = Var(ident(ctx; name=argname))
   body = tcompose(
     map(AlgTerm, t2) do (_, k)
       x[k]
@@ -416,7 +416,7 @@ function pushforward(
   ty1 = tcompose(t1)
   ty2 = tcompose(map(first, t2))
   ctx = TypeScope(argname => ty2)
-  x = AlgTerm(ident(ctx; name=argname))
+  x = Var(ident(ctx; name=argname))
   body = tcompose(
     mapwithkey(AlgTerm, t1) do k, _
       foldl(
@@ -471,7 +471,7 @@ function oapply(r::Rhizome, sharers::Dtry{ResourceSharer})
   add = pushforward(state, full_state, r.mcompose, r.mzero)
 
   update_ctx = TypeScope(:state => state_type, :params => params)
-  statevar, paramsvar = AlgTerm.(idents(update_ctx; name=[:state, :params]))
+  statevar, paramsvar = Var.(idents(update_ctx; name=[:state, :params]))
 
   update_body = add(orig_update(copy(statevar), paramsvar))
 

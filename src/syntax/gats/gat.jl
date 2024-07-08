@@ -134,7 +134,7 @@ Base.isempty(T::GAT) = T.name == :_EMPTY
 `idents(T::GAT) : Vector{Ident}`
 
 """
-function idents(T::GAT)
+function Scopes.idents(T::GAT)
   Iterators.flatten(map(getidents.(T.segments.scopes)) do idents
     filter(x -> !isnothing(x.name), idents)
   end) |> collect
@@ -247,14 +247,14 @@ function allnames(theory::GAT; aliases=false)
   filter(!=(nothing), nameof.(getidents(theory; aliases)))
 end
 
-sorts(theory::GAT) = PrimSort.(theory.sorts)
+sorts(theory::GAT) = theory.sorts
 
-primitive_sorts(theory::GAT) = 
-  PrimSort.(filter(m->getvalue(theory[m.method]) isa AlgTypeConstructor, theory.sorts))
+constructor_sorts(theory::GAT) =
+  filter(m->getvalue(theory[m.method]) isa AlgTypeConstructor, theory.sorts)
 
 # NOTE: AlgStruct is the only derived sort this returns.
 struct_sorts(theory::GAT) = 
-  PrimSort.(filter(m->getvalue(theory[m.method]) isa AlgStruct, theory.sorts))
+  filter(m->getvalue(theory[m.method]) isa AlgStruct, theory.sorts)
 
 function termcons(theory::GAT)
   xs = Tuple{Ident, Ident}[]

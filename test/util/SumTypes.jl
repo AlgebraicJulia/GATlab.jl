@@ -17,15 +17,15 @@ using Test
 @test SumTypes.fromexpr(:(x::Int), SumTypes.Field) isa SumTypes.Field
 @test_throws ErrorException SumTypes.fromexpr(:(1+1), SumTypes.Field)
 
-@test SumTypes.fromexpr(:(V(x::Int)), SumTypes.Variant, :T) isa SumTypes.Variant
-@test_throws ErrorException SumTypes.fromexpr(:(V{}), SumTypes.Variant, :T)
+@test SumTypes.fromexpr(:(V(x::Int)), SumTypes.Variant) isa SumTypes.Variant
+@test_throws ErrorException SumTypes.fromexpr(:(V{}), SumTypes.Variant)
 
 # Integration tests
 
 @sum AlgebraExpr{T} begin
   Const(x::T)
-  Sum(summands::Vector{Self})
-  Product(factors::Vector{Self})
+  Sum(summands::Vector{AlgebraExpr{T}})
+  Product(factors::Vector{AlgebraExpr{T}})
 end
 
 @test typeof(Const{Int}(2)) == AlgebraExpr{Int}
@@ -38,8 +38,8 @@ expr_type = sprint(show, AlgebraExpr)
       "$sum_type($expr_type{Int64}[$const_type(3)::$expr_type{Int64}])::$expr_type{Int64}"
 
 @sum MonoidExpr begin
-  Zero
-  Plus(t1::Self, t2::Self)
+  Zero()
+  Plus(t1::MonoidExpr, t2::MonoidExpr)
 end
 
 res = @match Plus(Zero(), Zero()) begin

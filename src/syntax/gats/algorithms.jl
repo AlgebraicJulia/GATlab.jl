@@ -73,7 +73,7 @@ function equations(c::GATContext, args::AbstractVector{Ident}; init=nothing)
   theory = c.theory
   context = c.context
   ways_of_computing = Dict{Ident, Set{AlgTerm}}()
-  to_expand = Pair{Ident, AlgTerm}[x => AlgTerm(x) for x in args]
+  to_expand = Pair{Ident, AlgTerm}[x => Var(x) for x in args]
 
   if !isnothing(init)
     append!(to_expand, pairs(init))
@@ -89,33 +89,43 @@ function equations(c::GATContext, args::AbstractVector{Ident}; init=nothing)
     push!(ways_of_computing[x], t)
 
     type = getvalue(context[x])
-    typecon = getvalue(theory[type.body.method])
+    @match type begin
+      TypeApp(m, args) => begin
+        typecon = getvalue(theory[m.method])
 
-    for (i, arg) in enumerate(type.body.args)
-      if isconstant(arg) || isapp(arg)
-        continue
-      else
-        y = arg.body
-        @assert y ∈ context
-        a = theory.accessors[type.body.method][i]
-        acc = getvalue(theory[a])
-        expr′ = AlgTerm(getdecl(acc), a, [t])
-        push!(to_expand, y => expr′)
+        for (i, arg) in enumerate(args)
+          @match arg begin
+            Constant(_, _) => continue
+            TermApp(_, _) => continue
+            Var(y) => begin
+              @assert y ∈ context
+              a = theory.accessors[m.method][i]
+              acc = getvalue(theory[a])
+              expr′ = TermApp(ResolvedMethod(getdecl(acc), a), [t])
+              push!(to_expand, y => expr′)
+            end
+          end
+        end
       end
+      _ => error("don't yet support `equations` for non-TypeApp types")
     end
   end
   ways_of_computing
 end
 
-function equations(theory::GAT, t::TypeInCtx)
-  b = bodyof(t.val)
-  m = methodof(b)
+function equations(theory::GAT, inctx::TypeInCtx)
+  t = inctx.val
+  m, args = @match t begin
+    TypeApp(m, args) => (m, args)
+    _ => error("don't yet support `equations` for non-TypeApp types")
+  end
+
   newscope = Scope([Binding{AlgType}(nothing, t.val)])
-  newterm = AlgTerm(only(getidents(newscope)))
-  extended = ScopeList([t.ctx, newscope])
-  init = Dict{Ident, AlgTerm}(map(collect(theory.accessors[m])) do (i, acc)
+  newterm = Var(only(getidents(newscope)))
+  extended = ScopeList([inctx.ctx, newscope])
+  init = Dict{Ident, AlgTerm}(map(collect(theory.accessors[m.method])) do (i, acc)
     algacc = getvalue(theory[acc])
-    bodyof(b.args[i]) => AlgTerm(algacc.declaration, acc, [newterm])
+    bodyof(args[i]) => TermApp(ResolvedMethod(algacc.declaration, acc), [newterm])
   end)
   equations(GATContext(theory, extended), Ident[]; init=init)
 end
@@ -195,10 +205,10 @@ function substitute_funs(ctx::Context, t::AlgTerm)
     TermApp(method, args) => begin
       m = getvalue(ctx[method.method])
       if m isa AlgTermConstructor || m isa AlgStruct
-        args = substitute_funs.(Ref(ctx), argsof(b))
-        AlgTerm(MethodApp{AlgTerm}(headof(b), methodof(b), args))
+        args = Vector{AlgTerm}(substitute_funs.(Ref(ctx), args))
+        TermApp(method, args)
       elseif m isa AlgFunction
-        subst = Dict(zip(idents(m.localcontext; lid=m.args), argsof(b)))
+        subst = Dict(zip(idents(m.localcontext; lid=m.args), args))
         substitute_term(m.value, subst)
       end
     end

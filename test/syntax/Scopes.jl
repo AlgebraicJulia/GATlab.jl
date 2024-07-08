@@ -204,7 +204,7 @@ c = ScopeList([xy_scope, xz_scope])
 # AppendContext
 #############
 
-@test_throws Exception AppendContext(ScopeList([xy_scope]), xy_scope)
+@test_throws Exception AppendContext(ScopeList([xy_scope]), xy_scope; strict=true)
 
 c = AppendContext(ScopeList([xy_scope]), xz_scope)
 @test length(getidents(c)) == 6
