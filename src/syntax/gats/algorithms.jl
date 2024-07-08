@@ -4,27 +4,28 @@
 Throw an error if a the head of an AlgTerm (which refers to a term constructor)
 has arguments of the wrong sort. Returns the sort of the term.
 """
-function sortcheck(ctx::Context, t::AlgTerm)::AbstractAlgSort
-  t_sub = substitute_funs(ctx, t)
-  if t_sub != t 
-    return sortcheck(ctx, t_sub)
-  end 
-  if isapp(t)
-    judgment = ctx[t.body.method] |> getvalue
-    if judgment isa AlgTermConstructor
-      argsorts = sortcheck.(Ref(ctx), t.body.args)
-      argsorts == sortsignature(judgment) || error("Sorts don't match")
-      AlgSort(judgment.type)
-    elseif judgment isa AlgStruct
-      AlgSort(headof(bodyof(t)), methodof(bodyof(t)))
+function sortcheck(ctx::Context, t::AlgTerm)
+  # The sort, assuming that t is well-formed
+  sort_if_correct = AlgSort(ctx, t)
+  @match t begin
+    TermApp(method, args) => begin
+      binding = ctx[method.method]
+      value = getvalue(binding)
+      arg_sorts = sortcheck.(Ref(ctx), args)
+      expected_arg_sorts = if value isa Union{AlgTermConstructor, AlgFunction}
+        AlgSort.(getvalue.(value.localcontext[value.args]))
+      elseif value isa AlgStruct
+        AlgSort.(getvalue.(value.fields))
+      else
+        error("expected a term constructor or a function as the head of a TermApp: got $value")
+      end
+      if arg_sorts != expected_arg_sorts
+        error("expected argument sorts: $expected_arg_sorts do not match actual argument sorts: $arg_sorts")
+      else
+        sort_if_correct
+      end
     end
-  elseif isvariable(t)
-    type = ctx[t.body] |> getvalue
-    AlgSort(type)
-  elseif isdot(t)
-    AlgSort(ctx, t)
-  elseif isconstant(t)
-    AlgSort(t.body.type)
+    _ => sort_if_correct
   end
 end
 
@@ -35,11 +36,15 @@ Throw an error if a the head of an AlgType (which refers to a type constructor)
 has arguments of the wrong sort.
 """
 function sortcheck(ctx::Context, t::AlgType)
-  judgment = ctx[t.body.method] |> getvalue
-  judgment isa AlgTypeConstructor || error("AlgType method must refer to AlgTypeConstructor: $judgment")
-  argsorts = sortcheck.(Ref(ctx), t.body.args)
-  expected = AlgSort.(getvalue.(argsof(judgment)))
-  argsorts == expected || error("Sorts don't match: $argsorts != $expected")
+  @match t begin
+    TypeApp(method, args) => begin
+      judgment = ctx[method.method] |> getvalue
+      judgment isa AlgTypeConstructor || error("AlgType method must refer to AlgTypeConstructor: $judgment")
+      argsorts = sortcheck.(Ref(ctx), args)
+      expected = AlgSort.(getvalue.(argsof(judgment)))
+      argsorts == expected || error("Sorts don't match: $argsorts != $expected")
+    end
+  end
 end
 
 # Equations
@@ -64,10 +69,11 @@ ways_of_computing = Dict(a => [dom(f)], b => [codom(f), dom(g)], c => [codom(g)]
                          f => [f], g => [g])
 """
 function equations(c::GATContext, args::AbstractVector{Ident}; init=nothing)
+  # TODO: integrate with namedtupletype
   theory = c.theory
   context = c.context
   ways_of_computing = Dict{Ident, Set{AlgTerm}}()
-  to_expand = Pair{Ident, AlgTerm}[x => AlgTerm(x) for x in args]
+  to_expand = Pair{Ident, AlgTerm}[x => Var(x) for x in args]
 
   if !isnothing(init)
     append!(to_expand, pairs(init))
@@ -83,33 +89,43 @@ function equations(c::GATContext, args::AbstractVector{Ident}; init=nothing)
     push!(ways_of_computing[x], t)
 
     type = getvalue(context[x])
-    typecon = getvalue(theory[type.body.method])
+    @match type begin
+      TypeApp(m, args) => begin
+        typecon = getvalue(theory[m.method])
 
-    for (i, arg) in enumerate(type.body.args)
-      if isconstant(arg) || isapp(arg)
-        continue
-      else
-        y = arg.body
-        @assert y ∈ context
-        a = theory.accessors[type.body.method][i]
-        acc = getvalue(theory[a])
-        expr′ = AlgTerm(getdecl(acc), a, [t])
-        push!(to_expand, y => expr′)
+        for (i, arg) in enumerate(args)
+          @match arg begin
+            Constant(_, _) => continue
+            TermApp(_, _) => continue
+            Var(y) => begin
+              @assert y ∈ context
+              a = theory.accessors[m.method][i]
+              acc = getvalue(theory[a])
+              expr′ = TermApp(ResolvedMethod(getdecl(acc), a), [t])
+              push!(to_expand, y => expr′)
+            end
+          end
+        end
       end
+      _ => error("don't yet support `equations` for non-TypeApp types")
     end
   end
   ways_of_computing
 end
 
-function equations(theory::GAT, t::TypeInCtx)
-  b = bodyof(t.val)
-  m = methodof(b)
+function equations(theory::GAT, inctx::TypeInCtx)
+  t = inctx.val
+  m, args = @match t begin
+    TypeApp(m, args) => (m, args)
+    _ => error("don't yet support `equations` for non-TypeApp types")
+  end
+
   newscope = Scope([Binding{AlgType}(nothing, t.val)])
-  newterm = AlgTerm(only(getidents(newscope)))
-  extended = ScopeList([t.ctx, newscope])
-  init = Dict{Ident, AlgTerm}(map(collect(theory.accessors[m])) do (i, acc)
+  newterm = Var(only(getidents(newscope)))
+  extended = ScopeList([inctx.ctx, newscope])
+  init = Dict{Ident, AlgTerm}(map(collect(theory.accessors[m.method])) do (i, acc)
     algacc = getvalue(theory[acc])
-    bodyof(b.args[i]) => AlgTerm(algacc.declaration, acc, [newterm])
+    bodyof(args[i]) => TermApp(ResolvedMethod(algacc.declaration, acc), [newterm])
   end)
   equations(GATContext(theory, extended), Ident[]; init=init)
 end
@@ -122,26 +138,29 @@ end
 
 function compile(expr_lookup::Dict{Ident}, term::AlgTerm;
                  theorymodule=nothing, instance_types=nothing, theory=nothing)
-  if isapp(term)
-    name = nameof(term.body.head)
-    fun = if !isnothing(theorymodule)
-      :($theorymodule.$name)
-    else
-      esc(name)
+  # TODO: need other cases for AlgTerm
+  @match term begin
+    Var(i) => begin
+      expr_lookup[i]
     end
-    # In the case that we have an old-style instance we need to pass in the
-    # return type in order to dispatch a nullary term constructor
-    args = if !isnothing(instance_types) && isempty(term.body.args)
-      termcon = getvalue(theory[term.body.method])
-      [instance_types[AlgSort(termcon.type)]]
-    else
-      [compile(expr_lookup, arg; theorymodule, instance_types, theory) for arg in term.body.args]
+    TermApp(method, args) => begin
+      name = nameof(method.head)
+      fun = if !isnothing(theorymodule)
+        :($theorymodule.$name)
+      else
+        esc(name)
+      end
+      # In the case that we have an old-style instance we need to pass in the
+      # return type in order to dispatch a nullary term constructor
+      args = if !isnothing(instance_types) && isempty(args)
+        termcon = getvalue(theory[method.method])
+        [instance_types[AlgSort(termcon.type)]]
+      else
+        [compile(expr_lookup, arg; theorymodule, instance_types, theory) for arg in args]
+      end
+      Expr(:call, fun, args...)
     end
-    Expr(:call, fun, args...)
-  elseif isvariable(term)
-    expr_lookup[term.body]
-  elseif isconstant(term)
-    term.body.value
+    Constant(value, _) => value
   end
 end
 
@@ -151,9 +170,9 @@ InCtx(g::GAT, k::Ident) =
 """
 Get the canonical term + ctx associated with a method.
 """
-function InCtx{T}(g::GAT, k::Ident) where T<:AlgAST
+function InCtx{AlgTerm}(g::GAT, k::Ident)
   tcon = getvalue(g[k])
-  args = T.(idents(tcon.localcontext; lid=tcon.args))
+  args = Var.(idents(tcon.localcontext; lid=tcon.args))
   TermInCtx(tcon.localcontext, T(tcon.declaration, k, args))
 end
 
@@ -162,46 +181,59 @@ Get the canonical type + ctx associated with a type constructor.
 """
 function InCtx{AlgType}(g::GAT, k::Ident)
   tcon = getvalue(g[k])
-  args = AlgTerm[AlgTerm.(idents(tcon.localcontext; lid=tcon.args))...]
+  args = AlgTerm[Var.(idents(tcon.localcontext; lid=tcon.args))...]
   dec = getvalue(g[k]).declaration
-  TypeInCtx(tcon.localcontext, AlgType(MethodApp(dec, k, args)))
+  TypeInCtx(tcon.localcontext, TypApp(ResolvedMethod(dec, k), args))
 end
 
 """ Replace idents with AlgTerms. """
-function substitute_term(t::T, subst::Dict{Ident,AlgTerm}) where T <: AlgAST
-  if isvariable(t)
-    subst[t.body]
-  elseif isconstant(t)
-    t
-  else
-    T(substitute_term(t.body, subst))
+function substitute_term(t::T, subst::Dict{Ident,AlgTerm}) where T
+  @match t begin
+    Var(i) => get(subst, i, Var(i))
+    TermApp(method, args) => TermApp(method, substitute_term.(args, Ref(subst)))
+    DotAccess(t, field) => DotAccess(substitute_term(t, subst), field)
+    NamedTupleTerm(tuple) => NamedTupleTerm(map(t -> substitute_term(t, subst), tuple))
+    # TODO: also substitute in type
+    Annot(t, type) => Annot(substitute_term(t, subst), type)
+    # TODO: Constant
   end
 end
-
-function substitute_term(ma::MethodApp{AlgTerm}, subst::Dict{Ident, AlgTerm})
-  MethodApp{AlgTerm}(ma.head, ma.method, substitute_term.(ma.args, Ref(subst)))
-end
-
-function substitute_term(ad::AlgDot, subst::Dict{Ident, AlgTerm})
-  AlgDot(ad.head, substitute_term(ad.body, subst))
-end
-
 
 """Replace all functions with their desugared expressions"""
 function substitute_funs(ctx::Context, t::AlgTerm)
-  b = bodyof(t)
-  if isapp(t)
-    m = getvalue(ctx[methodof(b)])
-    if m isa AlgTermConstructor || m isa AlgStruct
-      args = substitute_funs.(Ref(ctx), argsof(b))
-      AlgTerm(MethodApp{AlgTerm}(headof(b), methodof(b), args))
-    elseif m isa AlgFunction 
-      subst = Dict(zip(idents(m.localcontext; lid=m.args), argsof(b)))
-      substitute_term(m.value, subst)
+  @match t begin
+    TermApp(method, args) => begin
+      m = getvalue(ctx[method.method])
+      if m isa AlgTermConstructor || m isa AlgStruct
+        args = Vector{AlgTerm}(substitute_funs.(Ref(ctx), args))
+        TermApp(method, args)
+      elseif m isa AlgFunction
+        subst = Dict(zip(idents(m.localcontext; lid=m.args), args))
+        substitute_term(m.value, subst)
+      end
     end
-  elseif isvariable(t) || isconstant(t)
-    t 
-  elseif isdot(t)
-    AlgTerm(AlgDot(headof(b), substitute_funs(ctx, bodyof(b))))
+    Var(_) => t
+    Constant(_, _) => t
+    DotAccess(t, field) => DotAccess(substitute_funs(ctx, t), field)
+    # TODO: also substitute in type
+    Annot(t, type) => Annot(substitute_funs(ctx, t), type)
+    # TODO: namedtuple
   end
 end
+
+# What does this even mean?? What is the type of f supposed to be??
+
+# Base.map(f, t::AlgTerm) = AlgTerm(map(f, bodyof(t)))
+
+# Base.map(f, b::MethodApp{AlgTerm}) = MethodApp{AlgTerm}(headof(b), methodof(b), map(f, argsof(b)))
+
+# Base.map(f, b::AlgDot) = AlgDot(b.head, f(b.body))
+
+# Base.map(f, b::AlgAnnot) = AlgAnnot(f(b.term), b.type)
+
+# Base.map(f, b::AlgNamedTuple{AlgTerm}) =
+#   AlgNamedTuple{AlgTerm}(OrderedDict{Symbol, AlgTerm}(n => f(v) for (n, v) in b.fields))
+
+# Base.map(f, b::Ident) = b
+
+# Base.map(f, b::Constant) = b
