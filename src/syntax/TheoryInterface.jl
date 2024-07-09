@@ -1,5 +1,5 @@
 module TheoryInterface
-export @theory, @signature, Model, invoke_term
+export @theory, @signature, Model, invoke_term, Id, TypedVar, AlgTermId
 
 using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
 # using GATlab.Util
@@ -8,12 +8,17 @@ using MLStyle, StructEquality, Markdown
 
 abstract type Model{Tup <: Tuple} end
 
+abstract type AbstractComputeGraph{Tup <: Tuple} <: Model{Tup} end
+
+function add_term! end
+
 struct Id
   index::UInt32
 end
 
 struct TypedVar{T}
   id::Id
+  parent::AbstractComputeGraph
 end
 
 struct AlgTermId
@@ -23,10 +28,6 @@ end
 function TermAppId(rm::ResolvedMethod, args::Vector{Id})
   AlgTermId(GATs.Prims.TermApp{Id}(rm, args))
 end
-
-abstract type AbstractComputeGraph{Tup <: Tuple} <: Model{Tup} end
-
-function add_term! end
 
 @struct_hash_equal struct WithModel{M <: Model}
   model::M
@@ -332,7 +333,10 @@ function compute_graph_model_impl(module_name::Symbol, segment::GATSegment)
             m.model,
             $(TermAppId)($rm, Id[$((:($x.id) for (x, _) in args)...)])
           )
-          TypedVar{$module_name.$ret_sort}(ret_id)
+          TypedVar{$module_name.$ret_sort}(
+            ret_id,
+            m.model
+          )
         end
       end)
     end
