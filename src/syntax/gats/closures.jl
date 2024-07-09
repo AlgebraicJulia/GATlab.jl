@@ -132,10 +132,11 @@ function (f::AlgClosure)(argvals::Any...)
 end
 
 function Base.show(io::IO, f::AlgClosure)
-  m = only(values(f.methods))
-  fndef = Expr(:(->), Expr(:tuple, toexpr(f.theory, m.context).args...), toexpr(GATContext(f.theory, m.context), m.body))
   println(io, "AlgClosure in theory $(nameof(f.theory)) with definition:")
-  print(io, fndef)
+  for m in values(f.methods)
+    fndef = Expr(:(->), Expr(:tuple, toexpr(f.theory, m.context).args...), toexpr(GATContext(f.theory, m.context), m.body))
+    print(io, fndef)
+  end
 end
 
 function Base.show(io::IO, m::AlgMethod; theory)

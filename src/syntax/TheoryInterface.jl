@@ -8,6 +8,26 @@ using MLStyle, StructEquality, Markdown
 
 abstract type Model{Tup <: Tuple} end
 
+struct Id
+  index::UInt32
+end
+
+struct TypedVar{T}
+  id::Id
+end
+
+struct AlgTermId
+  content::GATs.Prims.AlgTerm{Id}
+end
+
+function TermAppId(rm::ResolvedMethod, args::Vector{Id})
+  AlgTermId(GATs.Prims.TermApp{Id}(rm, args))
+end
+
+abstract type AbstractComputeGraph{Tup <: Tuple} <: Model{Tup} end
+
+function add_term! end
+
 @struct_hash_equal struct WithModel{M <: Model}
   model::M
 end
@@ -168,7 +188,6 @@ function theory_impl(head, body, __module__)
   # XXX
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
-
   esc(
     Expr(
       :toplevel,
@@ -181,6 +200,7 @@ function theory_impl(head, body, __module__)
         $(structlines...)
         end
       ),
+      compute_graph_model_impl(name, newsegment),
       :(@doc ($(Markdown.MD)((@doc $doctarget), $docstr)) $name)
     )
   )
@@ -267,6 +287,57 @@ function mk_struct(ctx, s::AlgStruct, mod)
 
     $she
   end
+end
+
+function compute_graph_model_impl(module_name::Symbol, segment::GATSegment)
+  fndefs = []
+  for (x, binding) in zip(getidents(segment), getbindings(segment))
+    j = getvalue(binding)
+    if j isa AlgTermConstructor
+      decl = j.declaration
+      sorts = sortsignature(j)
+
+      args = try
+        map(sorts) do sort
+          sortname = @match sort begin
+            PrimSort(m) => nameof(m)
+            _ => error("can't yet handle non-primitive sorts")
+          end
+          (gensym(), sortname)
+        end
+      catch _
+        continue
+      end
+
+      argexprs = map(args) do (name, sortname)
+        :($name::$(TypedVar){$module_name.$sortname})
+      end
+
+      ret_sort = try
+        @match AlgSort(j.type) begin
+          PrimSort(m) => nameof(m)
+          _ => error("can't yet handle non-primitive sorts")
+        end
+      catch _
+        continue
+      end
+
+      rm = ResolvedMethod(decl, x)
+      push!(fndefs, quote
+        function $module_name.$(nameof(decl))(
+          m::$(WithModel){<:$(AbstractComputeGraph)},
+          $(argexprs...)
+        )
+          ret_id = $(TheoryInterface).add_term!(
+            m.model,
+            $(TermAppId)($rm, Id[$((:($x.id) for (x, _) in args)...)])
+          )
+          TypedVar{$module_name.$ret_sort}(ret_id)
+        end
+      end)
+    end
+  end
+  Expr(:block, fndefs...)
 end
 
 end
