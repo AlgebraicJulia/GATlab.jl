@@ -1,4 +1,5 @@
 module ComputeGraphs
+export ComputeGraph, Node, add_var!
 
 using ...Syntax
 
@@ -16,13 +17,14 @@ function getindex(cg::ComputeGraph, i::Id)
   cg.nodes[i.index]
 end
 
-function TheoryInterface.add_term!(cg::ComputeGraph, t::AlgTermId)::Id
-  push!(cg.nodes, n)
-  Id(length(cg.nodes))
+function add_var!(cg::ComputeGraph, T)
+  push!(cg.nodes, Node(nothing, nothing))
+  TypedVar{T}(Id(length(cg.nodes)), cg)
 end
 
-function getindex(v::CGVar)
-  v.cg[v.id]
+function TheoryInterface.add_term!(cg::ComputeGraph, t::AlgTermId)::Id
+  push!(cg.nodes, Node(nothing, t))
+  Id(length(cg.nodes))
 end
 
 end

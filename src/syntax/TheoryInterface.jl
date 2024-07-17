@@ -1,5 +1,5 @@
 module TheoryInterface
-export @theory, @signature, Model, invoke_term, Id, TypedVar, AlgTermId
+export @theory, @signature, Model, invoke_term, AbstractComputeGraph, Id, TypedVar, AlgTermId
 
 using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
 # using GATlab.Util
