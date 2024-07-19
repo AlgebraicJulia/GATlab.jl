@@ -1,23 +1,23 @@
 module TestDEC
 
 using DEC
-using DEC: Decapode, SortError, d, fresh!, ∂ₜ, ∧, ≐
+using DEC: Decapode, SortError, d, fresh!, ∂ₜ, ∧, Δ, ≐
 using Test
 using Metatheory.EGraphs
 
 @test Scalar() + Scalar() == Scalar()
-@test Scalar() + Form(1) == Form(1)
-@test Form(2) + Scalar() == Form(2)
-@test_throws SortError Form(1) + Form(2)
+@test Scalar() + PrimalForm(1) == PrimalForm(1)
+@test PrimalForm(2) + Scalar() == PrimalForm(2)
+@test_throws SortError PrimalForm(1) + PrimalForm(2)
 
 # Scalar Multiplication
 @test Scalar() * Scalar() == Scalar()
-@test Scalar() * Form(1) == Form(1)
-@test Form(2) * Scalar() == Form(2)
-@test_throws SortError Form(2) * Form(1) 
+@test Scalar() * PrimalForm(1) == PrimalForm(1)
+@test PrimalForm(2) * Scalar() == PrimalForm(2)
+@test_throws SortError PrimalForm(2) * PrimalForm(1) 
 
 # Exterior Product
-@test Form(1) ∧ Form(1) == Form(2)
+@test PrimalForm(1) ∧ PrimalForm(1) == PrimalForm(2)
 
 pode = Decapode()
 
@@ -29,10 +29,10 @@ y = a + b
 
 @test x == y
 
-ω = fresh!(pode, Form(1), :ω)
-η = fresh!(pode, Form(0), :η)
+ω = fresh!(pode, PrimalForm(1), :ω)
+η = fresh!(pode, PrimalForm(0), :η)
 
-@test ω ∧ η isa DEC.Var{Form(1)}
+@test ω ∧ η isa DEC.Var{PrimalForm(1)}
 @test ω ∧ η == ω ∧ η
 
 @test_throws SortError x ≐ ω 
@@ -41,7 +41,7 @@ y = a + b
 
 ∂ₜ(a) ≐ 3 * a + 5
 
-EGraphs.extract!(pode.graph, DEC.noderivcost, (∂ₜ(a)).id)
+EGraphs.extract!(∂ₜ(a), DEC.derivative_cost([DEC.extract!(a)]))
 
 function lotka_volterra(pode)
     α = fresh!(pode, Scalar(), :α)
@@ -59,8 +59,6 @@ end
 
 f = DEC.vfield(lotka_volterra)
 
-EGraphs.extract!(pode.graph, DEC.noderivcost, (∂ₜ(w)).id)
-
 function transitivity(pode)
     w = fresh!(pode, Scalar(), :w)
     ∂ₜ(w) ≐ 1 * w
@@ -69,8 +67,17 @@ function transitivity(pode)
 end
 _w = transitivity(pode)
 # picks whichever expression it happens to visit first
-EGraphs.extract!(pode.graph, DEC.noderivcost, (∂ₜ(_w)).id)
+EGraphs.extract!((∂ₜ(_w)), DEC.derivative_cost([DEC.extract!(_w)]))
 
-EGraphs.extract!(pode.graph, EGraphs.astsize, w.id)
+function heat_equation(pode)
+    u = fresh!(pode, PrimalForm(0), :u)
+
+    ∂ₜ(u) ≐ Δ(u)
+
+    ([u], [])
+end
+
+f = DEC.vfield(heat_equation)
+
 
 end

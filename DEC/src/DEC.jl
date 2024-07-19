@@ -1,5 +1,6 @@
 module DEC
 using MLStyle
+using Reexport
 using StructEquality
 import Metatheory
 using Metatheory: EGraph, EGraphs, Id, VECEXPR_FLAG_ISCALL, VECEXPR_FLAG_ISTREE, VECEXPR_META_LENGTH
@@ -9,12 +10,23 @@ import Base: +, -
 import Base: *
 
 include("HashColor.jl")
+include("SSAExtract.jl")
+
+@reexport using .SSAExtract
 
 @data Sort begin
     Scalar()
     Form(dim::Int, isdual::Bool)
 end
-export Scalar, Form, DualForm
+export Scalar, Form
+
+duality(f::Form) = f.isdual ? "dual" : "primal"
+
+PrimalForm(i::Int) = Form(i, false)
+export PrimalForm
+
+DualForm(i::Int) = Form(i, true)
+export DualForm
 
 struct SortError <: Exception
     message::String
@@ -24,12 +36,12 @@ end
 function +(s1::Sort, s2::Sort)
     @match (s1, s2) begin
         (Scalar(), Scalar()) => Scalar()
-        (Scalar(), Form(d, isdual)) || (Form(d, isdual), Scalar()) => Form(d, isdual)
-        (Form(d, ϖ), Form(d′, ϖ′)) =>
-          if (d == d′) && (ϖ == ϖ′)
-            Form(d, ϖ)
+        (Scalar(), Form(i, isdual)) || (Form(i, isdual), Scalar()) => Form(i, isdual)
+        (Form(i1, isdual1), Form(i2, isdual2)) =>
+          if (i1 == i2) && (isdual1 == isdual2)
+            Form(i1, isdual1)
           else
-            throw(SortError("Cannot add two forms of different dimensions/dualities $(d,ϖ) and $(d′,ϖ′)"))
+            throw(SortError("Cannot add two forms of different dimensions/dualities: $((i1,isdual1)) and $((i2,isdual2))"))
           end
     end
 end
@@ -41,9 +53,9 @@ end
 @nospecialize
 function *(s1::Sort, s2::Sort)
   @match (s1, s2) begin
-    (Scalar(), Scalar()) => Scalar()
-    (Scalar(), Form(d, ϖ)) || (Form(d, ϖ), Scalar()) => Form(d)
-    (Form(_, _), Form(_, _)) => throw(SortError("Cannot multiply two forms. Maybe try `∧`??"))
+    (Scalar(), Scalar()) => Scalar() 
+    (Scalar(), Form(i, isdual)) || (Form(i, isdual), Scalar()) => Form(i, isdual)
+    (Form(_, _), Form(_, _)) => throw(SortError("Cannot scalar multiply a form with a form. Maybe try `∧`??"))
   end
 end
 
@@ -51,11 +63,15 @@ end
 function ∧(s1::Sort, s2::Sort)
     @match (s1, s2) begin
         (_, Scalar()) || (Scalar(), _) => throw(SortError("Cannot take a wedge product with a scalar"))
-        (Form(d, ϖ), Form(d′, ϖ)) =>
-          if d + d′ <= 2l
-            Form(d + d′)
+        (Form(i1, isdual1), Form(i2, isdual2)) =>
+          if isdual1 == isdual2
+            if i1 + i2 <= 2
+                Form(i1 + i2, isdual1)
+            else
+                throw(SortError("Can only take a wedge product when the dimensions of the forms add to less than 2: tried to wedge product $i1 and $i2"))
+            end
           else
-            throw(SortError("Can only take a wedge product when the dimensions of the forms add to less than 2: tried to wedge product $d and $(d′)"))
+            throw(SortError("Cannot wedge two forms of different dualities: attempted to wedge $(duality(s1)) and $(duality(s2))"))
           end
     end
 end
@@ -67,12 +83,19 @@ end
 function d(s::Sort)
     @match s begin
         Scalar() => throw(SortError("Cannot take exterior derivative of a scalar"))
-        Form(d) =>
-          if d <= 1
-            Form(d + 1)
+        Form(i, isdual) =>
+          if i <= 1
+            Form(i + 1, isdual)
           else
             throw(SortError("Cannot take exterior derivative of a n-form for n >= 1"))
           end
+    end
+end
+
+function ★(s::Sort)
+    @match s begin
+        Scalar() => throw(SortError("Cannot take Hodge star of a scalar"))
+        Form(i, isdual) => Form(2 - i, !isdual)
     end
 end
 
@@ -105,6 +128,15 @@ struct Decapode
     end
 end
 
+function EGraphs.make(g::EGraph{Expr, Sort}, n::Metatheory.VecExpr)
+    op = EGraphs.get_constant(g, Metatheory.v_head(n))
+    if op isa RootVar
+        op.sort
+    else
+        op((g[arg].data for arg in Metatheory.v_children(n))...)
+    end
+end
+
 struct Var{S}
     pode::Decapode
     id::Id
@@ -134,22 +166,22 @@ function Base.show(io::IO, v::Var)
     print(io, getexpr(v))
 end
 
-function fresh!(d::Decapode, sort::Sort, name::Symbol)
-    v = RootVar(name, length(d.variables), sort)
-    push!(d.variables, v)
+function fresh!(pode::Decapode, sort::Sort, name::Symbol)
+    v = RootVar(name, length(pode.variables), sort)
+    push!(pode.variables, v)
     n = Metatheory.v_new(0)
-    Metatheory.v_set_head!(n, EGraphs.add_constant!(d.graph, v))
+    Metatheory.v_set_head!(n, EGraphs.add_constant!(pode.graph, v))
     Metatheory.v_set_signature!(n, hash(Metatheory.maybe_quote_operation(v), hash(0)))
-    Var{sort}(d, EGraphs.add!(d.graph, n, false))
+    Var{sort}(pode, EGraphs.add!(pode.graph, n, false))
 end
 
 @nospecialize
-function inject_number!(d::Decapode, x::Number)
+function inject_number!(pode::Decapode, x::Number)
     x = Float64(x)
     n = Metatheory.v_new(0)
-    Metatheory.v_set_head!(n, EGraphs.add_constant!(d.graph, x))
+    Metatheory.v_set_head!(n, EGraphs.add_constant!(pode.graph, x))
     Metatheory.v_set_signature!(n, hash(Metatheory.maybe_quote_operation(x), hash(0)))
-    Var{Scalar()}(d, EGraphs.add!(d.graph, n, false))
+    Var{Scalar()}(pode, EGraphs.add!(pode.graph, n, false))
 end
 
 @nospecialize
@@ -226,6 +258,15 @@ function d(v::Var{s}) where {s}
     Var{s′}(v.pode, addcall!(v.pode.graph, d, (v.id,)))
 end
 
+
+@nospecialize
+function ★(v::Var{s}) where {s}
+    s′ = ★(s)
+    Var{s′}(v.pode, addcall!(v.pode.graph, ★, (v.id,)))
+end
+
+Δ(v::Var{PrimalForm(0)}) = ★(d(★(d(v))))
+
 function equate!(v1::Var{s1}, v2::Var{s2}) where {s1, s2}
     (s1 == s2) || throw(SortError("Cannot equate variables of a different sort: attempted to equate $s1 with $s2"))
     v1.pode === v2.pode || error("Cannot equate variables from different graphs")
@@ -243,6 +284,11 @@ function derivative_cost(allowed_roots)
             Metatheory.astsize(n, op, costs)
         end
     end
+end
+
+struct TypedApplication
+    fn::Function
+    sorts::Vector{Sort}
 end
 
 """ vfield :: (Decapode -> (StateVars, ParamVars)) -> VectorFieldFunction
@@ -263,7 +309,7 @@ A limitation of this function can be demonstrated here: given the model
   we would return ([a, b],). Suppose we wanted to extract terms of the form "a + b." Since the expression "a + b" is not a RootVar, 
   the extractor would bypass it completely.
 """
-function vfield(model)
+function vfield(model, matrices::Dict{TypedApplication, Any})
     pode = Decapode()
     (state_vars, param_vars) = model(pode)
     length(state_vars) >= 1 || error("need at least one state variable in order to create vector field")
@@ -274,7 +320,7 @@ function vfield(model)
     end
     param_rootvars = map(param_vars) do p
         rv = extract!(p)
-        rv isa RootVar || error("all state variables must be RootVars")
+        rv isa RootVar || error("all param variables must be RootVars")
         rv
     end
     cost = derivative_cost(Set([state_rootvars; param_rootvars]))
@@ -295,6 +341,8 @@ function vfield(model)
         e = extract!(∂ₜ(v), cost)
         :(@inbounds $(du)[$i] = $(replace_rootvars(e, rootvar_lookup)))
     end
+
+    
 
     eval(
         quote
