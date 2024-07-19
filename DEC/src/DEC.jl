@@ -12,9 +12,9 @@ include("HashColor.jl")
 
 @data Sort begin
     Scalar()
-    Form(dim::Int)
+    Form(dim::Int, isdual::Bool)
 end
-export Scalar, Form
+export Scalar, Form, DualForm
 
 struct SortError <: Exception
     message::String
@@ -22,13 +22,14 @@ end
 
 @nospecialize
 function +(s1::Sort, s2::Sort)
-    @match (s1, s2) begin(Scalar(), Scalar()) => Scalar()
-        (Scalar(), Form(d)) || (Form(d), Scalar()) => Form(d)
-        (Form(d), Form(d′)) =>
-          if d == d′
-            Form(d)
+    @match (s1, s2) begin
+        (Scalar(), Scalar()) => Scalar()
+        (Scalar(), Form(d, isdual)) || (Form(d, isdual), Scalar()) => Form(d, isdual)
+        (Form(d, ϖ), Form(d′, ϖ′)) =>
+          if (d == d′) && (ϖ == ϖ′)
+            Form(d, ϖ)
           else
-            throw(SortError("Cannot add two forms of different dimensions $d and $(d′)"))
+            throw(SortError("Cannot add two forms of different dimensions/dualities $(d,ϖ) and $(d′,ϖ′)"))
           end
     end
 end
@@ -41,8 +42,8 @@ end
 function *(s1::Sort, s2::Sort)
   @match (s1, s2) begin
     (Scalar(), Scalar()) => Scalar()
-    (Scalar(), Form(d)) || (Form(d), Scalar()) => Form(d)
-    (Form(d), Form(d′)) => throw(SortError("Cannot multiply two forms. Maybe try `∧`??"))
+    (Scalar(), Form(d, ϖ)) || (Form(d, ϖ), Scalar()) => Form(d)
+    (Form(_, _), Form(_, _)) => throw(SortError("Cannot multiply two forms. Maybe try `∧`??"))
   end
 end
 
@@ -50,8 +51,8 @@ end
 function ∧(s1::Sort, s2::Sort)
     @match (s1, s2) begin
         (_, Scalar()) || (Scalar(), _) => throw(SortError("Cannot take a wedge product with a scalar"))
-        (Form(d), Form(d′)) =>
-          if d + d′ <= 2
+        (Form(d, ϖ), Form(d′, ϖ)) =>
+          if d + d′ <= 2l
             Form(d + d′)
           else
             throw(SortError("Can only take a wedge product when the dimensions of the forms add to less than 2: tried to wedge product $d and $(d′)"))
