@@ -318,7 +318,10 @@ function symbolic_structs(theory::GAT, abstract_types, parentmod)::Vector{Expr}
 end
 
 function typename(theory::GAT, type::AlgType; parentmod=nothing)
-  name = nameof(type.body.head)
+  m = @match type begin
+    TypeApp(m, _) => m
+  end
+  name = nameof(m)
   if !isnothing(parentmod)
     Expr(:(.), parentmod, QuoteNode(name))
   else
@@ -327,14 +330,14 @@ function typename(theory::GAT, type::AlgType; parentmod=nothing)
 end
 
 function internal_accessors(theory::GAT)
-  map(theory.sorts) do sort
-    typecon = getvalue(theory[sort.method])
-    map(collect(pairs(theory.accessors[sort.method]))) do (i, acc)
+  map(theory.sorts) do m
+    typecon = getvalue(theory[m.method])
+    map(collect(pairs(theory.accessors[m.method]))) do (i, acc)
       accessor = getvalue(theory[acc])
       return_type = getvalue(typecon[typecon.args[i]])
       JuliaFunction(
         name=esc(nameof(getdecl(accessor))),
-        args=[:(x::$(esc(nameof(sort.head))))],
+        args=[:(x::$(esc(nameof(m))))],
         return_type = typename(theory, return_type),
         impl=:(x.type_args[$i])
       )
@@ -379,18 +382,23 @@ function internal_constructors(theory::GAT, theorymodule)::Vector{JuliaFunction}
       end...
     )
 
-    instance_types = Dict(sort => esc(nameof(sort)) for sort in sorts(theory))
+    instance_types = Dict(m => esc(nameof(m)) for m in sorts(theory))
     check_or_error = Expr(:(||), :(!strict), check_expr, throw_expr)
     context_xs = getidents(termcon.localcontext)
     expr_lookup = Dict{Ident, Any}(map(context_xs) do x
       x => compile(arg_expr_lookup, first(eqs[x]); theorymodule, theory, instance_types)
     end)
 
+    termcon_type_args = @match termcon.type begin
+      TypeApp(_, args) => args
+      _ => error("non-TypeApp type not yet supported")
+    end
+
     build = Expr(
       :call,
       Expr(:curly, typename(theory, termcon.type), Expr(:quote, name)),
       Expr(:vect, nameof.(argsof(termcon))...),
-      Expr(:ref, GATExpr, compile.(Ref(expr_lookup), termcon.type.body.args; theorymodule, theory, instance_types)...)
+      Expr(:ref, GATExpr, compile.(Ref(expr_lookup), termcon_type_args; theorymodule, theory, instance_types)...)
     )
 
     JuliaFunction(
@@ -414,12 +422,12 @@ function symbolic_instance_methods(
 
   type_con_funs = []
   accessors_funs = []
-  for sort in sorts(theory)
-    type_con = getvalue(theory[sort.method])
-    symgen = symbolic_generator(theorymodule, syntaxname, sort.method, type_con, theory)
+  for m in sorts(theory)
+    type_con = getvalue(theory[m.method])
+    symgen = symbolic_generator(theorymodule, syntaxname, m.method, type_con, theory)
     push!(type_con_funs, symgen)
     for binding in argsof(type_con)
-      push!(accessors_funs, symbolic_accessor(theorymodule, theory, syntaxname, sort.method, binding))
+      push!(accessors_funs, symbolic_accessor(theorymodule, theory, syntaxname, m.method, binding))
     end
   end
 
@@ -614,7 +622,7 @@ function parse_json_sexpr(syntax_module::Module, sexpr;
   theory = theory_module.Meta.theory
   type_lens = Dict(
     nameof(getdecl(getvalue(binding))) => length(getvalue(binding).args)
-    for binding in [theory[sort.method] for sort in sorts(theory)]
+    for binding in [theory[m.method] for m in sorts(theory)]
   )
 
   function parse_impl(sexpr::Vector, ::Type{Val{:expr}})

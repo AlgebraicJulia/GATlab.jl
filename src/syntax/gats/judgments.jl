@@ -101,7 +101,7 @@ end
 
 getdecl(acc::AccessorField) = acc.declaration
 
-sortsignature(acc::AccessorField) = [AlgSort(acc.typecondecl, acc.typecon)]
+sortsignature(acc::AccessorField) = [PrimSort(ResolvedMethod(acc.typecondecl, acc.typecon))]
 
 
 rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, a::AlgAccessor) = 
@@ -166,7 +166,7 @@ multiple term constructors of the same name.
 # rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, ts::Vector{AlgSort}) = map(ts) do t
 #   AlgSort
 
-const AlgSorts = Vector{<:AbstractAlgSort}
+const AlgSorts = Vector{AlgSort}
 
 """
 `AlgStruct`
