@@ -1,22 +1,51 @@
 module SSAExtract
 
+# 
+using ..DEC: AbstractSort, TypedApplication, TA, Roe, RootVar
+
+# other dependencies
 using MLStyle
+using Metatheory: VecExpr
 using Metatheory.EGraphs
-using ..DEC: Sort
 using StructEquality
 
+"""    SSAVar
+
+A wrapper for the index of a SSAVar
+"""
 @struct_hash_equal struct SSAVar
     idx::Int
 end
+export SSAVar
 
 function Base.show(io::IO, v::SSAVar)
     print(io, "%", v.idx)
 end
 
+"""    SSAExpr
+
+A wrapper for a function (::Any) and its args (::Vector{Tuple{Sort, SSAVar}}).
+
+Example: the equation
+```
+  a = 1 + b
+```
+may have an SSA dictionary
+```
+  %1 => a
+  %2 => +(%1, %3)
+  %3 => b
+```
+and so `+` would have
+```
+SSAExpr(+, [(Scalar(), SSAVar(1)), (Scalar(), SSAVar(2))])
+```
+"""
 @struct_hash_equal struct SSAExpr
     fn::Any
-    args::Vector{Tuple{Sort, SSAVar}}
+    args::Vector{Tuple{AbstractSort, SSAVar}}
 end
+export SSAExpr
 
 function Base.show(io::IO, e::SSAExpr)
     print(io, e.fn)
@@ -26,6 +55,9 @@ function Base.show(io::IO, e::SSAExpr)
 end
 
 """
+
+Struct defining Static Single-Assignment information for a given roe.
+
 Advantages of SSA form:
 
 1. We can preallocate each matrix
@@ -38,6 +70,7 @@ struct SSA
         new(Dict{Id, SSAVar}(), SSAExpr[])
     end
 end
+export SSA
 
 function Base.show(io::IO, ssa::SSA)
     println(io, "SSA: ")
@@ -46,20 +79,29 @@ function Base.show(io::IO, ssa::SSA)
     end
 end
 
+"""    add_stmt!(ssa::SSA, id::Id, expr::SSAExpr)::SSAVar
+
+Given an SSA, add onto the assignment_lookup an SSAExpr. 
+
+"""
 function add_stmt!(ssa::SSA, id::Id, expr::SSAExpr)
     push!(ssa.statements, expr)
     v = SSAVar(length(ssa.statements))
     ssa.assignment_lookup[id] = v
     v
 end
+export add_stmt!
+# TODO is this idempotent?
 
 function hasid(ssa::SSA, id::Id)
     haskey(ssa.assignment_lookup, id)
 end
+export hasid
 
 function getvar(ssa::SSA, id::Id)
     ssa.assignment_lookup[id]
 end
+export getvar
 
 """
     extract_ssa!(g::EGraph, ssa::SSA, id::Id, term_select, make_expr)::SSAVar
@@ -74,6 +116,7 @@ The closure parameters control the behavior of this function.
 
 This closure selects, given an id in an EGraph, the term that we want to use in
 order to compute a value for that id
+
 """
 function extract_ssa!(g::EGraph, ssa::SSA, id::Id, term_select)::SSAVar
     if hasid(ssa, id)

@@ -1,17 +1,12 @@
 import Decapodes
 using StructEquality
 
-@struct_hash_equal struct TypedApplication
-    fn::Function
-    sorts::Vector{Sort}
-end
 
-const TA = TypedApplication
+"""    precompute_matrices(sd, hodge)::Dict{TypedApplication, Any}
 
-function Base.show(io::IOBuffer, ta::TA)
-  print(io, Expr(:call, ta.fn, ta.sorts...))
-end
+Given a matrix and a hodge star (DiagonalHodge() or GeometricHodge()), this returns a lookup dictionary between operators (as TypedApplications) and their corresponding matrices.
 
+"""
 function precompute_matrices(sd, hodge)::Dict{TypedApplication, Any}
     Dict{TypedApplication, Any}(
         # Regular Hodge Stars
@@ -20,8 +15,10 @@ function precompute_matrices(sd, hodge)::Dict{TypedApplication, Any}
         TA(★, Sort[PrimalForm(2)]) => Decapodes.dec_mat_hodge(2, sd, hodge),
 
         # Inverse Hodge Stars
-        TA(★, Sort[DualForm(0)]) => Decapodes.dec_mat_inverse_hodge(1, sd, hodge), # why is this 1???
-        TA(★, Sort[DualForm(1)]) => Decapodes.dec_pair_inv_hodge(Val{1}, sd, hodge), # Special since Geo is a solver
+        TA(★, Sort[DualForm(0)]) => Decapodes.dec_mat_inverse_hodge(1, sd, hodge), 
+        # why is this 1???
+        TA(★, Sort[DualForm(1)]) => Decapodes.dec_pair_inv_hodge(Val{1}, sd, hodge), 
+        # Special since Geo is a solver
         TA(★, Sort[DualForm(2)]) => Decapodes.dec_mat_inverse_hodge(0, sd, hodge),
 
         # Differentials
@@ -70,6 +67,6 @@ function precompute_matrices(sd, hodge)::Dict{TypedApplication, Any}
         # # Averaging Operator
         # :avg₀₁ => Decapodes.dec_avg₀₁(sd)
 
-        # :neg => x -> -1 .* x
     )
 end
+

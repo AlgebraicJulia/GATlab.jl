@@ -1,9 +1,18 @@
-@data Sort begin
+using ...DEC: AbstractSort, SortError
+
+using MLStyle
+
+import Base: +, -, *
+
+# Define the sorts in your theory.
+# For the DEC, we work with Scalars and Forms, graded objects which can also be primal or dual.
+@data Sort <: AbstractSort begin
     Scalar()
     Form(dim::Int, isdual::Bool)
 end
 export Scalar, Form
 
+dim(f::Form) = f.dim
 duality(f::Form) = f.isdual ? "dual" : "primal"
 
 PrimalForm(i::Int) = Form(i, false)
@@ -12,33 +21,37 @@ export PrimalForm
 DualForm(i::Int) = Form(i, true)
 export DualForm
 
-struct SortError <: Exception
-    message::String
-end
+Base.show(io::IO, ω::Form) = print(io, ω.isdual ? "DualForm($(dim(ω)))" : "PrimalForm($(dim(ω)))")
+
+## OPERATIONS
 
 @nospecialize
 function +(s1::Sort, s2::Sort)
-    @match (s1, s2) begin
-        (Scalar(), Scalar()) => Scalar()
-        (Scalar(), Form(i, isdual)) || (Form(i, isdual), Scalar()) => Form(i, isdual)
-        (Form(i1, isdual1), Form(i2, isdual2)) =>
-          if (i1 == i2) && (isdual1 == isdual2)
-            Form(i1, isdual1)
-          else
-            throw(SortError("Cannot add two forms of different dimensions/dualities: $((i1,isdual1)) and $((i2,isdual2))"))
-          end
+  @match (s1, s2) begin
+    (Scalar(), Scalar()) => Scalar()
+    (Scalar(), Form(i, isdual)) || 
+      (Form(i, isdual), Scalar()) => Form(i, isdual)
+    (Form(i1, isdual1), Form(i2, isdual2)) =>
+      if (i1 == i2) && (isdual1 == isdual2)
+        Form(i1, isdual1)
+      else
+        throw(SortError("Cannot add two forms of different dimensions/dualities: $((i1,isdual1)) and $((i2,isdual2))"))
+      end
     end
 end
 
+# Type-checking inverse of addition follows addition
 -(s1::Sort, s2::Sort) = +(s1, s2)
 
+# Negation is valid
 -(s::Sort) = s
 
 @nospecialize
 function *(s1::Sort, s2::Sort)
   @match (s1, s2) begin
     (Scalar(), Scalar()) => Scalar() 
-    (Scalar(), Form(i, isdual)) || (Form(i, isdual), Scalar()) => Form(i, isdual)
+    (Scalar(), Form(i, isdual)) || 
+      (Form(i, isdual), Scalar()) => Form(i, isdual)
     (Form(_, _), Form(_, _)) => throw(SortError("Cannot scalar multiply a form with a form. Maybe try `∧`??"))
   end
 end
@@ -82,3 +95,4 @@ function ★(s::Sort)
         Form(i, isdual) => Form(2 - i, !isdual)
     end
 end
+
