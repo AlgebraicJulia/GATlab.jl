@@ -90,12 +90,29 @@ function vfield(model, operator_lookup::Dict{TA, Any}=Dict{TA, Any}())
     toexpr(v::SSAVar) = Symbol("tmp%$(v.idx)")
 
     function toexpr(expr::SSAExpr)
-        if expr.fn isa RootVar
-            rootvar_lookup[expr.fn]
-        elseif expr.fn isa Number
-            expr.fn
+      @match expr.head begin
+        ::RootVar => rootvar_lookup[expr.head]
+        ::Number => expr.head
+        _ => begin
+          op = operator_lookup[TA(expr.head, first.(expr.args))]
+          if op isa Tuple
+            op = op[1]
+          end
+          Expr(:call, *, op, toexpr.(last.(expr.args))...)
+        end
+      end
+    end
+
+    function _toexpr(expr::SSAExpr)
+        if expr.head isa RootVar
+            rootvar_lookup[expr.head]
+        elseif expr.head isa Number
+            expr.head
+        elseif expr.head == :*
+
         else
-            op = operator_lookup[TypedApplication(expr.fn, first.(expr.args))]
+            @info expr.args
+            op = operator_lookup[TypedApplication(expr.head, first.(expr.args))]
             # Decapodes dec_* functions yield a tuple of both in-place and out-of-place function.
             # We choose the first.
             if op isa Tuple
@@ -106,11 +123,11 @@ function vfield(model, operator_lookup::Dict{TA, Any}=Dict{TA, Any}())
     end
 
     ssalines = map(enumerate(ssa.statements)) do (i, expr)
-        :($(toexpr(SSAVar(i))) = $(toexpr(expr)))
+      :($(toexpr(SSAVar(i))) = $(toexpr(expr)))
     end
 
     set_derivative_stmts = map(enumerate(derivative_vars)) do (i, v)
-        :($(du) .= $(toexpr(v)))
+      :($(du) .= $(toexpr(v)))
     end
 
     eval(

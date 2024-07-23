@@ -2,11 +2,12 @@ module TestDEC
 
 # AlgebraicJulia dependencies
 using DEC
-import DEC.ThDEC: Δ
+import DEC.ThDEC: Δ # conflicts with CombinatorialSpaces
 
 # other dependencies
 using Test
 using Metatheory.EGraphs
+using ComponentArrays
 using CombinatorialSpaces 
 using GeometryBasics
 using OrdinaryDiffEq
@@ -63,4 +64,29 @@ function save_dynamics(save_file_name)
   end
 end
 
+## 1-D HEAT EQUATION WITH DIFFUSIVITY
+
+function new_heat_equation(roe)
+  u = fresh!(roe, PrimalForm(0), :u)
+  k = fresh!(roe, Scalar(), :k) 
+
+  ∂ₜ(u) ≐ k * Δ(u)
+  
+  ([u], [k])
 end
+
+# we can reuse the mesh and operator lookup
+_vf = vfield(new_heat_equation, operator_lookup)
+
+# we can reuse the initial condition U
+
+# 
+constants_and_parameters = ComponentArray(k=0.5,);
+
+t0 = 50
+
+@info("Precompiling solver")
+prob = ODEProblem(_vf, U, (0, t0), constants_and_parameters);
+soln = solve(prob, Tsit5());
+
+

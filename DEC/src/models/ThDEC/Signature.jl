@@ -21,7 +21,9 @@ export PrimalForm
 DualForm(i::Int) = Form(i, true)
 export DualForm
 
-Base.show(io::IO, ω::Form) = print(io, ω.isdual ? "DualForm($(dim(ω)))" : "PrimalForm($(dim(ω)))")
+function Base.show(io::IO, ω::Form)
+  print(io, ω.isdual ? "DualForm($(dim(ω)))" : "PrimalForm($(dim(ω)))")
+end
 
 ## OPERATIONS
 
@@ -96,3 +98,19 @@ function ★(s::Sort)
     end
 end
 
+function ι(s1::Sort, s2::Sort)
+  @match (s1, s2) begin
+    (Form(i1, isdual1), Form(i2, isdual2)) =>
+      if i1 == 1 && i2 ∈ [1,2] && isdual1 == isdual2
+        Form(i2 - 1, isdual2)
+      else
+        # TODO fix this error message
+        throw(SortError("Cannot take the interior product of these forms."))
+      end
+      (Scalar(), _) || (_, Scalar()) => throw(SortError("Cannot take the interior product involving scalars"))
+  end
+end
+
+function ♯(s::Sort) end
+
+function ♭(s::Sort) end 

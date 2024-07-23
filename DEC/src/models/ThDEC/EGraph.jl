@@ -80,4 +80,8 @@ export ★
 Δ(v::Var{PrimalForm(0)}) = ★(d(★(d(v))))
 export Δ
 
+# ι
+# ♯
+# ♭
+
 # end

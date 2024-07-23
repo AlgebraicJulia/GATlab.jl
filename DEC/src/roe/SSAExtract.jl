@@ -42,13 +42,13 @@ SSAExpr(+, [(Scalar(), SSAVar(1)), (Scalar(), SSAVar(2))])
 ```
 """
 @struct_hash_equal struct SSAExpr
-    fn::Any
+    head::Any
     args::Vector{Tuple{AbstractSort, SSAVar}}
 end
 export SSAExpr
 
 function Base.show(io::IO, e::SSAExpr)
-    print(io, e.fn)
+    print(io, e.head)
     if length(e.args) > 0
         print(io, Expr(:tuple, (Expr(:(::), v, sort) for (sort, v) in e.args)...))
     end
