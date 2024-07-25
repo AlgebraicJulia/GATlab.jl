@@ -13,5 +13,5 @@ end
 end
 
 @testset "ThDEC" begin
-  include("DEC.jl")
+  include("ThDEC/tests.jl")
 end

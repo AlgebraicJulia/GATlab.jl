@@ -63,7 +63,7 @@ function term_select(g::EGraph, id::Id)
     g[id].nodes[1]
 end
 
-extract_ssa!(roe.graph, ssa, (a + b).id, term_select)
+extract!(roe.graph, ssa, (a + b).id, term_select)
 
 ssa
 

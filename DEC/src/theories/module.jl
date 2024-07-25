@@ -1,4 +1,4 @@
-module Models
+module Theories
 
 using Reexport
 

@@ -37,7 +37,7 @@ push!(pages, "Library Reference" => "api.md")
 
 @info "Building Documenter.jl docs"
 makedocs(
-  modules   = [Decapodes],
+  modules   = [DEC],
   format    = Documenter.HTML(
     assets = ["assets/analytics.js"],
   ),
