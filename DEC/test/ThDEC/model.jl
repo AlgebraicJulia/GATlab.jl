@@ -1,3 +1,6 @@
+using DEC
+import DEC: Δ, ∧
+
 # load other dependencies
 using ComponentArrays
 using CombinatorialSpaces 

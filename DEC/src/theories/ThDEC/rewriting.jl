@@ -1,5 +1,25 @@
 using Metatheory
 using Metatheory.Library
+using Metatheory.Rewriters
+using MLStyle
+
+buf = OptBuffer{UInt128}(10)
+
+function isForm(g, ec::EClass)
+  any(ec.nodes) do n
+    h = v_head(n)
+    if has_constant(g, h)
+      c = get_constant(g, h)
+      return c isa Form
+    end
+    false
+  end
+end
+
+t = @theory a b begin
+  ~a::isForm + ~b::isForm --> 0
+end
+
 
 ThMultiplicativeMonoid = @commutative_monoid (*) 1
 ThAdditiveGroup = @commutative_group (+) 0 (-)
