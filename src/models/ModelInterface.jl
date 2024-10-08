@@ -652,6 +652,10 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
     v => whereparamdict[AlgSort(tmap(v.method).val)]
   end)
 
+  whereparams2 = map(sorts(dom_theory)) do v
+    whereparamdict[AlgSort(tmap(v.method).val)]
+  end
+
   # Create input for instance_code
   ################################
   accessor_funs = JuliaFunction[] # added to during typecon_funs loop
@@ -729,11 +733,12 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
   )
 
   tup_params = Expr(:curly, :Tuple, whereparams...)
+  tup_params2 = Expr(:curly, :Tuple, whereparams2...)
 
   model_expr = Expr(
     :curly,
     GlobalRef(Syntax.TheoryInterface, :Model),
-    tup_params
+    tup_params2 # Types associated with *domain* sorts
   )
 
   # The second whereparams needs to be reordered by the sorts of the DOM theory
