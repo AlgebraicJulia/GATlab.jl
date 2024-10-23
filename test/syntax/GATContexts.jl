@@ -2,6 +2,8 @@ module TestGATContexts
 
 using GATlab
 using Test
+using MLStyle
+
 T = ThCategory.Meta.theory
 ctx = GATContext(T)
 tscope = fromexpr(
@@ -28,7 +30,9 @@ end
 src, tgt = idents(SchGraph; name=[:src, :tgt])
 Hom = ident(SchGraph; name=:Hom)
 
-@test getvalue(SchGraph[src]).body.head == Hom
+@test (@match getvalue(SchGraph[src]) begin
+  TypeApp(m, _) => m.head
+end) == Hom
 
 @gatcontext SchFiberedGraph <: SchGraph begin
   (FE, FV)::Ob

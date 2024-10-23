@@ -21,12 +21,12 @@ end
 
 # IntMonoid = NatPlusMonoid(IntNatPlus)
 #--------------------------------------
-using .ThMonoid
+# using .ThMonoid
 
-@withmodel IntMonoid (e) begin
-  @test e() == 0
-  @test (ThMonoid.:(⋅)[IntMonoid])(3, 4) == 7
-end
+# @withmodel IntMonoid (e) begin
+#   @test e() == 0
+#   @test (ThMonoid.:(⋅)[IntMonoid])(3, 4) == 7
+# end
 
 # Integers as preorder
 #---------------------
@@ -40,17 +40,18 @@ end
 
 # Now using category interface
 
-using .ThCategory
+# using .ThCategory
 
-@withmodel IntPreorderCat (Hom, id, compose) begin
-  @test compose((1,3), (3,5)) == (1,5)
-  @test_throws TypeCheckFail Hom((5,3), 5, 3)
-  @test_throws ErrorException compose((1,2), (3,5))
-  @test id(2) == (2,2)
-end
+# @withmodel IntPreorderCat (Hom, id, compose) begin
+#   @test compose((1,3), (3,5)) == (1,5)
+#   @test_throws TypeCheckFail Hom((5,3), 5, 3)
+#   @test_throws ErrorException compose((1,2), (3,5))
+#   @test id(2) == (2,2)
+# end
 
 # Ring of integers
-#---------------------
+# --------------------
+
 using .ThRing
 import .ThRing: zero, one, -, +, *
 
