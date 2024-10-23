@@ -220,12 +220,12 @@ end
  - The set of Quarternions ℍ 
 
 """
-@theory ThDivisionRing begin
-  using ThRing
-  i(x) :: default ⊣ [x]
-  i(x) * x == one() ⊣ [x]
-  x * i(x) == one() ⊣ [x]
-end
+# @theory ThDivisionRing begin
+#   using ThRing
+#   i(x) :: default ⊣ [x]
+#   i(x) * x == one() ⊣ [x]
+#   x * i(x) == one() ⊣ [x]
+# end
 
 @theory ThCRig begin
   using ThRig

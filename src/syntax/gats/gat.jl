@@ -101,7 +101,7 @@ struct GAT <: HasScopeList{Judgment}
   name::Symbol
   segments::ScopeList{Judgment}
   resolvers::OrderedDict{Ident, MethodResolver}
-  sorts::Vector{AlgSort}
+  sorts::Vector{ResolvedMethod}
   accessors::OrderedDict{Ident, Dict{Int, Ident}}
   axioms::Vector{Ident}
 end
@@ -122,7 +122,7 @@ function GAT(name::Symbol)
     name,
     ScopeList{Judgment}(),
     OrderedDict{Ident, MethodResolver}(),
-    AlgSort[],
+    ResolvedMethod[],
     OrderedDict{Ident, Dict{Int, Ident}}(),
     Ident[],
   )
@@ -130,69 +130,14 @@ end
 
 Base.isempty(T::GAT) = T.name == :_EMPTY
 
-# """ 
-# `idents(T::GAT) : Vector{Ident}`
+"""
+`idents(T::GAT) : Vector{Ident}`
 
-# """
-# function idents(T::GAT)
-#   Iterators.flatten(map(getidents.(T.segments.scopes)) do idents
-#     filter(x -> !isnothing(x.name), idents)
-#   end) |> collect
-# end
-
-function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, gat::GAT)
-  GAT(gat.name, rename(tag, renames, gat.segments), rename(tag, renames, gat.resolvers), rename(tag, renames, gat.sorts), gat.accessors, gat.axioms) 
-end
-
-function reident(reps::Dict{Ident}, gat::GAT)
-  GAT(gat.name, 
-      reident(reps, gat.segments),
-      reident(reps, gat.resolvers),
-      reident.(Ref(reps), gat.sorts),
-      reident(reps, gat.accessors),
-      reident.(Ref(reps), gat.axioms))
-end
-
-function rename(tag::ScopeTag, renames::Dict{Symbol, Symbol}, resolvers::OrderedDict{Ident, MethodResolver})
-  if length(resolvers)==0
-    resolvers
-  else
-    merge(map(collect(resolvers)) do (r,m)
-      Dict(rename(tag, renames, r) => rename(tag, renames, m))
-    end...)
-  end
-end
-
-function reident(reps::Dict{Ident}, resolvers::OrderedDict{Ident, MethodResolver})
-  if length(resolvers)==0
-    resolvers
-  else
-    merge(map(collect(resolvers)) do (r, m)
-      key = reident(reps, r)
-      Dict(key => reident(reps, key, m))
-      # Dict(reident(reps, r) => reident(reps, m)) # reident(reps, m)
-    end...)
-  end
-end
-
-function reident(reps::Dict{Ident}, d::Dict{Int64, Ident})
-  if length(d) == 0
-    d
-  else
-    merge(map(collect(d)) do (k, v)
-      Dict(k => reident(reps, v))
-    end...)
-  end
-end
-
-function reident(reps::Dict{Ident}, accessors::OrderedDict{Ident, Dict{Int64, Ident}})
-  if length(accessors) == 0
-    accessors
-  else
-    merge(map(collect(accessors)) do (i, d)
-      Dict(reident(reps, i) => reident(reps, d))
-    end...)
-  end
+"""
+function Scopes.idents(T::GAT)
+  Iterators.flatten(map(getidents.(T.segments.scopes)) do idents
+    filter(x -> !isnothing(x.name), idents)
+  end) |> collect
 end
 
 # Mutators which should only be called during construction of a theory
@@ -211,7 +156,7 @@ end
 
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgTypeConstructor)
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
-  push!(theory.sorts, AlgSort(getdecl(judgment), x))
+  push!(theory.sorts, ResolvedMethod(getdecl(judgment), x))
   theory.accessors[x] = Dict{Int, Ident}()
 end
 
@@ -222,7 +167,7 @@ end
 function unsafe_updatecache!(theory::GAT, x::Ident, judgment::AlgStruct)
   addmethod!(theory.resolvers[getdecl(judgment)], sortsignature(judgment), x)
   addmethod!(theory.resolvers[getdecl(judgment)], typesortsignature(judgment), x) # Collision?
-  push!(theory.sorts, AlgSort(getdecl(judgment), x))
+  push!(theory.sorts, ResolvedMethod(getdecl(judgment), x))
   theory.accessors[x] = Dict{Int, Ident}()
 end
 
@@ -303,12 +248,13 @@ function allnames(theory::GAT; aliases=false)
 end
 
 sorts(theory::GAT) = theory.sorts
-primitive_sorts(theory::GAT) = 
-  filter(s->getvalue(theory[methodof(s)]) isa AlgTypeConstructor, sorts(theory))
+
+constructor_sorts(theory::GAT) =
+  filter(m->getvalue(theory[m.method]) isa AlgTypeConstructor, theory.sorts)
 
 # NOTE: AlgStruct is the only derived sort this returns.
 struct_sorts(theory::GAT) = 
-  filter(s->getvalue(theory[methodof(s)]) isa AlgStruct, sorts(theory))
+  filter(m->getvalue(theory[m.method]) isa AlgStruct, theory.sorts)
 
 function termcons(theory::GAT)
   xs = Tuple{Ident, Ident}[]
@@ -378,4 +324,7 @@ else
 end
 
 """Get all structs in a theory"""
-structs(t::GAT) = AlgStruct[getvalue(t[methodof(s)]) for s in struct_sorts(t)]
+structs(t::GAT) =
+  AlgStruct[getvalue(t[m.method]) for m in t.sorts if getvalue(t[m.method]) isa AlgStruct]
+
+declarations(t::GAT) = keys(t.resolvers)

@@ -175,7 +175,7 @@ end
 
 reident(r::Dict{Ident}, x) = x
 
-# XXX we need to make sure we match on just tag and name 
+# XXX we need to make sure we match on just tag and name
 function reident(r::Dict{Ident}, x::Ident)
   haskey(r, x) ? r[x] : x
 end
@@ -726,6 +726,7 @@ end
 
 Base.getindex(c::Context, x::Ident) = getbinding(getscope(c, x), x)
 
+getvalue(c::Context, lid::LID) = getvalue(c[lid])
 getvalue(c::Context, x::Ident) = getvalue(c[x])
 getvalue(c::Context, name::Symbol) = getvalue(c[ident(c; name)])
 
@@ -859,8 +860,8 @@ alltags(hsl::HasScopeList) = Set(gettag.(getscopelist(hsl).scopes))
 struct AppendContext{T₁, T₂} <: Context{Union{T₁,T₂}}
   ctx1::Context{T₁}
   ctx2::Context{T₂}
-  function AppendContext(ctx1::Context{T₁}, ctx2::Context{T₂}) where {T₁, T₂}
-    isempty(intersect(alltags(ctx1), alltags(ctx2))) ||
+  function AppendContext(ctx1::Context{T₁}, ctx2::Context{T₂}; strict=false) where {T₁, T₂}
+    !strict || isempty(intersect(alltags(ctx1), alltags(ctx2))) ||
       error("All scopes in context must have unique tags")
     new{T₁, T₂}(ctx1, ctx2)
   end
