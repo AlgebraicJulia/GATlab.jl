@@ -205,6 +205,8 @@ function parse_scope!(f::Function, scope::Scope, lines::AbstractVector)
     @match e begin
       l::LineNumberNode => (currentln = l)
       _ => f(e) do binding
+        # @info "CURRENT LINE!!!" currentln
+        # @info "IS BEING SET!!!" setline(binding, currentln) isnothing(currentln)
         Scopes.unsafe_pushbinding!(scope, setline(binding, currentln))
       end
     end
@@ -441,6 +443,8 @@ function parse_gat_line!(theory::GAT, e::Expr, linenumber; current_module)
           end
         end
       end
+      # already handled earlier
+      Expr(:using, _) => nothing
       _ => begin
         parse_binding_line!(theory, e, linenumber)
       end

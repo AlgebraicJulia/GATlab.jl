@@ -1,6 +1,6 @@
 module GATs
 export Constant, AlgTerm, AlgType, AlgAST,
-  TypeScope, TypeCtx, AlgSort, AlgSorts,
+  TypeScope, TypeCtx, AlgSort, AlgEqSort, AlgSorts,
   AlgDeclaration, AlgTermConstructor, AbstractAlgSort,
   AlgTypeConstructor, AlgAccessor, AlgAxiom, AlgStruct, AlgDot, AlgFunction,
   typesortsignature, sortsignature, getdecl,
@@ -14,7 +14,9 @@ export Constant, AlgTerm, AlgType, AlgAST,
 using ..Scopes
 import ..ExprInterop: fromexpr, toexpr
 
-import ..Scopes: retag, rename
+import ..Scopes: retag, rename, reident
+
+import AlgebraicInterfaces: equations
 
 using StructEquality
 using MLStyle

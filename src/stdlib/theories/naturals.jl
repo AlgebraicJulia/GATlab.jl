@@ -15,6 +15,7 @@ end
 
 """
 @theory ThNatPlus <: ThNat begin
+  using ThNat
   ((x::ℕ) + (y::ℕ))::ℕ
   (n + S(m) == S(n+m) :: ℕ) ⊣ [n::ℕ,m::ℕ]
 end
@@ -23,6 +24,7 @@ end
 
 """
 @theory ThNatPlusTimes <: ThNatPlus begin
+  using ThNatPlus
   ((x::ℕ) * (y::ℕ))::ℕ
   (n * S(m) == ((n * m) + n)) ⊣ [n::ℕ,m::ℕ]
 end

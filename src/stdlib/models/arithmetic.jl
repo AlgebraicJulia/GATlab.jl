@@ -1,7 +1,14 @@
-export IntNatPlus, IntPreorder
+export IntNat, IntNatPlus, IntPreorder, ZRing, BoolRing
 
 using ...Models
 using ..StdTheories
+
+struct IntNat <: Model{Tuple{Int}} end
+
+@instance ThNat{Int} [model::IntNat] begin
+  Z() = 0
+  S(n::Int) = n + 1
+end
 
 struct IntNatPlus <: Model{Tuple{Int}} end
 
@@ -21,4 +28,14 @@ struct IntPreorder <: Model{Tuple{Int, Tuple{Int,Int}}} end
   else 
     error("Cannot compose $ab and $bc")
   end
+end
+
+struct ZRing <: Model{Tuple{Int}} end
+
+@instance ThRing{Int} [model::ZRing] begin
+  zero() = 0
+  one() = 1
+  -(x::Int) = -1 * x
+  +(x::Int, y::Int) = x + y
+  *(x::Int, y::Int) = x * y
 end
