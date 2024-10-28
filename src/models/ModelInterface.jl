@@ -494,7 +494,9 @@ function mk_fun(f::AlgFunction, theory, mod, jltype_by_sort)
   args = map(zip(f.args, sortsignature(f))) do (i,s)
     Expr(:(::),nameof(f[i]),jltype_by_sort[s])
   end
-  impl = to_call_impl(f.value,theory, mod, false)
+  argnames = Vector{Symbol}(undef, length(getcontext(f)))
+  setindex!.(Ref(argnames), [nameof(f[i]) for i in f.args], getvalue.(f.args))
+  impl = to_call_impl(f.value,theory, mod, argnames, false)
   JuliaFunction(;name=name, args, impl)
 end
 
@@ -695,11 +697,13 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
     args = [:($k::$(v)) for (k, v) in zip(argnames, sig.types)]
     
     return_type = first(sig.types)
+    argnames′ = Array{Symbol}(undef, length(getcontext(typecon)))
+    setindex!.(Ref(argnames′), argnames[2:end], getvalue.(typecon.args))
 
-    impls = to_call_impl.(codom_body.args, Ref(codom_theory), Ref(codom_module), true)
+    impls = to_call_impl.(codom_body.args, Ref(codom_theory), Ref(codom_module), 
+                          Ref(argnames′), true)
     impl = Expr(:call, Expr(:ref, :($codom_module.$fxname), 
                             :(model.model)), _x, impls...)
-
     JuliaFunction(;name, args, return_type, impl)
   end
 
@@ -711,8 +715,11 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
 
     name = nameof(termcon.declaration)
     return_type = jltype_by_sort[AlgSort(termcon.type)]
-    args = [:($k::$v) for (k, v) in zip(nameof.(argsof(termcon)), sig.types)]
-    impl = to_call_impl(fx.val, codom_theory, codom_module, true)
+    argnames = nameof.(argsof(termcon))
+    argnames′ = Array{Symbol}(undef, length(getcontext(termcon)))
+    setindex!.(Ref(argnames′), argnames, getvalue.(termcon.args))
+    args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
+    impl = to_call_impl(fx.val, codom_theory, codom_module, argnames′, true)
 
     JuliaFunction(;name, args, return_type, impl)
   end
@@ -759,19 +766,19 @@ end
 Compile an AlgTerm into a Julia call Expr where termcons (e.g. `f`) are
 interpreted as `mod.f[model.model](...)`.
 """
-function to_call_impl(t::AlgTerm, theory::GAT, mod::Union{Symbol,Module}, migrate::Bool)
+function to_call_impl(t::AlgTerm, theory::GAT, mod::Union{Symbol,Module}, argnames::Vector{Symbol}, migrate::Bool)
   b = bodyof(t)
   if GATs.isvariable(t)
-    nameof(b)
+    argnames[getvalue(getlid(b))]
   elseif  GATs.isdot(t)
-    impl = to_call_impl(b.body, theory, mod, migrate)
+    impl = to_call_impl(b.body, theory, mod, argnames, migrate)
     if isnamed(b.head)
       Expr(:., impl, QuoteNode(nameof(b.head)))
     else 
       Expr(:ref, impl, getlid(b.head).val)
     end
   else
-    args = to_call_impl.(argsof(b), Ref(theory), Ref(mod), migrate)
+    args = to_call_impl.(argsof(b), Ref(theory), Ref(mod), Ref(argnames), migrate)
     name = nameof(headof(b))
     newhead = if name ∈ nameof.(structs(theory))
       Expr(:., :($mod), QuoteNode(name))
