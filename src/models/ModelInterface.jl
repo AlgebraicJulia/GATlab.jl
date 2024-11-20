@@ -519,7 +519,7 @@ function make_alias_definitions(theory, theory_module, jltype_by_sort, model_typ
               args
             end
           else
-            [(gensym(:m), :($(TheoryInterface.WithModel){$model_type})); args]
+            [(gensym(:m), :($(TheoryInterface.WithModel){<:$model_type})); args]
           end
           argexprs = [Expr(:(::), p...) for p in args]
           overload = JuliaFunction(;
@@ -565,7 +565,7 @@ function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{E
 
     m = gensym(:m)
     (
-      [Expr(:(::), m, Expr(:curly, TheoryInterface.WithModel, model_type)), args...],
+      [Expr(:(::), m, Expr(:curly, TheoryInterface.WithModel, Expr(:<:, model_type))), args...],
       Expr(:let, Expr(:(=), :model, :($m.model)), fun.impl)
     )
   else
