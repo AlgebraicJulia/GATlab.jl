@@ -159,7 +159,7 @@ function infer_type(ctx::Context, t::AlgTerm)
     tc = getvalue(ctx[head])
     typed_terms = bind_localctx(ctx, t)
     typ = bodyof(tc.type)
-    args = substitute_term.(argsof(typ), Ref(typed_terms))
+    args = Vector{AlgTerm}(substitute_term.(argsof(typ), Ref(typed_terms)))
     AlgType(headof(typ), methodof(typ), args)
   end
 end

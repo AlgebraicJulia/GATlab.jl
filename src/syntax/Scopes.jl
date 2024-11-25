@@ -175,7 +175,7 @@ end
 
 reident(r::Dict{Ident}, x) = x
 
-# XXX we need to make sure we match on just tag and name 
+# XXX we need to make sure we match on just tag and name
 function reident(r::Dict{Ident}, x::Ident)
   haskey(r, x) ? r[x] : x
 end
@@ -726,6 +726,7 @@ end
 
 Base.getindex(c::Context, x::Ident) = getbinding(getscope(c, x), x)
 
+getvalue(c::Context, lid::LID) = getvalue(c[lid])
 getvalue(c::Context, x::Ident) = getvalue(c[x])
 getvalue(c::Context, name::Symbol) = getvalue(c[ident(c; name)])
 

@@ -50,7 +50,8 @@ using .ThCategory
 end
 
 # Ring of integers
-#---------------------
+# --------------------
+
 using .ThRing
 import .ThRing: zero, one, -, +, *
 
