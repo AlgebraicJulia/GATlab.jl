@@ -170,4 +170,30 @@ end
   munit() = 0
 end
 
+# Test scenario where we @import a method but then extend it
+############################################################
+@theory T1 begin 
+  X::TYPE; 
+  h(a::X)::X 
+end
+
+@theory T2<:T1 begin 
+  Y::TYPE; 
+  h(b::Y)::Y 
+end
+
+@instance T1{Int} begin 
+  h(a::Int) = 1 
+end
+
+@instance T2{Int,Bool} begin 
+  @import X, h
+  h(b::Bool) = false 
+end
+
+@test h(2) == 1
+
+@test h(false) == false
+
+
 end # module

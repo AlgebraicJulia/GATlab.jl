@@ -387,11 +387,7 @@ function typecheck_instance(
 
   overload_errormsg =
    "the types for this model declaration do not permit Julia overloading to distinguish between GAT overloads"
-
   for (decl, resolver) in theory.resolvers
-    if nameof(decl) ∈ ext_functions
-      continue
-    end
     for (_, x) in allmethods(resolver)
       if getvalue(theory[x]) isa AlgStruct 
         continue 
@@ -455,6 +451,7 @@ function typecheck_instance(
   end
 
   for (sig, (decl, method)) in undefined_signatures
+    nameof(decl) ∈ ext_functions && continue # assume it has been impl'd already
     judgment = getvalue(theory[method])
     if judgment isa AlgTermConstructor
       error("Failed to implement $decl: $(toexpr(sig))")
