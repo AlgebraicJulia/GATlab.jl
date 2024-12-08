@@ -2,7 +2,7 @@ module TestSliceCategories
 
 using GATlab, Test
 
-const C = SliceC{Int, Vector{Int}, FinSetC}(FinSetC(), 4)
+const C = SliceC(FinSetC(), 4)
 const MkOb = SliceOb{Int, Vector{Int}}
 
 using .ThCategory

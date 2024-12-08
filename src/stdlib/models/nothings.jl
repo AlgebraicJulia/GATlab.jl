@@ -2,8 +2,7 @@ export NothingC
 
 using ...Models, ..StdTheories
 
-struct NothingC <: Model{Tuple{Nothing, Nothing}}
-end
+struct NothingC end
 
 @instance ThCategory{Nothing, Nothing} [model::NothingC] begin
   Ob(::Nothing) = nothing

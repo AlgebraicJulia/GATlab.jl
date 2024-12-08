@@ -3,8 +3,7 @@ export FinMatC
 using ...Models
 using ..StdTheories
 
-struct FinMatC{T<:Number} <: Model{Tuple{T}}
-end
+struct FinMatC{T <: Number} end
 
 @instance ThCategory{Int, Matrix{T}} [model::FinMatC{T}] where {T} begin
   Ob(n::Int) = n >= 0 ? n : @fail "expected nonnegative integer"

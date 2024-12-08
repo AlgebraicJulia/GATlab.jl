@@ -10,8 +10,17 @@ using ...Models
 using ..StdTheories
 using StructEquality
 
-@struct_hash_equal struct OpC{ObT, HomT, C<:Model{Tuple{ObT, HomT}}} <: Model{Tuple{ObT, HomT}}
-  cat::C
+# TODO when we implement custom structs for models of a particular theory, we 
+# can use that rather than a generic "C" for which we then have to check 
+# whether it implements the theory.
+
+@struct_hash_equal struct OpC{ObT, HomT, C}
+  cat::C 
+  function OpC(c::C) where C 
+    obtype = impl_type(c, ThCategory, :Ob)
+    homtype = impl_type(c, ThCategory, :Hom)
+    implements(c, ThCategory) ? new{obtype, homtype, C}(c) : error("bad")
+  end
 end
 
 op(c) = OpC(c)

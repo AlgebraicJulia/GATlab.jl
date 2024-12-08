@@ -13,4 +13,4 @@ using .ThCategory
   @test isnothing(compose(nothing, nothing))
 end
 
-end
+end # module

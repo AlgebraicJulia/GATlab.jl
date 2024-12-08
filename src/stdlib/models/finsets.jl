@@ -3,8 +3,7 @@ export FinSetC
 using ...Models
 using ..StdTheories
 
-struct FinSetC <: Model{Tuple{Int, Vector{Int}}}
-end
+struct FinSetC end
 
 @instance ThCategory{Int, Vector{Int}} [model::FinSetC] begin
   Ob(x::Int) = x >= 0 ? x : @fail "expected nonnegative integer"
