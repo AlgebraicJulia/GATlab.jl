@@ -154,7 +154,7 @@ function theory_impl(head, body, __module__)
   
   doctarget = gensym()
   mdp(::Nothing) = []
-  mdp(::Markdown.MD) = [x]
+  mdp(x::Markdown.MD) = x
   mdp(x::Base.Docs.DocStr) = Markdown.parse(x.text...)
 
   push!(modulelines, Expr(:toplevel, :(module Meta
