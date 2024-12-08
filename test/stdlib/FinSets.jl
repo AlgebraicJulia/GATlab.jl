@@ -16,4 +16,4 @@ using .ThCategory
   @test codom([5]; context=(codom=10,)) == 10
 end
 
-end
+end # module

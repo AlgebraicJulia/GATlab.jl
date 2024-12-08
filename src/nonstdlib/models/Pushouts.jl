@@ -2,8 +2,6 @@ using DataStructures, StructEquality
 
 export PushoutInt
 
-using GATlab
-
 """Data required to specify a pushout. No fancy caching."""
 @struct_hash_equal struct PushoutInt
   ob::Int

@@ -1,25 +1,7 @@
-module ModelInterface
-
-export Model, implements, TypeCheckFail, SignatureMismatchError, 
-       @model, @instance, @withmodel, @fail, migrate_model
-
-using ...Syntax
-using ...Util.MetaUtils
-using ...Util.MetaUtils: JuliaFunctionSigNoWhere
-
-import ...Syntax.TheoryMaps: migrator 
-
-using MLStyle
-using DataStructures: DefaultDict, OrderedDict
 
 """
-`Model{Tup <: Tuple}`
-
-A Julia value with type `Model{Tuple{Ts...}}` represents a model of some
-part of the theory hierarchy, which uses the types in `Ts...` to implement
-the sorts.
-
-A model `m::Model{Tup}` is marked as implementing a `seg::GATSegment` iff
+Any Julia struct can be a model of a GAT. A model is marked as implementing a 
+`seg::GATSegment` iff
 
 `implements(m, ::Type{Val{gettag(seg)}}) == true`
 
@@ -57,11 +39,25 @@ to get away without providing the context when you are writing code that is not 
 across models, and you know that, for instance, composition of FinFunctions does not
 need the domains and codomains of the FinFunctions explicitly supplied.
 
-A model `m::Model{Tup}` implements a theory iff it implements all of the GATSegments
+A model implements a theory iff it implements all of the GATSegments
 in the theory.
-
-Models are defined in TheoryInterface because reasons
 """
+module ModelInterface
+
+export implements, impl_type, TypeCheckFail, SignatureMismatchError, 
+       @model, @instance, @withmodel, @fail, migrate_model
+
+using ...Syntax
+using ...Util.MetaUtils
+using ...Util.MetaUtils: JuliaFunctionSigNoWhere
+
+import ...Syntax.TheoryMaps: migrator 
+using ...Syntax.TheoryMaps: dom, codom
+using ...Syntax.TheoryInterface: GAT_MODULE_LOOKUP
+
+using MLStyle
+using DataStructures: DefaultDict, OrderedDict
+
 
 """
 `ImplementationNotes`
@@ -75,20 +71,26 @@ struct ImplementationNotes
 end
 
 """
-`implements(m::Model, tag::ScopeTag) -> Union{ImplementationNotes, Nothing}`
+`implements(m::MyModel, tag::ScopeTag) -> Union{ImplementationNotes, Nothing}`
 
 If `m` implements the GATSegment referred to by `tag`, then return the
 corresponding implementation notes.
 """
 implements(m::Module, ::Type{Val{tag}}) where {tag} = nothing
 
-implements(m::Model, tag::ScopeTag) = implements(m, Val{tag})
+implements(m, tag::ScopeTag) = implements(m, Val{tag})
 
-implements(m::Model, theory_module::Module) =
+impl_type(m, tag::ScopeTag) = impl_type(m, Val{tag})
+
+impl_type(m, mod::Module, name::Symbol) = 
+  impl_type(m, gettag(ident(mod.Meta.theory; name)))
+
+
+implements(m, theory_module::Module) =
   all(!isnothing(implements(m, gettag(scope))) for scope in theory_module.Meta.theory.segments.scopes)
 
 struct TypeCheckFail <: Exception
-  model::Union{Model, Nothing}
+  model::Any
   theory::GAT
   type::Ident
   val::Any
@@ -108,7 +110,7 @@ end
 Usage:
 
 ```julia
-struct TypedFinSetC <: Model{Tuple{Vector{Int}, Vector{Int}}}
+struct TypedFinSetC
   ntypes::Int
 end
 
@@ -124,11 +126,18 @@ end
   codom(f::Vector{Int}; context) = context.codom
 end
 
-struct SliceCat{Ob, Hom, C <: Model{Tuple{Ob, Hom}}} <: Model{Tuple{Tuple{Ob, Hom}, Hom}}
-  c::C
+struct SliceC{ObT, HomT, C}
+  cat::C
+  over::ObT
+  function SliceC(cat::C, over) where C
+    implements(cat, ThCategory) || error("Bad cat $cat")
+    obtype = impl_type(cat, ThCategory, :Ob)
+    homtype = impl_type(cat, ThCategory, :Hom)
+    new{obtype, homtype, C}(cat, ThCategory.Ob[cat](over))
+  end
 end
 
-@instance ThCategory{Tuple{Ob, Hom}, Hom} [model::SliceCat{Ob, Hom, C}] where {Ob, Hom, C<:Model{Tuple{Ob, Hom}}} begin
+@instance ThCategory{Tuple{Ob, Hom}, Hom} [model::SliceCat{Ob, Hom, C}] where {Ob, Hom, C}}} begin
 end
 ```
 
@@ -210,10 +219,18 @@ function generate_instance(
     []
   end
 
+  impl_type_declarations = if isnothing(model_type) 
+    Expr[]
+  else 
+    map(collect(jltype_by_sort)) do (k, v)
+      impl_type_declaration(model_type, whereparams, k, v)
+    end
+  end
   docsink = gensym(:docsink)
 
   code = Expr(:block,
     [generate_function(f) for f in qualified_functions]...,
+    impl_type_declarations...,
     implements_declarations...,
     :(function $docsink end),
     :(Core.@__doc__ $docsink)
@@ -491,7 +508,9 @@ function mk_fun(f::AlgFunction, theory, mod, jltype_by_sort)
   args = map(zip(f.args, sortsignature(f))) do (i,s)
     Expr(:(::),nameof(f[i]),jltype_by_sort[s])
   end
-  impl = to_call_impl(f.value,theory, mod, false)
+  argnames = Vector{Symbol}(undef, length(getcontext(f)))
+  setindex!.(Ref(argnames), [nameof(f[i]) for i in f.args], getvalue.(f.args))
+  impl = to_call_impl(f.value,theory, mod, argnames, false)
   JuliaFunction(;name=name, args, impl)
 end
 
@@ -578,6 +597,17 @@ function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{E
   )
 end
 
+function impl_type_declaration(model_type, whereparams, sort, jltype)
+  quote 
+    if !hasmethod($(GlobalRef(ModelInterface, :impl_type)), 
+      ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(getdecl(sort)))}}))
+      $(GlobalRef(ModelInterface, :impl_type))(
+          ::$(model_type), ::Type{Val{$(gettag(getdecl(sort)))}}
+        ) where {$(whereparams...)} = $(jltype)
+    end
+  end
+end
+
 function implements_declaration(model_type, scope, whereparams)
   notes = ImplementationNotes(nothing)
   quote
@@ -627,37 +657,35 @@ macro withmodel(model, subsexpr, body)
 end
 
 
+migrate_model(F::Module, m::Any, new_model_name=nothing) = 
+  migrate_model(F.MAP, m, new_model_name)
+
 """
-Given a Theory Morphism T->U and a model Mᵤ which implements U,
-obtain a model Mₜ which wraps Mᵤ and is a model of T.
+Given a theory map A -> B, construct a new struct type which wraps a model of
+theory B and is itself a model of theory A. The name of the struct can be
+optionally given, otherwise it is gensym'd. The resulting expression is an
+instance of that struct type.
 
 Future work: There is some subtlety in how accessor functions should be handled.
 TODO: The new instance methods do not yet handle the `context` keyword argument.
 """
-function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
+function migrate_model(F::AbsTheoryMap, m::Any, new_model_name::Union{Nothing,Symbol}=nothing)
+  new_model_name = isnothing(new_model_name) ? gensym(:Migrated) : new_model_name
+  dom_theory = dom(F)
+  codom_theory = codom(F)
+  dom_module = GAT_MODULE_LOOKUP[gettag(dom_theory)]
+  codom_module = GAT_MODULE_LOOKUP[gettag(codom_theory)]
 
-  # Symbols
-  migrator_name = :Migrator # TODO do we need to gensym?
-  _x = gensym("val")
-
-  # Map CODOM sorts to whereparam symbols
-  whereparamdict = OrderedDict(s=>gensym(s.head.name) for s in sorts(codom_theory))
-  # New model is parameterized by these types
-  whereparams = collect(values(whereparamdict))
-  # Julia types of domain sorts determined by theorymap 
+  # Expressions which evaluate to the correct Julia type
   jltype_by_sort = Dict(map(sorts(dom_theory)) do v
-    v => whereparamdict[AlgSort(tmap(v.method).val)]
+    v => :(impl_type($m, gettag(getdecl(AlgSort($F($v.method).val)))))
   end)
 
-  whereparams2 = map(sorts(dom_theory)) do v
-    whereparamdict[AlgSort(tmap(v.method).val)]
-  end
+  _x = gensym("val")
 
-  # Create input for instance_code
-  ################################
   accessor_funs = JuliaFunction[] # added to during typecon_funs loop
 
-  typecon_funs = map(collect(typemap(tmap))) do (x, fx)
+  typecon_funs = map(collect(typemap(F))) do (x, fx)
     typecon = getvalue(dom_theory[x])
 
     # Accessors
@@ -692,36 +720,37 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
     args = [:($k::$(v)) for (k, v) in zip(argnames, sig.types)]
     
     return_type = first(sig.types)
+    argnames′ = Array{Symbol}(undef, length(getcontext(typecon)))
+    setindex!.(Ref(argnames′), argnames[2:end], getvalue.(typecon.args))
 
-    impls = to_call_impl.(codom_body.args, Ref(codom_theory), Ref(codom_module), true)
+    impls = to_call_impl.(codom_body.args, Ref(codom_theory), Ref(codom_module), 
+                          Ref(argnames′), true)
     impl = Expr(:call, Expr(:ref, :($codom_module.$fxname), 
                             :(model.model)), _x, impls...)
-
     JuliaFunction(;name, args, return_type, impl)
   end
 
-  # Term constructors
-  #------------------
-  termcon_funs = map(collect(termmap(tmap))) do (x, fx)
+
+  termcon_funs = map(collect(termmap(F))) do (x, fx)
     termcon = getvalue(dom_theory[x])
     sig = julia_signature(dom_theory, x, jltype_by_sort)
 
     name = nameof(termcon.declaration)
     return_type = jltype_by_sort[AlgSort(termcon.type)]
-    args = [:($k::$v) for (k, v) in zip(nameof.(argsof(termcon)), sig.types)]
-    impl = to_call_impl(fx.val, codom_theory, codom_module, true)
+    argnames = nameof.(argsof(termcon))
+    argnames′ = Array{Symbol}(undef, length(getcontext(termcon)))
+    setindex!.(Ref(argnames′), argnames, getvalue.(termcon.args))
+    args = [:($k::$v) for (k, v) in zip(argnames, sig.types)]
+    impl = to_call_impl(fx.val, codom_theory, codom_module, argnames′, true)
 
     JuliaFunction(;name, args, return_type, impl)
   end
-
-
-  # Generate instance code 
   instance_code = generate_instance(
     dom_theory,
     dom_module,
     jltype_by_sort,
-    Expr(:curly, migrator_name, whereparams...),
-    whereparams,
+    new_model_name,
+    [],
     Expr(:block, generate_function.([typecon_funs...,
                                      termcon_funs..., 
                                      accessor_funs...
@@ -729,46 +758,32 @@ function migrator(tmap, dom_module, codom_module, dom_theory, codom_theory)
     typecheck=true, escape=false
   )
 
-  tup_params = Expr(:curly, :Tuple, whereparams...)
-  tup_params2 = Expr(:curly, :Tuple, whereparams2...)
-
-  model_expr = Expr(
-    :curly,
-    GlobalRef(Syntax.TheoryInterface, :Model),
-    tup_params2 # Types associated with *domain* sorts
-  )
-
-  # The second whereparams needs to be reordered by the sorts of the DOM theory
-  quote
-    struct Migrator{$(whereparams...)} <: $model_expr
-      model ::  $(GlobalRef(ModelInterface, :Model)){$tup_params}
-      function Migrator(model:: $(GlobalRef(ModelInterface, :Model)){$tup_params}) where {$(whereparams...)}
-        $(GlobalRef(ModelInterface, :implements))(model, $codom_module) || error("Cannot migrate model $model")
-        new{$(whereparams...)}(model)
-      end
+  eval(quote 
+    struct $new_model_name 
+      model::Any
     end
-
-    $(instance_code.args...)
-  end
+    $instance_code
+    $new_model_name($m)
+  end)
 end
 
 """
 Compile an AlgTerm into a Julia call Expr where termcons (e.g. `f`) are
 interpreted as `mod.f[model.model](...)`.
 """
-function to_call_impl(t::AlgTerm, theory::GAT, mod::Union{Symbol,Module}, migrate::Bool)
+function to_call_impl(t::AlgTerm, theory::GAT, mod::Union{Symbol,Module}, argnames::Vector{Symbol}, migrate::Bool)
   b = bodyof(t)
   if GATs.isvariable(t)
-    nameof(b)
+    argnames[getvalue(getlid(b))]
   elseif  GATs.isdot(t)
-    impl = to_call_impl(b.body, theory, mod, migrate)
+    impl = to_call_impl(b.body, theory, mod, argnames, migrate)
     if isnamed(b.head)
       Expr(:., impl, QuoteNode(nameof(b.head)))
     else 
       Expr(:ref, impl, getlid(b.head).val)
     end
   else
-    args = to_call_impl.(argsof(b), Ref(theory), Ref(mod), migrate)
+    args = to_call_impl.(argsof(b), Ref(theory), Ref(mod), Ref(argnames), migrate)
     name = nameof(headof(b))
     newhead = if name ∈ nameof.(structs(theory))
       Expr(:., :($mod), QuoteNode(name))
@@ -785,7 +800,5 @@ function to_call_accessor(t::AlgTerm, x::Symbol, mod::Module)
   rest = GATs.isvariable(arg) ? x : to_call_accessor(arg, x, mod)
   Expr(:call, Expr(:ref, :($mod.$(nameof(headof(b)))), :(model.model)), rest)
 end
-
-migrate_model(theorymap::Module, m::Model) = theorymap.Migrator(m)
 
 end # module

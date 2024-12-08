@@ -35,5 +35,4 @@ end
   @test codom([5]) == 1
 end
 
-
 end # module

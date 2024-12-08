@@ -20,4 +20,7 @@ using .ThCategory
 
 end
 
-end
+# Test that `impl_type` is sensitive to the `where` parameters
+@test impl_type(FinMatC{Float64}(), ThCategory, :Hom) == Matrix{Float64}
+
+end # module
