@@ -53,6 +53,7 @@ end
 @test_throws ErrorException codom[FinSetC()]([1,2,3])
 
 @test implements(FinSetC(), ThCategory)
+@test !implements(FinSetC(), ThNatPlus)
 
 # Todo: get things working where Ob and Hom are the same type (i.e. binding dict not monic)
 struct TypedFinSetC

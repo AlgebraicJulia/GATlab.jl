@@ -76,7 +76,7 @@ end
 If `m` implements the GATSegment referred to by `tag`, then return the
 corresponding implementation notes.
 """
-implements(m::Module, ::Type{Val{tag}}) where {tag} = nothing
+implements(m, ::Type{Val{tag}}) where {tag} = nothing
 
 implements(m, tag::ScopeTag) = implements(m, Val{tag})
 
@@ -610,9 +610,10 @@ end
 
 function implements_declaration(model_type, scope, whereparams)
   notes = ImplementationNotes(nothing)
+  m = only(methods(implements, (Any, Type{Val{1}})))
   quote
-    if !hasmethod($(GlobalRef(ModelInterface, :implements)), 
-        ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(scope))}}))
+    if $m == only(methods($(GlobalRef(ModelInterface, :implements)), 
+        ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(scope))}})))
       $(GlobalRef(ModelInterface, :implements))(
         ::$(model_type), ::Type{Val{$(gettag(scope))}}
       ) where {$(whereparams...)} = $notes
