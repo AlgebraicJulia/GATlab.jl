@@ -19,6 +19,15 @@ f = FreeCategory.Hom{:generator}([:f], [x, y])
 @test ThCategory.id(x) isa HomExpr{:id}
 @test ThCategory.compose(ThCategory.id(x), f) == f
 
+M = FreeCategory.Meta.M
+@test M isa Dispatch
+@test implements(M, ThCategory)
+@test !implements(M, ThNatPlus)
+@test impl_type(M, ThCategory, :Ob) == FreeCategory.Ob
+@test impl_type(M, ThCategory, :Hom) == FreeCategory.Hom
+@test ThCategory.id[M](x) isa HomExpr{:id}
+@test ThCategory.compose[M](ThCategory.id(x), f) == f
+
 # Monoid
 ########
 

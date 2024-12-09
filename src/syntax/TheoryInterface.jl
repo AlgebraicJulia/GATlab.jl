@@ -184,11 +184,27 @@ function theory_impl(head, body, __module__)
   )
 end
 
+"""
+The Dispatch type is a model of every theory.
+"""
+@struct_hash_equal struct Dispatch 
+  t::GAT
+  types::Dict{AlgSort,Type}
+end
+
+Dispatch(t::GAT, v::AbstractVector{<:Type}) = 
+  Dispatch(t, Dict(zip(sorts(t), v)))
+
+# WARNING: if any other package play with indexing methodnames with their own 
+# structs, then this code could be broken because it assumes we are the only  
+# ones to use this trick.
 function juliadeclaration(name::Symbol)
   quote
     function $name end
+    # we expect just one method because of Dispatch type
+    if isempty(Base.methods(Base.getindex, [typeof($name), Any]))
+      Base.getindex(f::typeof($name), ::$(GlobalRef(TheoryInterface, :Dispatch))) = f
 
-    if Base.isempty(Base.methods(Base.getindex, [typeof($name), Any]))
       function Base.getindex(::typeof($name), m::Any) 
         (args...; context=nothing) -> $name($(GlobalRef(TheoryInterface, :WithModel))(m), args...; context)
       end

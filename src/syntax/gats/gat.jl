@@ -36,6 +36,8 @@ fancier.
   bysignature::Dict{AlgSorts, Ident}
 end
 
+Base.iterate(m::MethodResolver, i...) = iterate(m.bysignature, i...)
+
 function MethodResolver()
   MethodResolver(Dict{AlgSorts, Ident}())
 end
