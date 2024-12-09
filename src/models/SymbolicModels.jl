@@ -8,6 +8,7 @@ using ...Util
 using ...Syntax
 import ...Syntax: invoke_term
 using ..ModelInterface
+using ..ModelInterface: args_from_sorts, default_instance
 
 using Base.Meta: ParseError
 using MLStyle
@@ -262,6 +263,10 @@ macro symbolic_model(decl, theoryname, body)
 
   module_structs = symbolic_structs(theory, abstract_types, __module__)
   
+  # Part 1.5: Generate a model  
+  imp = Expr(:import, Expr(:(:), Expr(:., :., :., name), [
+    Expr(:., x) for x in [name, theoryname, name, nameof.(sorts(theory))...]]...))
+
   # Part 2: Generating internal methods
 
   module_methods = [internal_accessors(theory)..., 
@@ -271,15 +276,20 @@ macro symbolic_model(decl, theoryname, body)
     export $(nameof.(sorts(theory))...)
     using ..($(nameof(__module__)))
     import ..($(nameof(__module__))): $theoryname
+
+    $(module_structs...)
+
+    $(generate_function.(module_methods)...)
+
     module $(esc(:Meta))
-      import ..($(name)): $theoryname
+      $imp
       const $(esc(:theory_module)) = $(esc(theoryname))
       const $(esc(:theory)) = $(theory)
       const $(esc(:theory_type)) = $(esc(theoryname)).Meta.T
+      # Canonical symbolic model
+      $(esc(:M)) = Dispatch($(esc(:theory)), [$(esc.(nameof.(theory.sorts))...)])
     end
 
-    $(module_structs...)
-    $(generate_function.(module_methods)...)
   end)
 
   # Part 3: Generating instance of theory
@@ -731,4 +741,4 @@ function show_latex_script(io::IO, expr::GATExpr, head::String;
   print(io, "}")
 end
 
-end
+end # module

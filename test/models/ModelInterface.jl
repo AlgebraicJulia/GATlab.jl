@@ -56,7 +56,7 @@ end
 @test !implements(FinSetC(), ThNatPlus)
 
 # Todo: get things working where Ob and Hom are the same type (i.e. binding dict not monic)
-struct TypedFinSetC
+@struct_hash_equal struct TypedFinSetC
   ntypes::Int
 end
 
@@ -214,4 +214,19 @@ end
 # this will fail unless WithModel accepts subtypes
 @test ThSet.default[MyVect([1,2,3])](1) == 1
 
+# Test default model + dispatch model
+#####################################
+@test_throws MethodError id(2)
+
+@default_model ThCategory{Int, Vector{Int}} [model::FinSetC]
+
+d = Dispatch(ThCategory.Meta.theory, [Int, Vector{Int}])
+@test implements(d, ThCategory)
+@test !implements(d, ThNatPlus)
+@test impl_type(d, ThCategory, :Ob) == Int 
+@test impl_type(d, ThCategory, :Hom) == Vector{Int} 
+
+@test id(2) == [1,2] == ThCategory.id[d](2)
+@test compose([1,2,3], [2,1,3]) == [2,1,3]
+ 
 end # module
