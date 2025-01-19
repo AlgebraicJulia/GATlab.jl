@@ -1,6 +1,6 @@
 # Models and instances
 
-A *model* is any julia value `m` that satisfies `m :: Model`. A model may *implement* one or more theories; to check if a model `m` is implements a theory `Th`, one can run `implements(m, Th)`, which returns `nothing` if `m` does not implement `Th`, and returns an `ImplementationNotes` struct if `m` does implement `Th`.
+A *model* is any julia value `m` that satisfies `m :: Model`. A model may *implement* one or more theories; to check if a model `m` is implements a theory `Th`, one can run `implements(m, Th)::Bool`, to check if `m` implements all operations in `Th`.
 
 When a model `m` implements `Th`, the following methods should be defined.
 

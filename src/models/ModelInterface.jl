@@ -1,11 +1,11 @@
 
 """
-Any Julia struct can be a model of a GAT. A model is marked as implementing a 
-`seg::GATSegment` iff
+Any Julia struct can be a model of a GAT. A model `m::M` is marked as 
+implementing a theory iff, for all operations f(::A,::B,...), we have:
 
-`implements(m, ::Type{Val{gettag(seg)}}) == true`
+`hasmethod(f, (WithModel{M}, A, B) == true`
 
-and then we expect the following.
+Then we expect the following.
 
 Let `M` be the module corresponding to `seg`.
 
@@ -44,55 +44,100 @@ in the theory.
 """
 module ModelInterface
 
-export implements, impl_type, SignatureMismatchError, 
-       @model, @instance, @withmodel, migrate_model, @default_model,
-       Dispatch
+export implements, impl_type, impl_types,
+       @model, @instance, @withmodel, migrate_model, @default_model
 
 using ...Syntax
 using ...Util.MetaUtils
 using ...Util.MetaUtils: JuliaFunctionSigNoWhere
 
 using ...Syntax.TheoryMaps: dom, codom
-using ...Syntax.TheoryInterface: GAT_MODULE_LOOKUP, Dispatch
-import ...Syntax.TheoryInterface: implements, impl_type 
+using ...Syntax.TheoryInterface: GAT_MODULE_LOOKUP, WithModel
+import ...Syntax.TheoryInterface: implements, impl_type, impl_types
 
 using MLStyle
 using DataStructures: DefaultDict, OrderedDict
 
-
 """
-`ImplementationNotes`
+Check whether a model implements a particular theory.
 
-Information about how a model implements a `GATSegment`. Right now, just the
-docstring attached to the `@instance` macro, but could contain more info in the
-future.
+If no types are provided, then we look up whether or not `impl_type` methods 
+exist for this model + theory. If not, we will get a MethodError and assume 
+that the model does not implement the theory. (WARNING: occasionally one has 
+a complex type, such as `foo(Int,String)` which itself leads to a MethodError, 
+and this can be confusing because it looks like the model doesn't implement
+the theory at all rather than just being an error in how it was implemented).
+
+Once types are provided, we can check whether the theory is implemented by 
+checking for each term constructor whether or not the model implements that
+(handled by a different `implements` method).
 """
-struct ImplementationNotes
-  docs::Union{String, Nothing}
+function implements(m, theory_module::Module, types = nothing)
+  T = theory_module.Meta.theory 
+  try 
+    types = isnothing(types) ? impl_types(m, T) : types
+  catch e
+    e isa MethodError && return false
+    throw(e)
+  end
+    return all(t -> implements(m, theory_module, t, types), last.(termcons(T)))
+end 
+
+""" User-friendly access to checking if a model implements an operation.
+
+Throws an error if the name is overloaded. Anything programmatic should be 
+calling a method which accepts method `Ident`s rather than `Symbol`s.
+"""
+function implements(m::T, theory_mod::Module, name::Symbol, types=nothing) where T
+  isnothing(types) || return _implements(m, theory_mod, name, types)
+  theory = theory_mod.Meta.theory
+  decl = ident(theory; name)
+  args, _ = only(theory.resolvers[decl])
+  return !isempty(methods(getfield(theory_mod, name),
+                          (WithModel{T}, fill(Any, length(args))...)))
 end
 
-"""
-`implements(m::MyModel, tag::ScopeTag) -> Union{ImplementationNotes, Nothing}`
+function _implements(::T, theory::Module, name::Symbol, types::Vector{<:Type}) where T
+  f = getfield(theory, name)
+  any(==(Union{}), types) && return true # no such methods (Julia 1.10 bug)
+  hasmethod(f, Tuple{WithModel{<:T}, types...}, (:context,))
+end
 
-If `m` implements the GATSegment referred to by `tag`, then return the
-corresponding implementation notes.
-"""
-implements(m, ::Type{Val{tag}}) where {tag} = nothing
+""" 
+Machine-friendly access to checking if a model implements a particular
+operation. The `types` vector is in bijection with the AlgSorts of the
+*whole theory*. 
+"""  
+function implements(m, theory::Module, x::Ident, types::Vector{<:Type})
+  tc = getvalue(theory.Meta.theory[x])
+  name = nameof(getdecl(tc))
+  typedict = Dict(zip(sorts(theory.Meta.theory), types))
+  types′ = Type[typedict[AlgSort(getvalue(tc[i]))] for i in tc.args]
+  return _implements(m, theory, name, types′)
+end
 
-implements(m, tag::ScopeTag) = implements(m, Val{tag})
-
-implements(m, theory_module::Module) =
-  all(!isnothing(implements(m, gettag(scope))) for scope in theory_module.Meta.theory.segments.scopes)
 
 """
 If `m` implements a GAT with a type constructor (identified by ident `id`), 
 mapped to a Julia type, this function returns that Julia type.
 """
-impl_type(m, id::Ident) = impl_type(m, Val{gettag(id)}, Val{getlid(id)})
+impl_type(m, x::Ident) = impl_type(m, Val{gettag(x)}, Val{getlid(x)})
 
-impl_type(m, mod::Module, name::Symbol) = 
-  impl_type(m, ident(mod.Meta.theory; name))
+impl_type(m, x::AlgSort) = impl_type(m, methodof(x))
 
+impl_types(m, T::Module) = impl_types(m, T.Meta.theory)
+
+impl_types(m, T::GAT) = map(sorts(T)) do s 
+  t = impl_type(m, s) 
+  t isa Type || error("$s impl_type not a Type: $t")
+  t
+end
+
+""" This can error if called on a symbol that matches a declaration that has more than one method """
+function impl_type(m, mod::Module, name::Symbol) 
+  T = mod.Meta.theory
+  impl_type(m, last(only(T.resolvers[ident(mod.Meta.theory; name)])))
+end 
 
 """
 Usage:
@@ -126,6 +171,7 @@ struct SliceC{ObT, HomT, C}
 end
 
 @instance ThCategory{Tuple{Ob, Hom}, Hom} [model::SliceCat{Ob, Hom, C}] where {Ob, Hom, C}}} begin
+  ...
 end
 ```
 
@@ -163,48 +209,32 @@ function generate_instance(
   model_type::Union{Expr0, Nothing},
   whereparams::AbstractVector,
   body::Expr;
-  typecheck=true,
   escape=true
 )
   # The old (Catlab) style of instance, where there is no explicit model
   oldinstance = isnothing(model_type)
 
   # Parse the body into functions defined here and functions defined elsewhere
-  functions, ext_functions = parse_instance_body(body, theory)
-
-  # Checks that all the functions are defined with the correct types. Adds default
-  # methods for type constructors and type argument accessors if these methods
-  # are missing
-  typechecked_functions = if typecheck
-    typecheck_instance(theory, functions, ext_functions, jltype_by_sort; oldinstance, theory_module)
-  else
-    [functions..., ext_functions...] # skip typechecking
-  end
+  typechecked_functions = parse_instance_body(body, theory)
 
   # Adds keyword arguments to the functions, and qualifies them by
   # `theory_module`, i.e. changes
   # `Ob(x) = blah`
   # to
   # `ThCategory.Ob(m::WithModel{M}, x; context=nothing) = let model = m.model in blah end`
-  qualified_functions =
-    map(fun -> qualify_function(fun, theory_module, model_type, whereparams, 
-                                Set(nameof.(structs(theory)))), 
-        typechecked_functions)
-
-  append!(
-    qualified_functions,
-    make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, 
-                           whereparams, ext_functions)
-  )
-
-  # Declare that this model implements the theory
-
-  implements_declarations = if !isnothing(model_type)
-    map(theory.segments.scopes) do scope
-      implements_declaration(model_type, scope, whereparams)
+  qualified_typecons = []
+  qualified_functions = []
+  for f in typechecked_functions
+    x = ident(theory; name =nameof(f)) 
+    # This could go awry if the same name is used as both a typecon and termcon
+    tc = getvalue(theory[last(first(theory.resolvers[x]))]) 
+    qf = qualify_function(f, theory_module, model_type, whereparams, 
+                          Set(nameof.(structs(theory))))
+    if tc isa AlgTermConstructor 
+      push!(qualified_functions, qf)
+    else 
+      push!(qualified_typecons, qf)
     end
-  else
-    []
   end
 
   impl_type_declarations = if isnothing(model_type) 
@@ -214,12 +244,18 @@ function generate_instance(
       impl_type_declaration(model_type, whereparams, k, v)
     end
   end
+
+  runtime_impl_checks = map(last.(termcons(theory))) do x
+      typecheck_runtime(theory_module, theory, model_type, whereparams, x, jltype_by_sort)
+  end
+
   docsink = gensym(:docsink)
 
   code = Expr(:block,
-    [generate_function(f) for f in qualified_functions]...,
+    generate_function.(qualified_typecons)...,
+    generate_function.(qualified_functions)...,
+    runtime_impl_checks...,
     impl_type_declarations...,
-    implements_declarations...,
     :(function $docsink end),
     :(Core.@__doc__ $docsink)
   )
@@ -252,22 +288,13 @@ Parses the raw julia expression into JuliaFunctions
 function parse_instance_body(expr::Expr, theory::GAT)
   @assert expr.head == :block
   funs = JuliaFunction[]
-  ext_funs = Symbol[]
   for elem in strip_lines(expr).args
     elem = strip_lines(elem)
-    head = elem.head
-    if head == :macrocall && elem.args[1] == Symbol("@import")
-      ext_funs = @match elem.args[2] begin
-        sym::Symbol => [ext_funs; [sym]]
-        Expr(:tuple, args...) => [ext_funs; Symbol[args...]]
-      end
-    else
-      fun = parse_function(elem)
-      fun = setname(fun, nameof(ident(theory; name=fun.name)))
-      push!(funs, fun)
-    end
+    fun = parse_function(elem)
+    fun = setname(fun, nameof(ident(theory; name=fun.name)))
+    push!(funs, fun)
   end
-  return (funs, ext_funs)
+  return funs
 end
 
 function args_from_sorts(sorts::AlgSorts, jltype_by_sort::Dict{AlgSort})
@@ -357,107 +384,6 @@ end
 ExprInterop.toexpr(sig::JuliaFunctionSigNoWhere) = 
   ExprInterop.toexpr(sig |> JuliaFunctionSig)
 
-struct SignatureMismatchError <: Exception
-  name::Symbol
-  sig::Expr0
-  options::Set{Expr0}
-end
-
-Base.showerror(io::IO, e::SignatureMismatchError) =
-  print(io, "signature for ", e.name, ": ", e.sig,
-        " does not match any of [", join(e.options, ", "), "]")
-
-
-"""
-Throw error if missing a term constructor. Provides default instances for type
-constructors and type arguments, which return true or error, respectively.
-"""
-function typecheck_instance(
-  theory::GAT,
-  functions::Vector{JuliaFunction},
-  ext_functions::Vector{Symbol},
-  jltype_by_sort::Dict{AlgSort};
-  oldinstance=false,
-  theory_module=nothing,
-)::Vector{JuliaFunction}
-  typechecked = JuliaFunction[]
-
-  # The overloads that we have to provide
-  undefined_signatures = Dict{JuliaFunctionSigNoWhere, Tuple{Ident, Ident}}()
-
-  overload_errormsg =
-   "the types for this model declaration do not permit Julia overloading to distinguish between GAT overloads"
-  for (decl, resolver) in theory.resolvers
-    for (_, x) in allmethods(resolver)
-      if getvalue(theory[x]) isa AlgStruct 
-        continue 
-      end
-      sig = julia_signature(getvalue(theory[x]), jltype_by_sort; oldinstance, X=x) |> JuliaFunctionSigNoWhere
-      if haskey(undefined_signatures, sig)
-        error(overload_errormsg * ": $x vs $(undefined_signatures[sig])")
-      end
-      undefined_signatures[sig] = (decl, x)
-    end
-  end
-
-  for x in getidents(theory)
-    v = getvalue(theory[x])
-    if v isa AlgFunction 
-      push!(typechecked, mk_fun(v, theory, theory_module, jltype_by_sort))
-    end 
-  end
-
-  expected_signatures = DefaultDict{Ident, Set{Expr0}}(()->Set{Expr0}())
-
-  for (sig, (decl, _)) in undefined_signatures
-    push!(expected_signatures[decl], toexpr(sig))
-  end
-
-  for f in functions
-    sig = parse_function_sig(f) |> JuliaFunctionSigNoWhere
-    if haskey(undefined_signatures, sig)
-      (decl, method) = undefined_signatures[sig]
-
-      judgment = getvalue(theory, method)
-
-      delete!(undefined_signatures, sig)
-
-      push!(typechecked, f)
-    else
-      if hasname(theory, f.name)
-        x = ident(theory; name=f.name)
-        throw(SignatureMismatchError(f.name, toexpr(sig), expected_signatures[x]))
-      else
-        error("no declaration in the theory has name $f.name")
-      end
-      # TODO: allow extra overloads for type constructors to provide additional coercions
-      # try
-      #   x = ident(theory; name=f.name)
-      # catch e
-      #   throw(SignatureMismatchError(f.name, toexpr(sig), expected_signatures[f.name]))
-      # end
-
-      # methods = last.(allmethods(theory.resolvers[x]))
-
-      # if !(any(getvalue(theory[m]) isa AlgTypeConstructor for m in methods))
-      # end
-    end
-  end
-
-  for (sig, (decl, method)) in undefined_signatures
-    nameof(decl) ∈ ext_functions && continue # assume it has been impl'd already
-    judgment = getvalue(theory[method])
-    if judgment isa AlgTermConstructor
-      error("Failed to implement $decl: $(toexpr(sig))")
-    elseif judgment isa AlgTypeConstructor
-      push!(typechecked, default_typecon_impl(method, theory, jltype_by_sort))
-    elseif judgment isa AlgAccessor
-      push!(typechecked, default_accessor_impl(method, theory, jltype_by_sort))
-    end
-  end
-
-  typechecked
-end
 
 function mk_fun(f::AlgFunction, theory, mod, jltype_by_sort)
   name = nameof(f.declaration)
@@ -470,14 +396,18 @@ function mk_fun(f::AlgFunction, theory, mod, jltype_by_sort)
   JuliaFunction(;name=name, args, impl)
 end
 
-function make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, whereparams, ext_functions)
-  lines = []
+"""
+Returns two lists of JuliaFunctions: one for aliases of type constructors, one 
+for aliases of term constructors.
+"""
+function make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, whereparams)
+  typelines, termlines = [], []
   oldinstance = isnothing(model_type)
   for segment in theory.segments.scopes
     for binding in segment
       alias = getvalue(binding)
       name = nameof(binding)
-      if alias isa Alias && name ∉ ext_functions
+      if alias isa Alias
         for (argsorts, method) in allmethods(theory.resolvers[alias.ref])
           args = [(gensym(), jltype_by_sort[sort]) for sort in argsorts]
           args = if oldinstance
@@ -499,12 +429,13 @@ function make_alias_definitions(theory, theory_module, jltype_by_sort, model_typ
             whereparams,
             impl = :($theory_module.$(nameof(alias.ref))($(first.(args)...); kwargs...))
           )
-          push!(lines, overload)
+          is_term = getvalue(theory[method]) isa AlgTermConstructor
+          push!(is_term ? termlines : typelines, overload)
         end
       end
     end
   end
-  lines
+  typelines, termlines
 end
 
 """
@@ -556,27 +487,35 @@ end
 function impl_type_declaration(model_type, whereparams, sort, jltype)
   quote 
     if !hasmethod($(GlobalRef(ModelInterface, :impl_type)), 
-      ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(getdecl(sort)))}}, Type{Val{$(getlid(getdecl(sort)))}}))
+      ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(methodof(sort)))}}, Type{Val{$(getlid(methodof(sort)))}}))
       $(GlobalRef(ModelInterface, :impl_type))(
-          ::$(model_type), ::Type{Val{$(gettag(getdecl(sort)))}}, ::Type{Val{$(getlid(getdecl(sort)))}}
+          ::$(model_type), ::Type{Val{$(gettag(methodof(sort)))}}, ::Type{Val{$(getlid(methodof(sort)))}}
         ) where {$(whereparams...)} = $(jltype)
     end
   end
 end
 
-function implements_declaration(model_type, scope, whereparams)
-  notes = ImplementationNotes(nothing)
-  _, m = methods(implements, (Any, Type{Val{1}})) # first method is for Dispatch
+""" Check if a method exists """
+function typecheck_runtime(theory_name, theory::GAT, model_type, whereparams, x::Ident, jltype)
+  isempty(structs(theory)) || return :() # can't handle EqTypes yet
+  tc = getvalue(theory[x])
+  name = nameof(getdecl(tc))
+  wm = :($(GlobalRef(ModelInterface, :WithModel)){$model_type})
+  jltypes = [jltype[AlgSort(getvalue(i))] for i in argsof(tc)]
+
+  # For default models, nullary constructors are handled funnily
+  isnothing(model_type) && isempty(jltypes) && return :()
+
+  jltypes′ = isnothing(model_type) ? jltypes : [wm, jltypes...]
+  jltypes′′ = map(jltypes) do t 
+    Expr(:where, t, whereparams...)
+  end
   quote
-    if $m == only(methods($(GlobalRef(ModelInterface, :implements)), 
-        ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(scope))}})))
-      $(GlobalRef(ModelInterface, :implements))(
-        ::$(model_type), ::Type{Val{$(gettag(scope))}}
-      ) where {$(whereparams...)} = $notes
-    end
+    any(==(Union{}), [$(jltypes′′...)]) || hasmethod($(theory_name).$(name), Tuple{$(jltypes′...)} where {$(whereparams...)}, (:context,)) || error(
+      "No implementation for $($(theory_name)) $($(theory_name).$(name)) with arg types:\n"*join(string.([$(jltypes′′...)]), "\n")
+    )
   end
 end
-
 
 macro withmodel(model, subsexpr, body)
   modelvar = gensym("model")
@@ -636,7 +575,7 @@ function migrate_model(FM::Module, m::Any, new_model_name::Union{Nothing,Symbol}
 
   # Expressions which evaluate to the correct Julia type
   jltype_by_sort = Dict(map(sorts(dom_theory)) do v
-    v => :(impl_type($m, getdecl(AlgSort($F($v.method).val))))
+    v => :(impl_type($m, AlgSort($F($v.method).val)))
   end)
 
   _x = gensym("val")
@@ -713,7 +652,7 @@ function migrate_model(FM::Module, m::Any, new_model_name::Union{Nothing,Symbol}
                                      termcon_funs..., 
                                      accessor_funs...
                                      ])...);
-    typecheck=true, escape=false
+    escape=false
   )
 
   eval(quote 
@@ -784,7 +723,7 @@ function default_instance(theorymodule, theory, jltype_by_sort, model)
   end
   generate_instance(
     theory, theorymodule, jltype_by_sort, model, [], 
-    Expr(:block, termcon_funs...); typecheck=true, escape=true)
+    Expr(:block, termcon_funs...); escape=true)
 end
 
 """
@@ -805,7 +744,7 @@ function default_model(theorymodule, theory, jltype_by_sort, model)
   end
   generate_instance(
     theory, theorymodule, jltype_by_sort, nothing, [], 
-    Expr(:block, termcon_funs...); typecheck=true, escape=true)
+    Expr(:block, termcon_funs...);  escape=true)
 end
 
 macro default_model(head, model)
@@ -859,21 +798,5 @@ function use_dispatch_method_impl(x::Ident, theory::GAT,
   JuliaFunction(name=name, args=args, return_type=return_type, impl=impl)
 end
 
-# Special model for any theory which uses dispatch
-##################################################
-
-"""
-Check whether a dispatch model implements a particular scope of a theory.
-This could be more rigorous, like actually checking whether certain methods 
-exist, but for now users will be assuming that the dispatch methods exist when
-using a Dispatch model.
-"""
-function implements(d::Dispatch, ::T) where {X,T <: Type{Val{X}}}
-  hastag(d.t, X) ? true : nothing
-end
-
-function impl_type(d::Dispatch, x::Ident)
-  d.types[AlgSort(x, only(d.t.resolvers[x])[2])]
-end
 
 end # module

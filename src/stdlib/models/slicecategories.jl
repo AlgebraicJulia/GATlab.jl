@@ -13,10 +13,13 @@ end
   cat::C
   over::ObT
   function SliceC(cat::C, over) where C
-    implements(cat, ThCategory) || error("Bad cat $cat")
-    obtype = impl_type(cat, ThCategory, :Ob)
-    homtype = impl_type(cat, ThCategory, :Hom)
-    new{obtype, homtype, C}(cat, ThCategory.Ob[cat](over))
+    types = try 
+      impl_types(cat, ThCategory)
+    catch e 
+      throw(e)
+    end
+    implements(cat, ThCategory, types) || error("Bad cat $cat")
+    new{types..., C}(cat, ThCategory.Ob[cat](over))
   end
 end
 

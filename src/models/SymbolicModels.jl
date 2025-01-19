@@ -287,20 +287,19 @@ macro symbolic_model(decl, theoryname, body)
       const $(esc(:theory)) = $(theory)
       const $(esc(:theory_type)) = $(esc(theoryname)).Meta.T
       # Canonical symbolic model
-      $(esc(:M)) = Dispatch($(esc(:theory)), [$(esc.(nameof.(theory.sorts))...)])
+      $(esc(:M)) = $(GlobalRef(TheoryInterface, :Dispatch))($(esc(:theory)), 
+                     [$(esc.(nameof.(theory.sorts))...)])
     end
-
   end)
 
   # Part 3: Generating instance of theory
   theory_overloads = symbolic_instance_methods(theory, theoryname, name, overrides)
 
-  alias_overloads = ModelInterface.make_alias_definitions(
+  typealiases, termaliases = ModelInterface.make_alias_definitions(
     theory,
     theoryname,
     Dict(sort => :($name.$(nameof(sort))) for sort in sorts(theory)),
     nothing,
-    [],
     []
   )
 
@@ -308,7 +307,7 @@ macro symbolic_model(decl, theoryname, body)
     :toplevel,
     module_decl,
     :(Core.@__doc__ $(esc(name))),
-    esc.(generate_function.([theory_overloads; alias_overloads]))...,
+    esc.(generate_function.([theory_overloads; typealiases; termaliases]))...,
   )
 end
 
@@ -457,7 +456,7 @@ function symbolic_generator(theorymodule, syntaxname, X::Ident, typecon::AlgType
   value_param = gensym(:value)
   name = nameof(getdecl(typecon))
   args = [
-    Expr(:(::), value_param, Any);
+    Expr(:(::), value_param, :Any);
     [Expr(:(::), nameof(binding), typename(theory, getvalue(binding); parentmod=syntaxname))
      for binding in argsof(typecon)]
   ]

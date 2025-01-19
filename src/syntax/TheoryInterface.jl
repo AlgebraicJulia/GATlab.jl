@@ -24,7 +24,7 @@ A struct called `Meta.Wrapper` which is a smart constructor for Julia types
 which implement the theory.
 """
 module TheoryInterface
-export @theory, @signature, invoke_term, wrapper, ModelWrapper
+export @theory, @signature, @model_method, invoke_term, wrapper, ModelWrapper, WithModel
 
 using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
 
@@ -40,6 +40,8 @@ getvalue(m::WithModel) = m.model
 function implements end # implemented in ModelInterface
 
 function impl_type end # implemented in ModelInterface
+
+function impl_types end # implemented in ModelInterface
 
 """ Parse markdown coming out of @doc programatically. """
 mdp(::Nothing) = ""
@@ -154,7 +156,7 @@ function theory_impl(head, body, __module__)
 
   push!(
     modulelines,
-    Expr(:using,
+    Expr(:import,
       Expr(:(:),
         Expr(:(.), :(.), :(.), nameof(__module__)),
         Expr.(Ref(:(.)), newnames)...
@@ -183,7 +185,6 @@ function theory_impl(head, body, __module__)
   # XXX
   push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
-
   esc(
     Expr(
       :toplevel,
@@ -194,6 +195,7 @@ function theory_impl(head, body, __module__)
         module $name
         $(structlines...)
         $(modulelines...)
+        $(make_alias_definitions(name, theory)...)
         end
       ),
       :(@doc ($(Markdown.MD)($mdp(@doc $doctarget), $docstr)) $name)
@@ -202,28 +204,55 @@ function theory_impl(head, body, __module__)
 end
 
 """
-The Dispatch type is a model of every theory.
+The Dispatch model defers to type-dispatch: f[Dispatch](a,b,c) == f(a,b,c)
 """
-@struct_hash_equal struct Dispatch 
-  t::GAT
-  types::Dict{AlgSort,Type}
+@struct_hash_equal struct Dispatch
+  jltypes::Dict{AlgSort, Type}
 end
 
-Dispatch(t::GAT, v::AbstractVector{<:Type}) = 
-  Dispatch(t, Dict(zip(sorts(t), v)))
+Dispatch(theory_module::Module, types::AbstractVector{<:Type}) = 
+  Dispatch(theory_module.Meta.theory, types)
+
+function Dispatch(theory_module::GAT, types::AbstractVector{<:Type}) 
+  s = sorts(theory_module)
+  length(s) == length(types) || error("Bad length of type vector")
+  Dispatch(Dict(zip(s, types)))
+end
+
+"""
+The Initial model assigns `Union{}` to all AlgSorts. There is one implementation
+for any given theory.
+"""
+@struct_hash_equal struct InitialModel′ end
+
+"""
+The Terminal model assigns `Nothing` to all AlgSorts. There is one 
+implementation for any given theory.
+"""
+@struct_hash_equal struct TerminalModel′ end
+ 
+
+# Register methods for getindex even if not part of any theory
+macro model_method(name) esc(juliadeclaration(name))
+end
 
 # WARNING: if any other package play with indexing methodnames with their own 
 # structs, then this code could be broken because it assumes we are the only  
 # ones to use this trick.
 function juliadeclaration(name::Symbol)
+  funname = gensym(name)
   quote
     function $name end
     # we expect just one method because of Dispatch type
     if isempty(Base.methods(Base.getindex, [typeof($name), Any]))
       Base.getindex(f::typeof($name), ::$(GlobalRef(TheoryInterface, :Dispatch))) = f
+      Base.getindex(f::typeof($name), ::$(GlobalRef(TheoryInterface, :InitialModel′))) = (x...;kw...)->error("Cannot call")
+      Base.getindex(f::typeof($name), ::$(GlobalRef(TheoryInterface, :TerminalModel′))) = (x...;kw...)->nothing
 
-      function Base.getindex(::typeof($name), m::Any) 
-        (args...; context=nothing) -> $name($(GlobalRef(TheoryInterface, :WithModel))(m), args...; context)
+      function Base.getindex(::typeof($name), m::Any)
+        function $funname(args...; context=nothing) 
+          $name($(GlobalRef(TheoryInterface, :WithModel))(m), args...; context)
+        end
       end
     end
   end
@@ -287,6 +316,11 @@ function wrapper(name::Symbol, t::GAT, mod)
 
     macro wrapper(n, abs)
       doctarget = gensym()
+      Ts = ($(sorts)($t))
+      Xs = map(Ts) do s 
+        :($(GlobalRef($(TheoryInterface), :impl_type))(x, $s))
+      end
+
       esc(quote 
         # Catch any potential docs above the macro call
         const $(doctarget) = nothing
@@ -296,8 +330,8 @@ function wrapper(name::Symbol, t::GAT, mod)
         struct $n <: $abs
           val::Any
           function $n(x::Any)
-            $($(GlobalRef(TheoryInterface, :implements)))(x, $($name)) || error(
-              "Invalid $($($(name))) model: $x")
+            try $($(GlobalRef(TheoryInterface, :implements)))(x, $($name), [$(Xs...)]) 
+            catch MethodError false end || error("Invalid $($($(name))) model: $x")
             new(x)
           end
         end
@@ -341,16 +375,14 @@ function wrapper(name::Symbol, t::GAT, mod)
         struct $n{$(Ts...)} <: $abs
           val::Any
           function $n{$(Ts...)}(x::Any) where {$(Ts...)}
-            $($(GlobalRef(TheoryInterface, :implements)))(x, $($name)) || error(
-              "Invalid $($($(name))) model: $x")
+            $($(GlobalRef(TheoryInterface, :implements)))(x, $($name), [$(Xs...)]) || error("Invalid $($($(name))) model: $x")
             $(XTs...)
-            # CHECK THAT THE GIVEN PARAMETERS MATCH Xs
+            # TODO? CHECK THAT THE GIVEN PARAMETERS MATCH Xs?
             new{$(Ts...)}(x)
           end
 
-          function $n(x::Any)
-            $($(GlobalRef(TheoryInterface, :implements)))(x, $($name)) || error(
-              "Invalid $($($(name))) model: $x")
+          function $n(x::Any) 
+            $($(GlobalRef(TheoryInterface, :implements)))(x, $($name), [$(Xs...)]) || error("Invalid $($($(name))) model: $x")
             new{$(Xs...)}(x)
           end
         end
@@ -380,5 +412,42 @@ end
 
 parse_wrapper_input(n::Symbol) = n, Any
 parse_wrapper_input(n::Expr) = n.head == :<: ? n.args : error("Bad input for wrapper")
+
+
+"""
+Automatically add statements like 
+
+```
+ThCategory.→(m::WithModel, xs...; kw...) = 
+  ThCategory.Hom(m, xs...; kw...)
+```
+"""
+function make_alias_definitions(theory_module, theory)
+  lines = []
+  for segment in theory.segments.scopes
+    for binding in segment
+      alias = getvalue(binding)
+      name = nameof(binding)
+      if alias isa Alias
+        args = [Expr(:(::), :m, Expr(:., TheoryInterface, QuoteNode(:WithModel))),
+                Expr(:(...), :args)]
+        overload = JuliaFunction(;
+          name = :($theory_module.$name),
+          args,
+          kwargs = [Expr(:(...), :kwargs)],
+          whereparams = [],
+          impl = :($(nameof(alias.ref))(m, args...; kwargs...))
+        )
+        push!(lines, quote 
+          if !hasmethod($theory_module.$name, ($(GlobalRef(TheoryInterface, :WithModel)),))
+            $(generate_function(overload))
+          end
+      end)
+      end
+    end
+  end
+  lines
+end
+
 
 end # module

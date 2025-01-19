@@ -17,9 +17,8 @@ using StructEquality
 @struct_hash_equal struct OpC{ObT, HomT, C}
   cat::C 
   function OpC(c::C) where C 
-    obtype = impl_type(c, ThCategory, :Ob)
-    homtype = impl_type(c, ThCategory, :Hom)
-    implements(c, ThCategory) ? new{obtype, homtype, C}(c) : error("bad")
+    types = impl_types(c, ThCategory)
+    implements(c, ThCategory, types) ? new{types..., C}(c) : error("bad")
   end
 end
 
