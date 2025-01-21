@@ -193,9 +193,8 @@ function theory_impl(head, body, __module__)
       :(Core.@__doc__ $(doctarget)),
       :(
         module $name
-        $(structlines...)
-        $(modulelines...)
-        $(make_alias_definitions(name, theory)...)
+          $(structlines...)
+          $(modulelines...)
         end
       ),
       :(@doc ($(Markdown.MD)($mdp(@doc $doctarget), $docstr)) $name)
@@ -412,42 +411,6 @@ end
 
 parse_wrapper_input(n::Symbol) = n, Any
 parse_wrapper_input(n::Expr) = n.head == :<: ? n.args : error("Bad input for wrapper")
-
-
-"""
-Automatically add statements like 
-
-```
-ThCategory.→(m::WithModel, xs...; kw...) = 
-  ThCategory.Hom(m, xs...; kw...)
-```
-"""
-function make_alias_definitions(theory_module, theory)
-  lines = []
-  for segment in theory.segments.scopes
-    for binding in segment
-      alias = getvalue(binding)
-      name = nameof(binding)
-      if alias isa Alias
-        args = [Expr(:(::), :m, Expr(:., TheoryInterface, QuoteNode(:WithModel))),
-                Expr(:(...), :args)]
-        overload = JuliaFunction(;
-          name = :($theory_module.$name),
-          args,
-          kwargs = [Expr(:(...), :kwargs)],
-          whereparams = [],
-          impl = :($(nameof(alias.ref))(m, args...; kwargs...))
-        )
-        push!(lines, quote 
-          if !hasmethod($theory_module.$name, ($(GlobalRef(TheoryInterface, :WithModel)),))
-            $(generate_function(overload))
-          end
-      end)
-      end
-    end
-  end
-  lines
-end
 
 
 end # module

@@ -216,7 +216,7 @@ function generate_instance(
 
   # Parse the body into functions defined here and functions defined elsewhere
   typechecked_functions = parse_instance_body(body, theory)
-
+  methodnames = Vector{Symbol}(nameof.(typechecked_functions))
   # Adds keyword arguments to the functions, and qualifies them by
   # `theory_module`, i.e. changes
   # `Ob(x) = blah`
@@ -237,6 +237,9 @@ function generate_instance(
     end
   end
 
+  type_aliases, term_aliases = make_alias_definitions(
+      theory, theory_module, jltype_by_sort, model_type, whereparams, methodnames)
+
   impl_type_declarations = if isnothing(model_type) 
     Expr[]
   else 
@@ -254,6 +257,8 @@ function generate_instance(
   code = Expr(:block,
     generate_function.(qualified_typecons)...,
     generate_function.(qualified_functions)...,
+    generate_function.(type_aliases)...,
+    generate_function.(term_aliases)...,
     runtime_impl_checks...,
     impl_type_declarations...,
     :(function $docsink end),
@@ -399,15 +404,19 @@ end
 """
 Returns two lists of JuliaFunctions: one for aliases of type constructors, one 
 for aliases of term constructors.
+
+Optional `methodnames` argument restricts aliases to only being generated if the 
+name they are an alias for is included in this list.
 """
-function make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, whereparams)
+function make_alias_definitions(theory, theory_module, jltype_by_sort, model_type, 
+                                whereparams, methodnames=nothing)
   typelines, termlines = [], []
   oldinstance = isnothing(model_type)
   for segment in theory.segments.scopes
     for binding in segment
       alias = getvalue(binding)
       name = nameof(binding)
-      if alias isa Alias
+      if alias isa Alias && (isnothing(methodnames) || nameof(alias.ref) ∈ methodnames)
         for (argsorts, method) in allmethods(theory.resolvers[alias.ref])
           args = [(gensym(), jltype_by_sort[sort]) for sort in argsorts]
           args = if oldinstance
