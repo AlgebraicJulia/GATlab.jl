@@ -290,16 +290,12 @@ function parseconstructor!(theory::GAT, localcontext, type_expr, e)
   end
   args = parseargs!(theory, arglist, localcontext)
   @match type_expr begin
-    :TYPE => begin
-      decl = hasname!(theory, name)
-      typecon = AlgTypeConstructor(decl, localcontext, args)
-      X = Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, typecon))
-      for (i, arg) in enumerate(argsof(typecon))
-        argname = nameof(arg)
-        argdecl = hasname!(theory, argname)
-        Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, AlgAccessor(argdecl, decl, X, i)))
-      end
+    Expr(:curly, :TYPE, Ty) => begin 
+      new_typecon(theory, name, localcontext, args)
+      res = last(only(values(theory.resolvers[ident(theory; name)])))      
+      theory.fixed_types[AlgSort(getdecl(getvalue(theory[res])), res)] = Ty
     end
+    :TYPE => new_typecon(theory, name, localcontext, args)
     _ => begin
       c = GATContext(theory, localcontext)
       type = @match type_expr begin 
@@ -311,6 +307,18 @@ function parseconstructor!(theory::GAT, localcontext, type_expr, e)
       m = Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, termcon))
     end
   end
+end
+
+function new_typecon(theory, name, localcontext, args)
+  decl = hasname!(theory, name)
+  typecon = AlgTypeConstructor(decl, localcontext, args)
+  X = Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, typecon))
+  for (i, arg) in enumerate(argsof(typecon))
+    argname = nameof(arg)
+    argdecl = hasname!(theory, argname)
+    Scopes.unsafe_pushbinding!(theory, Binding{Judgment}(nothing, AlgAccessor(argdecl, decl, X, i)))
+  end
+
 end
 
 """

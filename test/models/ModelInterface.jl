@@ -329,4 +329,26 @@ end
 id[Foo()](:x) == 2
 id[Foo()]("x") == 3
 
+
+# Fixed Type parameters
+#######################
+
+@theory ThTestInt begin
+  Ob2::TYPE
+  X::TYPE{Tuple{Int,Int}}
+  Hom2(dom2::Ob2,codom2::Ob2)::TYPE
+  id2(x::Ob2)::Hom2(x,x)
+  copy(x::Ob2)::X
+  swap(x::X)::X
+end
+
+@instance ThTestInt{Int,Vector{Int}} [model::Nothing] begin 
+  swap(t::Tuple{Int,Int}) = (t[2],t[1])
+  id2(i::Int) = collect(1:i)
+  copy(i::Int) = (i, i)
+end
+
+@test swap[nothing]((1,2)) == (2,1)
+@test copy[nothing](1) == (1,1)
+
 end # module

@@ -106,6 +106,7 @@ struct GAT <: HasScopeList{Judgment}
   sorts::Vector{AlgSort}
   accessors::OrderedDict{Ident, Dict{Int, Ident}}
   axioms::Vector{Ident}
+  fixed_types::Dict{AlgSort, Union{Expr, Symbol}}
 end
 
 function Base.copy(theory::GAT; name=theory.name)
@@ -116,6 +117,7 @@ function Base.copy(theory::GAT; name=theory.name)
     copy(theory.sorts),
     deepcopy(theory.accessors),
     copy(theory.axioms),
+    deepcopy(theory.fixed_types)
   )
 end
 
@@ -127,6 +129,7 @@ function GAT(name::Symbol)
     AlgSort[],
     OrderedDict{Ident, Dict{Int, Ident}}(),
     Ident[],
+    Dict{Symbol,Type}()
   )
 end
 
@@ -143,7 +146,9 @@ Base.isempty(T::GAT) = T.name == :_EMPTY
 # end
 
 function rename(tag::ScopeTag, renames::Dict{Symbol,Symbol}, gat::GAT)
-  GAT(gat.name, rename(tag, renames, gat.segments), rename(tag, renames, gat.resolvers), rename(tag, renames, gat.sorts), gat.accessors, gat.axioms) 
+  GAT(gat.name, rename(tag, renames, gat.segments), 
+      rename(tag, renames, gat.resolvers), rename(tag, renames, gat.sorts), 
+      gat.accessors, gat.axioms, gat.fixed_types) # rename fixed_types?
 end
 
 function reident(reps::Dict{Ident}, gat::GAT)
@@ -152,7 +157,8 @@ function reident(reps::Dict{Ident}, gat::GAT)
       reident(reps, gat.resolvers),
       reident.(Ref(reps), gat.sorts),
       reident(reps, gat.accessors),
-      reident.(Ref(reps), gat.axioms))
+      reident.(Ref(reps), gat.axioms),
+      gat.fixed_types) # reident keys?
 end
 
 function rename(tag::ScopeTag, renames::Dict{Symbol, Symbol}, resolvers::OrderedDict{Ident, MethodResolver})
@@ -305,8 +311,10 @@ function allnames(theory::GAT; aliases=false)
 end
 
 sorts(theory::GAT) = theory.sorts
-primitive_sorts(theory::GAT) = 
-  filter(s->getvalue(theory[methodof(s)]) isa AlgTypeConstructor, sorts(theory))
+primitive_sorts(theory::GAT) = filter(sorts(theory)) do s
+  haskey(theory.fixed_types, s) && return false
+  getvalue(theory[methodof(s)]) isa AlgTypeConstructor
+end
 
 # NOTE: AlgStruct is the only derived sort this returns.
 struct_sorts(theory::GAT) = 

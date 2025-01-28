@@ -193,6 +193,7 @@ macro instance(head, model, body)
       end
     end
     :($ThX{$(Ts...)}) =>  (ThX, Ts) 
+    (ThX::Symbol) =>  (ThX, Expr[]) 
     _ => error("invalid syntax for head of @instance macro: $head")
   end
 
@@ -205,7 +206,8 @@ macro instance(head, model, body)
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
   jltype_by_sort = Dict{AlgSort,Expr0}([
     zip(primitive_sorts(theory), instance_types)..., 
-    [s => nameof(headof(s)) for s in struct_sorts(theory)]...
+    [s => nameof(headof(s)) for s in struct_sorts(theory)]...,
+    collect(theory.fixed_types)...
   ]) 
 
   # Get the model type that we are overloading for, or nothing if this is the
