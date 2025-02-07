@@ -21,8 +21,8 @@ f = FreeCategory.Hom{:generator}([:f], [x, y])
 
 M = FreeCategory.Meta.M
 @test M isa Dispatch
-@test implements(M, ThCategory)
-@test !implements(M, ThNatPlus)
+@test implements(M, ThCategory, [FreeCategory.Ob, FreeCategory.Hom])
+@test !implements(M, ThNatPlus, [FreeCategory.Ob, FreeCategory.Hom])
 @test impl_type(M, ThCategory, :Ob) == FreeCategory.Ob
 @test impl_type(M, ThCategory, :Hom) == FreeCategory.Hom
 @test ThCategory.id[M](x) isa HomExpr{:id}
@@ -398,4 +398,4 @@ zAB,zBC,zAC = zeromap(A,B),zeromap(B,C),zeromap(A,C)
 @test zAC == compose(f,zBC) == compose(zAB,g)
 @test compose(f,zBC,h) == zeromap(A,D)
 
-end
+end # module

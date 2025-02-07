@@ -36,11 +36,17 @@ const Expr0 = Union{Symbol,Expr}
   end
 end
 
+Base.nameof(f::JuliaFunction) = f.name
+
 setimpl(f::JuliaFunction, impl) =
   JuliaFunction(f.name, f.args, f.kwargs, f.whereparams, f.return_type, impl, f.doc)
 
 setname(f::JuliaFunction, name) =
   JuliaFunction(name, f.args, f.kwargs, f.whereparams, f.return_type, f.impl, f.doc)
+
+has_empty_arg_type(fun::JuliaFunction) = any(parse_function_sig(fun).types) do x 
+  x == :(Union{})
+end
 
 @struct_hash_equal struct JuliaFunctionSig
   name::Expr0
@@ -60,6 +66,8 @@ JuliaFunctionSigNoWhere(f::JuliaFunctionSig) =
   JuliaFunctionSigNoWhere(f.name, f.types)
 
 JuliaFunctionSig(f::JuliaFunctionSigNoWhere) = JuliaFunctionSig(f.name, f.types)
+
+
 
 # Parsing Julia functions
 #########################
@@ -141,6 +149,7 @@ end
 """ Generate Julia expression for function definition.
 """
 function generate_function(fun::JuliaFunction; rename=n->n)::Expr
+  has_empty_arg_type(fun) && return :() # workaround for Julia bug
   kwargsblock = if !isempty(fun.kwargs)
     [Expr(:parameters, fun.kwargs...)]
   else
@@ -168,6 +177,33 @@ function generate_function(fun::JuliaFunction; rename=n->n)::Expr
   expr = Expr(:function, head, body)
   generate_docstring(expr, fun.doc)
 end
+
+# """ 
+# Wrap a function definition in an `if` statement which checks if the method has already been implemented. If `err` is true, throw an error in this case.
+# """
+# function wrap_fn_def(fun::JuliaFunction, whereparams; err=false)
+#   res = generate_function(fun)
+#   args = map(fun.args) do a 
+#     @match a begin 
+#       Expr(:(::), _, y) => y  
+#       Expr(:(::), y) => y
+#       _ => error("Bad $a")
+#     end
+#   end
+#   e = if err 
+#     :(error("Method conflict: $($(fun.name)) w/ args $($(fun).args)...) "))
+#   else 
+#     :()#:(println("Already implemented $($(fun.name)) + $($(args)...)")) 
+#   end
+#   tup = Expr(:where, Expr(:curly, :Tuple, args...), whereparams...)
+#   quote 
+#     if !hasmethod($(fun.name), $tup)
+#       $res
+#     else 
+#       $e
+#     end
+#   end
+# end
 
 # Operations on Julia expressions
 #################################
