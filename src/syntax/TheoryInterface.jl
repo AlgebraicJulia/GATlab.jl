@@ -1,13 +1,3 @@
-module TheoryInterface
-export @theory, @signature, invoke_term
-
-using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
-
-using MLStyle, StructEquality, Markdown
-
-@struct_hash_equal struct WithModel{M}
-  model::M
-end
 
 """
 Each theory corresponds to a module, which has the following items.
@@ -29,7 +19,35 @@ For all aliases, `const` declarations that make them equal to their primaries.
 A macro called `@theory` which expands to the `GAT` data structure for the module.
 
 A constant called `Meta.theory` which is the `GAT` data structure.
+
+A struct called `Meta.Wrapper` which is a smart constructor for Julia types 
+which implement the theory.
 """
+module TheoryInterface
+export @theory, @signature, invoke_term, wrapper, ModelWrapper
+
+using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
+
+using MLStyle, StructEquality, Markdown
+import AlgebraicInterfaces: getvalue
+
+@struct_hash_equal struct WithModel{M}
+  model::M
+end
+
+getvalue(m::WithModel) = m.model
+
+function implements end # implemented in ModelInterface
+
+function impl_type end # implemented in ModelInterface
+
+""" Parse markdown coming out of @doc programatically. """
+mdp(::Nothing) = ""
+mdp(x::Markdown.MD) = x
+function mdp(x::Base.Docs.DocStr)
+  Markdown.parse(only(x.text))
+end
+
 
 # TODO is every contribution to a theory a new segment, or can a new theory introduce multiple segments? 
 """
@@ -150,10 +168,7 @@ function theory_impl(head, body, __module__)
   end
   
   doctarget = gensym()
-  mdp(::Nothing) = []
-  mdp(x::Markdown.MD) = x
-  mdp(x::Base.Docs.DocStr) = Markdown.parse(x.text...)
-
+  wrapper_expr = wrapper(name, theory, fqmn(__module__))
   push!(modulelines, Expr(:toplevel, :(module Meta
     struct T end
    
@@ -161,6 +176,8 @@ function theory_impl(head, body, __module__)
 
     macro theory() $theory end
     macro theory_module() parentmodule(@__MODULE__) end
+
+    $wrapper_expr
   end)))
 
   # XXX
@@ -175,8 +192,8 @@ function theory_impl(head, body, __module__)
       :(Core.@__doc__ $(doctarget)),
       :(
         module $name
-        $(modulelines...)
         $(structlines...)
+        $(modulelines...)
         end
       ),
       :(@doc ($(Markdown.MD)($mdp(@doc $doctarget), $docstr)) $name)
@@ -184,11 +201,27 @@ function theory_impl(head, body, __module__)
   )
 end
 
+"""
+The Dispatch type is a model of every theory.
+"""
+@struct_hash_equal struct Dispatch 
+  t::GAT
+  types::Dict{AlgSort,Type}
+end
+
+Dispatch(t::GAT, v::AbstractVector{<:Type}) = 
+  Dispatch(t, Dict(zip(sorts(t), v)))
+
+# WARNING: if any other package play with indexing methodnames with their own 
+# structs, then this code could be broken because it assumes we are the only  
+# ones to use this trick.
 function juliadeclaration(name::Symbol)
   quote
     function $name end
+    # we expect just one method because of Dispatch type
+    if isempty(Base.methods(Base.getindex, [typeof($name), Any]))
+      Base.getindex(f::typeof($name), ::$(GlobalRef(TheoryInterface, :Dispatch))) = f
 
-    if Base.isempty(Base.methods(Base.getindex, [typeof($name), Any]))
       function Base.getindex(::typeof($name), m::Any) 
         (args...; context=nothing) -> $name($(GlobalRef(TheoryInterface, :WithModel))(m), args...; context)
       end
@@ -234,4 +267,118 @@ function mk_struct(s::AlgStruct, mod)
   end
 end
 
+# Wrapper type 
+##############
+
+
+function wrapper(name::Symbol, t::GAT, mod)
+  use = Expr(:using, Expr(:., :., :., name))
+  quote
+    $use
+    macro wrapper(n)
+      x, y = $(parse_wrapper_input)(n)
+      esc(:($($(name)).Meta.@wrapper $x $y))
+    end
+
+    macro typed_wrapper(n)
+      x, y = $(parse_wrapper_input)(n)
+      esc(:($($(name)).Meta.@typed_wrapper $x $y))
+    end
+
+    macro wrapper(n, abs)
+      doctarget = gensym()
+      esc(quote 
+        # Catch any potential docs above the macro call
+        const $(doctarget) = nothing
+        Core.@__doc__ $(doctarget)
+
+        # Declare the wrapper struct
+        struct $n <: $abs
+          val::Any
+          function $n(x::Any)
+            $($(GlobalRef(TheoryInterface, :implements)))(x, $($name)) || error(
+              "Invalid $($($(name))) model: $x")
+            new(x)
+          end
+        end
+        # Apply the caught documentation to the new struct
+        @doc $($(mdp))(@doc $doctarget) $n
+
+        # Define == and hash
+        $(Expr(:macrocall, $(GlobalRef(StructEquality, Symbol("@struct_hash_equal"))), $(mod), $(:n)))
+
+        # GlobalRef doesn't work: "invalid function name".
+        GATlab.getvalue(x::$n) = x.val 
+        GATlab.impl_type(x::$n, o::Symbol) = GATlab.impl_type(x.val, $($name), o)
+
+        # Dispatch on model value for all declarations in theory
+        $(map(filter(x->x[2] isa $AlgDeclaration, $(identvalues(t)))) do (x,j)
+          if j isa $(AlgDeclaration) 
+            op = nameof(x)
+            :($($(name)).$op(x::$(($(:n))), args...; kw...) = 
+              $($(name)).$op[x.val](args...; kw...))
+          end
+      end...)
+      nothing
+      end)
+    end
+
+    macro typed_wrapper(n, abs)
+      doctarget = gensym()
+      Ts = nameof.($(sorts)($t))
+      Xs = map(Ts) do s 
+        :($(GlobalRef($(TheoryInterface), :impl_type))(x, $($(name)), $($(Meta.quot)(s))))
+      end
+      XTs = map(zip(Ts,Xs)) do (T,X)
+        :($X <: $T || error("Mismatch $($($(Meta.quot)(T))): $($X) ⊄ $($T)"))
+      end
+      esc(quote 
+        # Catch any potential docs above the macro call
+        const $(doctarget) = nothing
+        Core.@__doc__ $(doctarget)
+
+        # Declare the wrapper struct
+        struct $n{$(Ts...)} <: $abs
+          val::Any
+          function $n{$(Ts...)}(x::Any) where {$(Ts...)}
+            $($(GlobalRef(TheoryInterface, :implements)))(x, $($name)) || error(
+              "Invalid $($($(name))) model: $x")
+            $(XTs...)
+            # CHECK THAT THE GIVEN PARAMETERS MATCH Xs
+            new{$(Ts...)}(x)
+          end
+
+          function $n(x::Any)
+            $($(GlobalRef(TheoryInterface, :implements)))(x, $($name)) || error(
+              "Invalid $($($(name))) model: $x")
+            new{$(Xs...)}(x)
+          end
+        end
+        # Apply the caught documentation to the new struct
+        @doc $($(mdp))(@doc $doctarget) $n
+
+        # Define == and hash
+        $(Expr(:macrocall, $(GlobalRef(StructEquality, Symbol("@struct_hash_equal"))), $(mod), $(:n)))
+
+        # GlobalRef doesn't work: "invalid function name".
+        GATlab.getvalue(x::$n) = x.val 
+        GATlab.impl_type(x::$n, o::Symbol) = GATlab.impl_type(x.val, $($name), o)
+
+        # Dispatch on model value for all declarations in theory
+        $(map(filter(x->x[2] isa $AlgDeclaration, $(identvalues(t)))) do (x,j)
+          if j isa $(AlgDeclaration) 
+            op = nameof(x)
+            :($($(name)).$op(x::$(($(:n))), args...; kw...) = 
+              $($(name)).$op[x.val](args...; kw...))
+          end
+      end...)
+      nothing
+      end)
+    end
+  end
 end
+
+parse_wrapper_input(n::Symbol) = n, Any
+parse_wrapper_input(n::Expr) = n.head == :<: ? n.args : error("Bad input for wrapper")
+
+end # module

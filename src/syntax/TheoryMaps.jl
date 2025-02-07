@@ -418,7 +418,4 @@ macro theorymap(head, body)
   )
 end
 
-function migrator end
-
-
 end # module

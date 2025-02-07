@@ -56,7 +56,7 @@ end
 @test !implements(FinSetC(), ThNatPlus)
 
 # Todo: get things working where Ob and Hom are the same type (i.e. binding dict not monic)
-struct TypedFinSetC
+@struct_hash_equal struct TypedFinSetC
   ntypes::Int
 end
 
@@ -213,5 +213,63 @@ end
 
 # this will fail unless WithModel accepts subtypes
 @test ThSet.default[MyVect([1,2,3])](1) == 1
+
+# Test default model + dispatch model
+#####################################
+@test_throws MethodError id(2)
+
+@default_model ThCategory{Int, Vector{Int}} [model::FinSetC]
+
+d = Dispatch(ThCategory.Meta.theory, [Int, Vector{Int}])
+@test implements(d, ThCategory)
+@test !implements(d, ThNatPlus)
+@test impl_type(d, ThCategory, :Ob) == Int 
+@test impl_type(d, ThCategory, :Hom) == Vector{Int} 
+
+@test id(2) == [1,2] == ThCategory.id[d](2)
+@test compose([1,2,3], [2,1,3]) == [2,1,3]
+ 
+# Test wrapper structs
+######################
+"""Cat"""
+ThCategory.Meta.@wrapper Cat
+
+c = Cat(FinSetC());
+c2 = Cat(FinMatC{Int}());
+@test_throws ErrorException Cat(MyVect([1,2,3])) # can't construct
+
+@test getvalue(c) == FinSetC()
+@test impl_type(c, :Ob) == Int == impl_type(c2, :Ob)
+
+@test Ob(c, 2) == 2
+@test_throws MethodError Hom(c2, [1,2])
+
+function id2(c::Cat)
+  ThCategory.id(c, 2)
+end
+
+@test id2(c) == [1,2]
+@test id2(c2) == [1 0; 0 1]
+@test_throws MethodError id2(FinSetC())
+
+abstract type MyAbsType end
+ThCategory.Meta.@wrapper Cat2 <: MyAbsType 
+@test Cat2 <: MyAbsType
+
+# Typed wrappers
+#----------------
+"""Typed Cat"""
+ThCategory.Meta.@typed_wrapper TCat
+
+c = TCat(FinSetC())
+@test c == TCat{Int,Vector{Int}}(FinSetC())
+@test_throws ErrorException TCat{Bool,Symbol}(FinSetC()) # Ob: Int ⊄ Bool
+@test c isa TCat{Int, Vector{Int}}
+@test id(c, 2) == [1,2]
+
+c2 = TCat(FinMatC{Int}());
+@test c2 isa TCat{Int, Matrix{Int}}
+
+@test id(c2, 2) == [1 0; 0 1]
 
 end # module

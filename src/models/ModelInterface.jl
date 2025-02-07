@@ -45,15 +45,16 @@ in the theory.
 module ModelInterface
 
 export implements, impl_type, TypeCheckFail, SignatureMismatchError, 
-       @model, @instance, @withmodel, @fail, migrate_model
+       @model, @instance, @withmodel, @fail, migrate_model, @default_model,
+       Dispatch
 
 using ...Syntax
 using ...Util.MetaUtils
 using ...Util.MetaUtils: JuliaFunctionSigNoWhere
 
-import ...Syntax.TheoryMaps: migrator 
 using ...Syntax.TheoryMaps: dom, codom
-using ...Syntax.TheoryInterface: GAT_MODULE_LOOKUP
+using ...Syntax.TheoryInterface: GAT_MODULE_LOOKUP, Dispatch
+import ...Syntax.TheoryInterface: implements, impl_type 
 
 using MLStyle
 using DataStructures: DefaultDict, OrderedDict
@@ -80,14 +81,17 @@ implements(m, ::Type{Val{tag}}) where {tag} = nothing
 
 implements(m, tag::ScopeTag) = implements(m, Val{tag})
 
-impl_type(m, tag::ScopeTag) = impl_type(m, Val{tag})
-
-impl_type(m, mod::Module, name::Symbol) = 
-  impl_type(m, gettag(ident(mod.Meta.theory; name)))
-
-
 implements(m, theory_module::Module) =
   all(!isnothing(implements(m, gettag(scope))) for scope in theory_module.Meta.theory.segments.scopes)
+
+"""
+If `m` implements a GAT with a type constructor (identified by ident `id`), 
+mapped to a Julia type, this function returns that Julia type.
+"""
+impl_type(m, id::Ident) = impl_type(m, Val{gettag(id)}, Val{getlid(id)})
+
+impl_type(m, mod::Module, name::Symbol) = 
+  impl_type(m, ident(mod.Meta.theory; name))
 
 struct TypeCheckFail <: Exception
   model::Any
@@ -600,9 +604,9 @@ end
 function impl_type_declaration(model_type, whereparams, sort, jltype)
   quote 
     if !hasmethod($(GlobalRef(ModelInterface, :impl_type)), 
-      ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(getdecl(sort)))}}))
+      ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(getdecl(sort)))}}, Type{Val{$(getlid(getdecl(sort)))}}))
       $(GlobalRef(ModelInterface, :impl_type))(
-          ::$(model_type), ::Type{Val{$(gettag(getdecl(sort)))}}
+          ::$(model_type), ::Type{Val{$(gettag(getdecl(sort)))}}, ::Type{Val{$(getlid(getdecl(sort)))}}
         ) where {$(whereparams...)} = $(jltype)
     end
   end
@@ -610,7 +614,7 @@ end
 
 function implements_declaration(model_type, scope, whereparams)
   notes = ImplementationNotes(nothing)
-  m = only(methods(implements, (Any, Type{Val{1}})))
+  _, m = methods(implements, (Any, Type{Val{1}})) # first method is for Dispatch
   quote
     if $m == only(methods($(GlobalRef(ModelInterface, :implements)), 
         ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(scope))}})))
@@ -680,7 +684,7 @@ function migrate_model(FM::Module, m::Any, new_model_name::Union{Nothing,Symbol}
 
   # Expressions which evaluate to the correct Julia type
   jltype_by_sort = Dict(map(sorts(dom_theory)) do v
-    v => :(impl_type($m, gettag(getdecl(AlgSort($F($v.method).val)))))
+    v => :(impl_type($m, getdecl(AlgSort($F($v.method).val))))
   end)
 
   _x = gensym("val")
@@ -801,6 +805,123 @@ function to_call_accessor(t::AlgTerm, x::Symbol, mod::Module)
   arg = only(b.args)
   rest = GATs.isvariable(arg) ? x : to_call_accessor(arg, x, mod)
   Expr(:call, Expr(:ref, :($mod.$(nameof(headof(b)))), :(model.model)), rest)
+end
+
+
+# Default models
+
+"""
+Create an @instance for a model `M` whose methods are determined by type 
+dispatch, e.g.:
+
+```
+@instance ThCategory{O,H} [model::M] begin
+  id(x::O) = id(x)
+  compose(f::H, g::H)::H = compose(f, g)
+end
+```
+
+Use this with caution! For example, using this with two different models of 
+the same theory with the same types would cause a conflict.
+"""
+function default_instance(theorymodule, theory, jltype_by_sort, model)
+  acc = Iterators.flatten(values.(values(theory.accessors)))
+
+  termcon_funs = map(last.(termcons(theory)) ∪ acc) do x 
+    generate_function(use_dispatch_method_impl(x, theory, jltype_by_sort))
+  end
+  generate_instance(
+    theory, theorymodule, jltype_by_sort, model, [], 
+    Expr(:block, termcon_funs...); typecheck=true, escape=true)
+end
+
+"""
+Create an @instance for a model `M` whose methods are determined by the 
+implementation of another model, `M2`, e.g.:
+
+```
+@instance ThCategory{O,H} [model::M] begin
+  id(x::O) = id[M2](x)
+  compose(f::H, g::H)::H = compose[M2](f, g)
+end
+```
+"""
+function default_model(theorymodule, theory, jltype_by_sort, model)
+  acc = Iterators.flatten(values.(values(theory.accessors)))
+  termcon_funs = map(last.(termcons(theory)) ∪ acc) do x 
+    generate_function(use_model_method_impl(x, theory, jltype_by_sort, model))
+  end
+  generate_instance(
+    theory, theorymodule, jltype_by_sort, nothing, [], 
+    Expr(:block, termcon_funs...); typecheck=true, escape=true)
+end
+
+macro default_model(head, model)
+  # Parse the head of @instance to get theory and instance types
+  (theory_module, instance_types) = @match head begin
+    :($ThX{$(Ts...)}) => (ThX, Ts)
+    _ => error("invalid syntax for head of @instance macro: $head")
+  end
+
+  # Get the underlying theory
+  theory = macroexpand(__module__, :($theory_module.Meta.@theory))
+
+  # A dictionary to look up the Julia type of a type constructor from its name (an ident)
+  jltype_by_sort = Dict{AlgSort,Expr0}([
+    zip(primitive_sorts(theory), instance_types)..., 
+    [s => nameof(headof(s)) for s in struct_sorts(theory)]...
+  ]) 
+
+  # Get the model type that we are overloading for, or nothing if this is the
+  # default instance for `instance_types`
+  m = parse_model_param(model)[1]
+
+  # Create the actual instance
+  default_model(theory_module, theory, jltype_by_sort, m)
+end
+
+"""
+A canonical implementation that just calls the method with the implementation
+of another model, `m`.
+"""
+function use_model_method_impl(x::Ident, theory::GAT, 
+                               jltype_by_sort::Dict{AlgSort}, m::Expr0)
+  op = getvalue(theory[x])
+  name = nameof(getdecl(op))
+  return_type = op isa AlgAccessor ? nothing : jltype_by_sort[AlgSort(op.type)]
+  args = args_from_sorts(sortsignature(op), jltype_by_sort)
+  impl = :(return $(name)[$m()]($(args...)))
+  JuliaFunction(name=name, args=args, return_type=return_type, impl=impl)
+end
+
+"""
+A canonical implementation that just calls the method with type dispatch.
+"""
+function use_dispatch_method_impl(x::Ident, theory::GAT, 
+                                  jltype_by_sort::Dict{AlgSort})
+  op = getvalue(theory[x])
+  name = nameof(getdecl(op))
+  return_type = op isa AlgAccessor ? nothing : jltype_by_sort[AlgSort(op.type)]
+  args = args_from_sorts(sortsignature(op), jltype_by_sort)
+  impl = :(return $(name)($(args...)))
+  JuliaFunction(name=name, args=args, return_type=return_type, impl=impl)
+end
+
+# Special model for any theory which uses dispatch
+##################################################
+
+"""
+Check whether a dispatch model implements a particular scope of a theory.
+This could be more rigorous, like actually checking whether certain methods 
+exist, but for now users will be assuming that the dispatch methods exist when
+using a Dispatch model.
+"""
+function implements(d::Dispatch, ::T) where {X,T <: Type{Val{X}}}
+  hastag(d.t, X) ? true : nothing
+end
+
+function impl_type(d::Dispatch, x::Ident)
+  d.types[AlgSort(x, only(d.t.resolvers[x])[2])]
 end
 
 end # module

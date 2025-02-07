@@ -1,6 +1,9 @@
-export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, ThSemiRing, ThRing, ThCommRing, ThDiffRing, ThBooleanRing, ThDivisionRing, ThCRig, ThElementary, ThPreorder, ThLeftModule, ThRightModule, ThModule, ThCommRModule
+export ThEmpty, ThSet, ThMagma, ThSemiGroup, ThMonoid, ThGroup, ThCMonoid, ThAb, 
+       ThSemiRing, ThRing, ThCommRing, ThDiffRing, ThBooleanRing, ThDivisionRing, 
+       ThCRig, ThElementary, ThPreorder, ThLeftModule, ThRightModule, ThModule, 
+       ThCommRModule
 
-import Base: +, *, zero, one, -
+import Base: +, *, zero, one, -, inv
 
 @theory ThEmpty begin
 end

@@ -849,7 +849,11 @@ hastag(hsl::HasScopeList, t::ScopeTag) =
 hasname(hsl::HasScopeList, name::Symbol) =
   haskey(getscopelist(hsl).namelookup, name)
 
-getidents(hsl::HasScopeList; kw...) = vcat(getidents.(getscopelist(hsl); kw...)...)
+getidents(hsl::HasScopeList; kw...) = 
+  vcat(getidents.(getscopelist(hsl); kw...)...)
+
+identvalues(hsl::HasScopeList) = 
+  vcat(identvalues.(getscopelist(hsl))...)
 
 alltags(hsl::HasScopeList) = Set(gettag.(getscopelist(hsl).scopes))
 
