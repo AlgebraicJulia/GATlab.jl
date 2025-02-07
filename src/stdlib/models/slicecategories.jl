@@ -9,13 +9,15 @@ using StructEquality
   hom::HomT
 end
 
-@struct_hash_equal struct SliceC{ObT, HomT, C<:Model{Tuple{ObT, HomT}}} <: Model{Tuple{SliceOb{ObT, HomT}, HomT}}
+@struct_hash_equal struct SliceC{ObT, HomT, C}
   cat::C
   over::ObT
-  # function SliceC(cat, over)
-  #   implements(cat, ThCategory)
-  #   new(cat, Ob[cat](over))
-  # end
+  function SliceC(cat::C, over) where C
+    implements(cat, ThCategory) || error("Bad cat $cat")
+    obtype = impl_type(cat, ThCategory, :Ob)
+    homtype = impl_type(cat, ThCategory, :Hom)
+    new{obtype, homtype, C}(cat, ThCategory.Ob[cat](over))
+  end
 end
 
 using .ThCategory

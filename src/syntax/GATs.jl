@@ -14,7 +14,7 @@ export Constant, AlgTerm, AlgType, AlgAST,
 using ..Scopes
 import ..ExprInterop: fromexpr, toexpr
 
-import ..Scopes: retag, rename, reident
+import ..Scopes: retag, rename, reident, gettag
 
 import AlgebraicInterfaces: equations
 

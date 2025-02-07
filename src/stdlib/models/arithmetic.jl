@@ -3,14 +3,14 @@ export IntNat, IntNatPlus, IntPreorder, ZRing, BoolRing
 using ...Models
 using ..StdTheories
 
-struct IntNat <: Model{Tuple{Int}} end
+struct IntNat end
 
 @instance ThNat{Int} [model::IntNat] begin
   Z() = 0
   S(n::Int) = n + 1
 end
 
-struct IntNatPlus <: Model{Tuple{Int}} end
+struct IntNatPlus end
 
 @instance ThNatPlus{Int} [model::IntNatPlus] begin
   Z() = 0
@@ -18,7 +18,7 @@ struct IntNatPlus <: Model{Tuple{Int}} end
   +(x::Int, y::Int) = x + y
 end
 
-struct IntPreorder <: Model{Tuple{Int, Tuple{Int,Int}}} end
+struct IntPreorder end
 
 @instance ThPreorder{Int, Tuple{Int,Int}} [model::IntPreorder] begin
   Leq(ab::Tuple{Int,Int}, a::Int, b::Int) = a ≤ b ? ab : @fail "$(ab[1]) ≰ $(ab[2])"
@@ -30,7 +30,7 @@ struct IntPreorder <: Model{Tuple{Int, Tuple{Int,Int}}} end
   end
 end
 
-struct ZRing <: Model{Tuple{Int}} end
+struct ZRing end
 
 @instance ThRing{Int} [model::ZRing] begin
   zero() = 0

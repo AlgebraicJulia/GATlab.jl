@@ -1,11 +1,8 @@
 module TestModelInterface 
 
-using GATlab
-using Test
-using StructEquality
+using GATlab, Test, StructEquality
 
-@struct_hash_equal struct FinSetC <: Model{Tuple{Int, Vector{Int}}}
-end
+@struct_hash_equal struct FinSetC end
 
 @instance ThCategory{Int, Vector{Int}} [model::FinSetC] begin
   # check f is Hom: n -> m
@@ -58,7 +55,7 @@ end
 @test implements(FinSetC(), ThCategory)
 
 # Todo: get things working where Ob and Hom are the same type (i.e. binding dict not monic)
-struct TypedFinSetC <: Model{Tuple{Vector{Int}, Vector{Int}}}
+struct TypedFinSetC
   ntypes::Int
 end
 
@@ -199,7 +196,7 @@ end
 #################################
  
 """ Assume this implements Base.iterate """
-abstract type MyAbsIter{V} <: Model{Tuple{V}} end
+abstract type MyAbsIter{V} end
 
 struct MyVect{V} <: MyAbsIter{V}
   v::Vector{V}

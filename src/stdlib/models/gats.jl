@@ -4,10 +4,7 @@ using ...Models
 using ...Syntax
 using ..StdTheories
 
-using GATlab, GATlab.Models
-
-struct GATC <: Model{Tuple{GAT, AbsTheoryMap}}
-end
+struct GATC end
 
 @instance ThCategory{GAT, AbsTheoryMap} [model::GATC] begin
   id(x::GAT) = IdTheoryMap(x)

@@ -1,14 +1,11 @@
 module TheoryInterface
-export @theory, @signature, Model, invoke_term
+export @theory, @signature, invoke_term
 
 using ..Scopes, ..GATs, ..ExprInterop, GATlab.Util
-# using GATlab.Util
 
 using MLStyle, StructEquality, Markdown
 
-abstract type Model{Tup <: Tuple} end
-
-@struct_hash_equal struct WithModel{M <: Model}
+@struct_hash_equal struct WithModel{M}
   model::M
 end
 
@@ -191,8 +188,8 @@ function juliadeclaration(name::Symbol)
   quote
     function $name end
 
-    if Base.isempty(Base.methods(Base.getindex, [typeof($name), $(GlobalRef(TheoryInterface, :Model))]))
-      function Base.getindex(::typeof($name), m::$(GlobalRef(TheoryInterface, :Model)))
+    if Base.isempty(Base.methods(Base.getindex, [typeof($name), Any]))
+      function Base.getindex(::typeof($name), m::Any) 
         (args...; context=nothing) -> $name($(GlobalRef(TheoryInterface, :WithModel))(m), args...; context)
       end
     end
