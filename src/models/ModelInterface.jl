@@ -44,8 +44,8 @@ in the theory.
 """
 module ModelInterface
 
-export implements, impl_type, TypeCheckFail, SignatureMismatchError, 
-       @model, @instance, @withmodel, @fail, migrate_model, @default_model,
+export implements, impl_type, SignatureMismatchError, 
+       @model, @instance, @withmodel, migrate_model, @default_model,
        Dispatch
 
 using ...Syntax
@@ -93,22 +93,6 @@ impl_type(m, id::Ident) = impl_type(m, Val{gettag(id)}, Val{getlid(id)})
 impl_type(m, mod::Module, name::Symbol) = 
   impl_type(m, ident(mod.Meta.theory; name))
 
-struct TypeCheckFail <: Exception
-  model::Any
-  theory::GAT
-  type::Ident
-  val::Any
-  args::AbstractVector
-  reason::Any
-end
-
-function Base.showerror(io::IO, err::TypeCheckFail)
-  println(io, "TypeCheckFail:")
-  print(io, "$(err.val) is not a valid $(err.type)(")
-  join(io, err.args, ", ")
-  println(io, ") in model $(err.model) of theory $(nameof(err.theory)) because:")
-  println(io, err.reason)
-end
 
 """
 Usage:
@@ -194,7 +178,7 @@ function generate_instance(
   typechecked_functions = if typecheck
     typecheck_instance(theory, functions, ext_functions, jltype_by_sort; oldinstance, theory_module)
   else
-    [functions..., ext_functions...] # skip typechecking and expand_fail
+    [functions..., ext_functions...] # skip typechecking
   end
 
   # Adds keyword arguments to the functions, and qualifies them by
@@ -383,11 +367,6 @@ Base.showerror(io::IO, e::SignatureMismatchError) =
   print(io, "signature for ", e.name, ": ", e.sig,
         " does not match any of [", join(e.options, ", "), "]")
 
-const fail_var = gensym(:fail)
-
-macro fail(str)
-  esc(Expr(:call, fail_var, str))
-end
 
 """
 Throw error if missing a term constructor. Provides default instances for type
@@ -441,10 +420,6 @@ function typecheck_instance(
 
       judgment = getvalue(theory, method)
 
-      if judgment isa AlgTypeConstructor
-        f = expand_fail(theory, decl, f) 
-      end
-
       delete!(undefined_signatures, sig)
 
       push!(typechecked, f)
@@ -466,8 +441,6 @@ function typecheck_instance(
 
       # if !(any(getvalue(theory[m]) isa AlgTypeConstructor for m in methods))
       # end
-
-      # push!(typechecked, expand_fail(theory, x, f))
     end
   end
 
@@ -484,27 +457,6 @@ function typecheck_instance(
   end
 
   typechecked
-end
-
-function expand_fail(theory::GAT, x::Ident, f::JuliaFunction)
-  argname(arg::Expr) = first(arg.args)
-  setimpl(
-    f,
-    quote
-      let $(fail_var) =
-        reason -> throw(
-          $(TypeCheckFail)(
-            model,
-            $theory,
-            $x,
-            $(argname(f.args[1])),
-            $(Expr(:vect, argname.(f.args[2:end])...)),
-            reason
-          ))
-        $(f.impl)
-      end
-    end
-  )
 end
 
 function mk_fun(f::AlgFunction, theory, mod, jltype_by_sort)

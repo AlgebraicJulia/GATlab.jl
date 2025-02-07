@@ -6,18 +6,18 @@ using ..StdTheories
 struct FinSetC end
 
 @instance ThCategory{Int, Vector{Int}} [model::FinSetC] begin
-  Ob(x::Int) = x >= 0 ? x : @fail "expected nonnegative integer"
+  Ob(x::Int) = x >= 0 ? x : error("expected nonnegative integer")
 
   function Hom(f::Vector{Int}, n::Int, m::Int)
     if length(f) == n
       for i in 1:n
         if f[i] ∉ 1:m
-          @fail "index not in codomain: $i"
+          error("index not in codomain: $i")
         end
       end
       f
     else
-      @fail "length of morphism does not match domain: $(length(f)) != $m"
+      error("length of morphism does not match domain: $(length(f)) != $m")
     end
   end
 

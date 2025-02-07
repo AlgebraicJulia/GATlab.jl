@@ -10,12 +10,12 @@ using GATlab, GATlab.Stdlib, Test, StructEquality
     if length(f) == n
       for i in 1:n
         if f[i] ∉ 1:m
-          @fail "index not in codomain: $i"
+          error("index not in codomain: $i")
         end
       end
       f
     else
-      @fail "length of morphism does not match domain: $(length(f)) != $m"
+      error("length of morphism does not match domain: $(length(f)) != $m")
     end
   end
 
@@ -29,22 +29,10 @@ using .ThCategory
 
 @test Ob[FinSetC()](-1) == -1
 @test Hom[FinSetC()]([1,2,3], 3, 3) == [1,2,3]
-@test_throws TypeCheckFail Hom[FinSetC()]([1,2,3], 3, 2)
+@test_throws ErrorException Hom[FinSetC()]([1,2,3], 3, 2)
 
-try
-  ThCategory.Hom[FinSetC()]([1,2,3], 3, 2)
-catch e
-  @test e.model == FinSetC()
-  @test e.theory == ThCategory.Meta.theory
-  @test e.type == ident(ThCategory.Meta.theory; name=:Hom)
-  @test e.val == [1, 2, 3]
-  @test e.args == [3, 2]
-  @test e.reason == "index not in codomain: 3"
-  @test sprint(showerror, e) isa String
-end
-
-@test_throws TypeCheckFail Hom[FinSetC()]([1,2,3], 3, 2)
-@test_throws TypeCheckFail Hom[FinSetC()]([1,2,3], 2, 3)
+@test_throws ErrorException Hom[FinSetC()]([1,2,3], 3, 2)
+@test_throws ErrorException Hom[FinSetC()]([1,2,3], 2, 3)
 @test compose[FinSetC()]([1,3,2], [1,3,2]) == [1,2,3]
 
 @test id[FinSetC()](2) == [1,2]
@@ -90,11 +78,11 @@ end
 end 
 
 @instance ThCategory{FinSet, FinFunction} begin
-  Ob(x::FinSet) = x.n ≥ 0 ? x : @fail "expected nonnegative integer"
+  Ob(x::FinSet) = x.n ≥ 0 ? x : error("expected nonnegative integer")
 
   function Hom(f::FinFunction, x::FinSet, y::FinSet)
-    dom(f) == x || @fail "domain mismatch"
-    codom(f) == y || @fail "codomain mismatch"
+    dom(f) == x || error("domain mismatch")
+    codom(f) == y || error("codomain mismatch")
     f
   end
 
@@ -118,7 +106,7 @@ g = FinFunction([1,1,1],B,A)
 @test Hom(f, A, B) == f
 # TODO:
 # @test Hom([2,3], A, B) == f
-@test_throws TypeCheckFail Hom(f, A, A)
+@test_throws ErrorException Hom(f, A, A)
 
 @withmodel FinSetC() (mcompose, id) begin
   @test mcompose(id(2), id(2); context=(;B₁=2)) == id(4)
@@ -206,7 +194,7 @@ end
 Base.iterate(m::MyVect, i...) = iterate(m.v, i...)
 
 @instance ThSet{V} [model::MyAbsIter{V}] where V begin 
-  default(v::V) = v ∈ model ? v : @fail "Bad $v not in $model"
+  default(v::V) = v ∈ model ? v : error("Bad $v not in $model")
 end
 
 @test implements(MyVect([1,2,3]), ThSet)
