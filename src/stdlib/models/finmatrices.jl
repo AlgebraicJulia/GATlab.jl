@@ -6,9 +6,9 @@ using ..StdTheories
 struct FinMatC{T <: Number} end
 
 @instance ThCategory{Int, Matrix{T}} [model::FinMatC{T}] where {T} begin
-  Ob(n::Int) = n >= 0 ? n : @fail "expected nonnegative integer"
+  Ob(n::Int) = n >= 0 ? n : error("expected nonnegative integer")
   Hom(A::Matrix{T}, n::Int, m::Int) =
-    size(A) == (n,m) ? A : @fail "expected dimensions to be $((n,m))"
+    size(A) == (n,m) ? A : error("expected dimensions to be $((n,m))")
 
   id(n::Int) = T[T(i == j) for i in 1:n, j in 1:n]
   compose(A::Matrix{T}, B::Matrix{T}) = A * B

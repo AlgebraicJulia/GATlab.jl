@@ -27,12 +27,12 @@ using .ThCategory
     try
       Ob[model.cat](x.ob)
     catch e
-      @fail ("ob is not valid", e)
+      error("ob is not valid", e)
     end
     try
       Hom[model.cat](x.hom, x.ob, model.over)
     catch e
-      @fail ("hom is not valid", e)
+      error("hom is not valid", e)
     end
     x
   end
@@ -43,10 +43,10 @@ using .ThCategory
     try
       Hom[model.cat](f, x.ob, y.ob)
     catch e
-      @fail ("morphism is not valid in base category", e)
+      error("morphism is not valid in base category", e)
     end
     compose[model.cat](f, y.hom; context=(a=x.ob, b=y.ob, c=model.over)) == x.hom ||
-      @fail "commutativity of triangle does not hold"
+      error("commutativity of triangle does not hold")
     f
   end
 

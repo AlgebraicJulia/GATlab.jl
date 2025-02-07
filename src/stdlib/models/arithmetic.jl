@@ -21,7 +21,7 @@ end
 struct IntPreorder end
 
 @instance ThPreorder{Int, Tuple{Int,Int}} [model::IntPreorder] begin
-  Leq(ab::Tuple{Int,Int}, a::Int, b::Int) = a ≤ b ? ab : @fail "$(ab[1]) ≰ $(ab[2])"
+  Leq(ab::Tuple{Int,Int}, a::Int, b::Int) = a ≤ b ? ab : error("$(ab[1]) ≰ $(ab[2])")
   refl(i::Int) = (i, i)
   trans(ab::Tuple{Int,Int}, bc::Tuple{Int,Int}) = if ab[2] == bc[1] 
     (ab[1], bc[2])

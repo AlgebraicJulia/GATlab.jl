@@ -6,8 +6,8 @@ using .ThCategory
 
 @withmodel FinSetC() (Ob, Hom, id, compose, dom, codom) begin
   @test Ob(0) == 0
-  @test_throws TypeCheckFail Ob(-1)
-  @test_throws TypeCheckFail Hom([1,5,2], 3, 4)
+  @test_throws ErrorException Ob(-1)
+  @test_throws ErrorException Hom([1,5,2], 3, 4)
   @test Hom(Int[], 0, 4) == Int[]
 
   @test id(2) == [1,2]
