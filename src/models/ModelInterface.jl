@@ -178,14 +178,29 @@ end
 """
 macro instance(head, model, body)
   # Parse the head of @instance to get theory and instance types
-  # TODO: should we allow instance types to be nothing? Is this in Catlab?
   (theory_module, instance_types) = @match head begin
-    :($ThX{$(Ts...)}) => (ThX, Ts)
+    Expr(:curly, ThX, Expr(:(=), a,b),xs...) => begin
+      theory = macroexpand(__module__, :($ThX.Meta.@theory))
+      nS, nT = length(primitive_sorts(theory)), length(xs)+1 
+      nS == nT || error("$nT types provided ($ThX expected $nS)")
+      ThX => map(nameof.(primitive_sorts(theory))) do psort
+        for x in [Expr(:(=), a,b); xs]
+          x.head == :(=) || error("Unexpected type assignment $x")
+          n, v = x.args
+          n == psort && return v
+        end
+        error("Sort $psort not found in $xs")
+      end
+    end
+    :($ThX{$(Ts...)}) =>  (ThX, Ts) 
     _ => error("invalid syntax for head of @instance macro: $head")
   end
 
   # Get the underlying theory
   theory = macroexpand(__module__, :($theory_module.Meta.@theory))
+
+  nS, nT = length(primitive_sorts(theory)), length(instance_types) 
+  nS == nT || error("$nT types provided ($theory_module expected $nS)")
 
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
   jltype_by_sort = Dict{AlgSort,Expr0}([
