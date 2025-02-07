@@ -46,7 +46,8 @@ end
   @op 1 + 1
 end
 
-@test (@doc ThCMonoid.Meta.theory) isa Markdown.MD
-@test (@doc ThSet) == (@doc ThSet.Meta.theory)
+# DEPRECATED
+# @test (@doc ThCMonoid.Meta.theory) isa Markdown.MD
+# @test (@doc ThSet) == (@doc ThSet.Meta.theory)
 
 end

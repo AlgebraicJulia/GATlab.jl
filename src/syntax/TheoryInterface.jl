@@ -153,11 +153,13 @@ function theory_impl(head, body, __module__)
   end
   
   doctarget = gensym()
+  mdp(::Nothing) = []
+  mdp(x::Markdown.MD) = x
+  mdp(x::Base.Docs.DocStr) = Markdown.parse(x.text...)
 
   push!(modulelines, Expr(:toplevel, :(module Meta
     struct T end
    
-    @doc ($(Markdown.MD)((@doc $(__module__).$doctarget), $docstr))
     const theory = $theory
 
     macro theory() $theory end
@@ -180,7 +182,7 @@ function theory_impl(head, body, __module__)
         $(structlines...)
         end
       ),
-      :(@doc ($(Markdown.MD)((@doc $doctarget), $docstr)) $name)
+      :(@doc ($(Markdown.MD)($mdp(@doc $doctarget), $docstr)) $name)
     )
   )
 end
