@@ -300,7 +300,7 @@ macro symbolic_model(decl, theoryname, body)
     theoryname,
     Dict(sort => :($name.$(nameof(sort))) for sort in sorts(theory)),
     nothing,
-    []
+    [],
   )
 
   Expr(
