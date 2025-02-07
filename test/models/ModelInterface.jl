@@ -27,10 +27,24 @@ end
   dom(f::Vector{Int}) = length(f)
 end
 
+# Error if we label with nonexistent sorts
+@test_throws LoadError @eval @instance ThCategory{Ob=Int, Hume=Vector{Int}} [model::FinSetC′] begin
+  id(::Int) = error("")
+  compose(::Vector{Int}, ::Vector{Int}) = error("")
+end
+
+
+# Error if we have superfluous type assignments
+@test_throws LoadError @eval @instance ThCategory{Ob=Int, Hom=Vector{Int}, Hom2=Matrix{Int}} [model::FinSetC′] begin
+  id(::Int) = error("")
+  compose(::Vector{Int}, ::Vector{Int}) = error("")
+end
+
 # Actual instance
 #----------------
 
-@instance ThCategory{Int, Vector{Int}} [model::FinSetC′] begin
+# Test using the labeled sorts
+@instance ThCategory{Ob=Int, Hom=Vector{Int}} [model::FinSetC′] begin
 Ob(i::Int) = i 
 
   # check f is Hom: n -> m
@@ -187,11 +201,11 @@ end
   h(b::Y)::Y 
 end
 
-@instance T1{Int} begin 
+@instance T1{X=Int} begin 
   h(a::Int) = 1 
 end
 
-@instance T2{Int,Bool} begin 
+@instance T2{X=Int,Y=Bool} begin 
   h(b::Bool) = false 
 end
 

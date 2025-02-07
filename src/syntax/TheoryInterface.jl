@@ -203,7 +203,7 @@ function theory_impl(head, body, __module__)
 end
 
 """
-The Dispatch model defers to type-dispatch: f[Dispatch](a,b,c) == f(a,b,c)
+The Dispatch model defers to type-dispatch
 """
 @struct_hash_equal struct Dispatch
   jltypes::Dict{AlgSort, Type}
