@@ -1,7 +1,6 @@
 module TestPresentations
 
-using Test
-using GATlab
+using Test, GATlab, GATlab.Stdlib
 
 presentation_theory(::Presentation{Theory}) where Theory = Theory
 

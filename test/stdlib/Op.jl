@@ -1,7 +1,7 @@
 """Same as FinSetC tests but with all doms/codoms reversed"""
 module TestOp
 
-using GATlab, Test
+using GATlab, GATlab.Stdlib, Test
 
 using .ThCategory
 

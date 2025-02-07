@@ -1,6 +1,6 @@
 module TestSymbolicModels
 
-using GATlab, Test
+using GATlab, GATlab.Stdlib, Test
 
 abstract type CategoryExpr{T} <: GATExpr{T} end
 
@@ -130,7 +130,7 @@ end
 
 module CatTests
 
-using GATlab, Test
+using GATlab, GATlab.Stdlib, Test
 
 @symbolic_model FreeCategory{GATExpr, GATExpr} ThCategory begin
   compose(f::Hom, g::Hom) = associate(new(f,g))

@@ -6,12 +6,13 @@ using Reexport
 include("util/module.jl")
 include("syntax/module.jl")
 include("models/module.jl")
+
+# don't reexport these
 include("stdlib/module.jl")
-include("nonstdlib/module.jl") # don't reexport this
+include("nonstdlib/module.jl")
 
 @reexport using .Util
 @reexport using .Syntax
 @reexport using .Models
-@reexport using .Stdlib
 
 end # module GATlab

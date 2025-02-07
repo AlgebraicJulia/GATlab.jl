@@ -1,7 +1,6 @@
 module TestArithmetic 
 
-using GATlab
-using Test
+using GATlab, GATlab.Stdlib, Test
 
 # Peano arithmetic
 # -----------------------------

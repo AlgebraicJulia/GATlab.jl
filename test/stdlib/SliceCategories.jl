@@ -1,6 +1,6 @@
 module TestSliceCategories
 
-using GATlab, Test
+using GATlab, GATlab.Stdlib, Test
 
 const C = SliceC(FinSetC(), 4)
 const MkOb = SliceOb{Int, Vector{Int}}
