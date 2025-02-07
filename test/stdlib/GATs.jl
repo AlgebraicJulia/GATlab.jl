@@ -1,6 +1,6 @@
 module TestGATs
 
-using GATlab, Test
+using GATlab, GATlab.Stdlib, Test
 
 using .ThCategory
 

@@ -1,7 +1,5 @@
 
-using Test
-using GATlab
-using GATlab.NonStdlib
+using Test, GATlab, GATlab.Stdlib, GATlab.NonStdlib
 
 using .ThPushout
 

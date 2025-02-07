@@ -1,7 +1,6 @@
 module TestTheoryMaps 
 
-using GATlab
-using Test
+using GATlab, GATlab.Stdlib, Test
 
 # Set up 
 ########

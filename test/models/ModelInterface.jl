@@ -1,6 +1,6 @@
 module TestModelInterface 
 
-using GATlab, Test, StructEquality
+using GATlab, GATlab.Stdlib, Test, StructEquality
 
 @struct_hash_equal struct FinSetC end
 

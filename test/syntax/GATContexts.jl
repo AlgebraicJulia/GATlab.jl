@@ -1,7 +1,7 @@
 module TestGATContexts
 
-using GATlab
-using Test
+using GATlab, GATlab.Stdlib, Test
+
 T = ThCategory.Meta.theory
 ctx = GATContext(T)
 tscope = fromexpr(
