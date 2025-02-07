@@ -195,5 +195,25 @@ end
 
 @test h(false) == false
 
+# Test models with abstract types 
+#################################
+ 
+""" Assume this implements Base.iterate """
+abstract type MyAbsIter{V} <: Model{Tuple{V}} end
+
+struct MyVect{V} <: MyAbsIter{V}
+  v::Vector{V}
+end
+
+Base.iterate(m::MyVect, i...) = iterate(m.v, i...)
+
+@instance ThSet{V} [model::MyAbsIter{V}] where V begin 
+  default(v::V) = v ∈ model ? v : @fail "Bad $v not in $model"
+end
+
+@test implements(MyVect([1,2,3]), ThSet)
+
+# this will fail unless WithModel accepts subtypes
+@test ThSet.default[MyVect([1,2,3])](1) == 1
 
 end # module
