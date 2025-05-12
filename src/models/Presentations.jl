@@ -88,8 +88,13 @@ function add_generator!(pres::Presentation, expr)
   name, type = first(expr), gat_typeof(expr)
   generators = pres.generators[type]
   if !isnothing(name)
-    if haskey(pres.generator_name_index, name)
-      error("Name $name already defined in presentation")
+    (name, expr) = if haskey(pres.generator_name_index, name)
+        new_name = Symbol("$(expr.args[2].args[1])_$name")
+        expr.args[1] = new_name
+        (new_name, expr)
+      # error("Name $name already defined in presentation")
+    else
+        name, expr
     end
     pres.generator_name_index[name] = type => length(generators)+1
   end
