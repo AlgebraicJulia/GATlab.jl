@@ -206,7 +206,7 @@ macro instance(head, model, body)
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
   jltype_by_sort = Dict{AlgSort,Expr0}([
     zip(primitive_sorts(theory), instance_types)..., 
-    [s => nameof(headof(s)) for s in struct_sorts(theory)]...,
+    [s => nameof(headof(s)) for s in struct_sorts(theory)]..., 
     collect(theory.fixed_types)...
   ]) 
 
@@ -219,6 +219,7 @@ macro instance(head, model, body)
   generate_instance(theory, theory_module, jltype_by_sort, model_type, whereparams, body)
 end
 
+
 function generate_instance(
   theory::GAT,
   theory_module::Union{Expr0, Module},
@@ -228,8 +229,6 @@ function generate_instance(
   body::Expr;
   escape=true
 )
-  # The old (Catlab) style of instance, where there is no explicit model
-  oldinstance = isnothing(model_type)
 
   # Parse the body into functions defined here and functions defined elsewhere
   typechecked_functions = parse_instance_body(body, theory)
@@ -514,7 +513,7 @@ function impl_type_declaration(model_type, whereparams, sort, jltype)
   quote 
     if !hasmethod($(GlobalRef(ModelInterface, :impl_type)), 
       ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(methodof(sort)))}}, Type{Val{$(getlid(methodof(sort)))}}))
-      $(GlobalRef(ModelInterface, :impl_type))(
+      @inline $(GlobalRef(ModelInterface, :impl_type))(
           ::$(model_type), ::Type{Val{$(gettag(methodof(sort)))}}, ::Type{Val{$(getlid(methodof(sort)))}}
         ) where {$(whereparams...)} = $(jltype)
     end
