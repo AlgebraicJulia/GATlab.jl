@@ -514,7 +514,7 @@ function impl_type_declaration(model_type, whereparams, sort, jltype)
   quote 
     if !hasmethod($(GlobalRef(ModelInterface, :impl_type)), 
       ($(model_type) where {$(whereparams...)}, Type{Val{$(gettag(methodof(sort)))}}, Type{Val{$(getlid(methodof(sort)))}}))
-      $(GlobalRef(ModelInterface, :impl_type))(
+      @inline $(GlobalRef(ModelInterface, :impl_type))(
           ::$(model_type), ::Type{Val{$(gettag(methodof(sort)))}}, ::Type{Val{$(getlid(methodof(sort)))}}
         ) where {$(whereparams...)} = $(jltype)
     end

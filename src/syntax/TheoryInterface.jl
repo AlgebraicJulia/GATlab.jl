@@ -319,7 +319,14 @@ function wrapper(name::Symbol, t::GAT, mod)
       Xs = map(Ts) do s 
         :($(GlobalRef($(TheoryInterface), :impl_type))(x, $s))
       end
+      Ms = $(map(QuoteNode.(nameof.(keys(t.resolvers)))) do x
+        Expr(:call, :(=>), x, Expr(:call, :getindex, Expr(:., name, x), :x))
+      end) 
+      Mdict = :(Dict([$(Ms...)]))
 
+      Xdict = :(Dict(zip(nameof.($Ts), [$(Xs...)])))
+      gv = :($(GlobalRef($(Scopes), :getvalue)))
+      it = :($(GlobalRef($(TheoryInterface), :impl_type)))
       esc(quote 
         # Catch any potential docs above the macro call
         const $(doctarget) = nothing
@@ -328,10 +335,12 @@ function wrapper(name::Symbol, t::GAT, mod)
         # Declare the wrapper struct
         struct $n <: $abs
           val::Any
+          types::Dict{Symbol, Type}
           function $n(x::Any)
             try $($(GlobalRef(TheoryInterface, :implements)))(x, $($name), [$(Xs...)]) 
             catch MethodError false end || error("Invalid $($($(name))) model: $x")
-            new(x)
+            types = $Xdict
+            new(x, types)
           end
         end
         # Apply the caught documentation to the new struct
@@ -341,17 +350,20 @@ function wrapper(name::Symbol, t::GAT, mod)
         $(Expr(:macrocall, $(GlobalRef(StructEquality, Symbol("@struct_hash_equal"))), $(mod), $(:n)))
 
         # GlobalRef doesn't work: "invalid function name".
-        GATlab.getvalue(x::$n) = x.val 
-        GATlab.impl_type(x::$n, o::Symbol) = GATlab.impl_type(x.val, $($name), o)
+        # GATlab.getvalue(x::$n) = x.val 
+        $gv(x::$n) = x.val 
+        $it(x::$n, o::Symbol) = x.types[o]
 
         # Dispatch on model value for all declarations in theory
         $(map(filter(x->x[2] isa $AlgDeclaration, $(identvalues(t)))) do (x,j)
           if j isa $(AlgDeclaration) 
             op = nameof(x)
-            :($($(name)).$op(x::$(($(:n))), args...; kw...) = 
-              $($(name)).$op[x.val](args...; kw...))
+            :(@inline function $($(name)).$op(x::$(($(:n))), args...; kw...) 
+              $($(name)).$op(WithModel(x.val), args...; kw...)
+          end)
           end
       end...)
+
       nothing
       end)
     end
@@ -365,6 +377,32 @@ function wrapper(name::Symbol, t::GAT, mod)
       XTs = map(zip(Ts,Xs)) do (T,X)
         :($X <: $T || error("Mismatch $($($(Meta.quot)(T))): $($X) ⊄ $($T)"))
       end
+
+      Xdict = :(Dict(zip($Ts, [$(Xs...)])))
+
+      # As an experiment, we put the correct types of the arguments explicitly
+      # though this doesn't ultimately affect whether there is dynamic dispatch
+      ms = vcat(map(collect(values($t.resolvers))) do res
+        map(collect(pairs(res.bysignature))) do (sig, meth′)
+          meth = $t[meth′].value
+          is_acc = nameof(typeof(meth)) == :AlgAccessor
+          is_typ = nameof(typeof(meth)) ==  :AlgTypeConstructor
+          op = nameof(meth.declaration)
+          args = if is_acc 
+            [:($(gensym(:val))::$(nameof(meth.typecondecl)))]
+          else
+            vcat(is_typ  ? [:($(gensym(:val))::Any)] : Expr[], map(meth[meth.args]) do argbind 
+              :($(gensym(nameof(argbind)))::$(nameof(argbind.value.body.head)))
+             end)
+          end
+          argnames = [first(a.args) for a in args]
+          :(@inline function $($(name)).$op(x::$(($(:n))){$(Ts...)}, $(args...); kw...) where {$(Ts...)} 
+             $($(name)).$op(WithModel(x.val), $(argnames...); kw...)
+          end)
+        end
+      end...)
+
+
       esc(quote 
         # Catch any potential docs above the macro call
         const $(doctarget) = nothing
@@ -373,16 +411,20 @@ function wrapper(name::Symbol, t::GAT, mod)
         # Declare the wrapper struct
         struct $n{$(Ts...)} <: $abs
           val::Any
+          types::Dict{Symbol, Type}
+
           function $n{$(Ts...)}(x::Any) where {$(Ts...)}
             $($(GlobalRef(TheoryInterface, :implements)))(x, $($name), [$(Xs...)]) || error("Invalid $($($(name))) model: $x")
             $(XTs...)
             # TODO? CHECK THAT THE GIVEN PARAMETERS MATCH Xs?
-            new{$(Ts...)}(x)
+            types = $Xdict
+            new{$(Ts...)}(x, types)
           end
 
           function $n(x::Any) 
             $($(GlobalRef(TheoryInterface, :implements)))(x, $($name), [$(Xs...)]) || error("Invalid $($($(name))) model: $x")
-            new{$(Xs...)}(x)
+            types = $Xdict
+            new{$(Xs...)}(x, types)
           end
         end
         # Apply the caught documentation to the new struct
@@ -393,16 +435,9 @@ function wrapper(name::Symbol, t::GAT, mod)
 
         # GlobalRef doesn't work: "invalid function name".
         GATlab.getvalue(x::$n) = x.val 
-        GATlab.impl_type(x::$n, o::Symbol) = GATlab.impl_type(x.val, $($name), o)
+        GATlab.impl_type(x::$n, o::Symbol) = x.types[o]
 
-        # Dispatch on model value for all declarations in theory
-        $(map(filter(x->x[2] isa $AlgDeclaration, $(identvalues(t)))) do (x,j)
-          if j isa $(AlgDeclaration) 
-            op = nameof(x)
-            :($($(name)).$op(x::$(($(:n))), args...; kw...) = 
-              $($(name)).$op[x.val](args...; kw...))
-          end
-      end...)
+        $(ms...)
       nothing
       end)
     end
