@@ -321,6 +321,9 @@ function wrapper(name::Symbol, t::GAT, mod)
         :($(GlobalRef($(TheoryInterface), :impl_type))(x, $s))
       end
 
+      gv = :($(GlobalRef($(Scopes), :getvalue)))
+      it = :($(GlobalRef($(TheoryInterface), :impl_type)))
+
       esc(quote 
         # Catch any potential docs above the macro call
         const $(doctarget) = nothing
@@ -341,9 +344,8 @@ function wrapper(name::Symbol, t::GAT, mod)
         # Define == and hash
         $(Expr(:macrocall, $(GlobalRef(StructEquality, Symbol("@struct_hash_equal"))), $(mod), $(:n)))
 
-        # GlobalRef doesn't work: "invalid function name".
-        GATlab.getvalue(x::$n) = x.val 
-        GATlab.impl_type(x::$n, o::Symbol) = GATlab.impl_type(x.val, $($name), o)
+        $gv(x::$n) = x.val 
+        $it(x::$n, o::Symbol) = $it(x.val, $($name), o)
 
         # Dispatch on model value for all declarations in theory
         $(map(filter(x->x[2] isa $AlgDeclaration, $(identvalues(t)))) do (x,j)
@@ -366,6 +368,10 @@ function wrapper(name::Symbol, t::GAT, mod)
       XTs = map(zip(Ts,Xs)) do (T,X)
         :($X <: $T || error("Mismatch $($($(Meta.quot)(T))): $($X) ⊄ $($T)"))
       end
+
+      gv = :($(GlobalRef($(Scopes), :getvalue)))
+      it = :($(GlobalRef($(TheoryInterface), :impl_type)))
+
       esc(quote 
         # Catch any potential docs above the macro call
         const $(doctarget) = nothing
@@ -392,9 +398,8 @@ function wrapper(name::Symbol, t::GAT, mod)
         # Define == and hash
         $(Expr(:macrocall, $(GlobalRef(StructEquality, Symbol("@struct_hash_equal"))), $(mod), $(:n)))
 
-        # GlobalRef doesn't work: "invalid function name".
-        GATlab.getvalue(x::$n) = x.val 
-        GATlab.impl_type(x::$n, o::Symbol) = GATlab.impl_type(x.val, $($name), o)
+        $gv(x::$n) = x.val 
+        $it(x::$n, o::Symbol) = $it(x.val, $($name), o)
 
         # Dispatch on model value for all declarations in theory
         $(map(filter(x->x[2] isa $AlgDeclaration, $(identvalues(t)))) do (x,j)

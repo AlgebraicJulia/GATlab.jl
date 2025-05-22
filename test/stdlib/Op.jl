@@ -8,7 +8,7 @@ using .ThCategory
 # Explicit Op model
 #------------------
 
-@withmodel op(FinSetC()) (Ob, Hom, id, compose, dom, codom) begin
+@withmodel op(CatWrapper(FinSetC())) (Ob, Hom, id, compose, dom, codom) begin
   @test Ob(0) == 0
   @test_throws ErrorException Ob(-1)
   @test_throws ErrorException Hom([1,5,2], 4, 3)
