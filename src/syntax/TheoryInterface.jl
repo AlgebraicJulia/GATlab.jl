@@ -245,6 +245,7 @@ function juliadeclaration(name::Symbol)
     # we expect just one method because of Dispatch type
     if isempty(Base.methods(Base.getindex, [typeof($name), Any]))
       Base.getindex(f::typeof($name), ::$(GlobalRef(TheoryInterface, :Dispatch))) = f
+      $name(::$(GlobalRef(TheoryInterface, :WithModel)){$(GlobalRef(TheoryInterface, :Dispatch))}, args...) = $name(args...)
       Base.getindex(f::typeof($name), ::$(GlobalRef(TheoryInterface, :InitialModel′))) = (x...;kw...)->error("Cannot call")
       Base.getindex(f::typeof($name), ::$(GlobalRef(TheoryInterface, :TerminalModel′))) = (x...;kw...)->nothing
 

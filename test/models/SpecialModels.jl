@@ -41,7 +41,7 @@ ThCat.id(i::Int) = [i]
 @test implements(d, ThCat, [Int, Vector{Int}])
 
 @test id(1) == [1] == ThCat.id[d](1)
-@test compose[d]([1],[2,3]) == [1]
+@test compose[d]([1],[2,3]) == [1] == compose(WithModel(d), [1],[2,3])
 
 @test implements(d, ThCat, [Int, Vector{Int}])
 
