@@ -7,7 +7,6 @@ presentation_theory(::Presentation{Theory}) where Theory = Theory
 # Presentation
 ##############
 
-
 @symbolic_model FreeCategory{GATExpr, GATExpr} ThCategory begin
   compose(f::Hom, g::Hom) = associate(new(f,g))
 end
@@ -61,6 +60,8 @@ add_equations!(pres, [f => f′, g => g′])
   manager::Hom(Employee, Employee)
   works_in::Hom(Employee, Department)
   secretary::Hom(Department, Employee)
+  nickname::Hom(Employee, Str)
+  nickname::Hom(Department, Str)
   
   # Defined concepts.
   second_level_manager := compose(manager, manager)

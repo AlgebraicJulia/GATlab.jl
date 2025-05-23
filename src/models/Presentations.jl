@@ -27,10 +27,28 @@ using ..GATExprUtils
 # Data types
 ############
 
+struct Generators{Name}
+  # name => Dict(typ1 => (Hom => 1), typ2 => (Hom => 2))
+  index::Dict{Name, Dict{Vector{Symbol}, Pair{Name, Int}}}
+  registry::Dict{Vector{GATExpr}, Vector{Name}} 
+end
+
+function Generators{Name}() where Name
+  Generators{Name}(
+    Dict{Name, Dict{Vector{Symbol}, Pair{Name, Int}}}(),
+    Dict{Vector{GATExpr}, Vector{Name}}())
+end
+
+function Base.copy(gens::Generators{Name}) where Name
+    Generators{Name}(copy(gens.index), copy(gens.registry))
+end
+
 struct Presentation{Theory,Name}
   syntax::Module
   generators::NamedTuple
-  generator_name_index::Dict{Name,Pair{Symbol,Int}}
+  # TODO propagate this
+  generator_name_index::Generators{Name} 
+  # generator_name_index::Dict{Name,Pair{Symbol,Int}}
   equations::Vector{Pair}
 end
 
@@ -41,7 +59,7 @@ function Presentation{Name}(syntax::Module) where Name
   names = Tuple(nameof(sort) for sort in sorts(theory))
   vectors = ((getfield(syntax, name){:generator})[] for name in names)
   Presentation{T,Name}(syntax, NamedTuple{names}(vectors),
-                       Dict{Name,Pair{Symbol,Int}}(), Pair[])
+                       Generators{Name}(), Pair[])
 end
 
 Presentation(syntax::Module) = Presentation{Symbol}(syntax)
@@ -70,34 +88,40 @@ generators(pres::Presentation, type::Type) = generators(pres, nameof(type))
 Generators can also be retrieved using indexing notation, so that
 `generator(pres, name)` and `pres[name]` are equivalent.
 """
-function generator(pres::Presentation, name)
-  type, index = pres.generator_name_index[name]
+function generator(pres::Presentation, name, typs)
+  type, index = pres.generator_name_index.index[name]
   pres.generators[type][index]
 end
-Base.getindex(pres::Presentation, name) = generator.(Ref(pres), name)
+
+function Base.getindex(pres::Presentation, name)
+  generator.(Ref(pres), name)
+end
+# TODO
 
 """ Does the presentation contain a generator with the given name?
 """
 function has_generator(pres::Presentation, name)
-  haskey(pres.generator_name_index, name)
+  haskey(pres.generator_name_index.index, name)
 end
+# TODO
 
 """ Add a generator to a presentation.
 """
 function add_generator!(pres::Presentation, expr)
-  name, type = first(expr), gat_typeof(expr)
+  name, type, args = first(expr), gat_typeof(expr), gat_type_args(expr)
   generators = pres.generators[type]
   if !isnothing(name)
-    (name, expr) = if haskey(pres.generator_name_index, name)
-        new_name = Symbol("$(expr.args[2].args[1])_$name")
-        expr.args[1] = new_name
-        (new_name, expr)
-      # error("Name $name already defined in presentation")
+    if haskey(pres.generator_name_index.registry, args)
+      if name ∈ pres.generator_name_index.registry[args]
+          error("Name $name already defined in presentation with $args")
+      else
+          push!(pres.generator_name_index.registry[args], name)
+      end
     else
-        name, expr
+      pres.generator_name_index.registry[args] = [name]
     end
-    pres.generator_name_index[name] = type => length(generators)+1
-  end
+    pres.generator_name_index.index[name] = type => length(generators) + 1
+  end 
   push!(generators, expr)
   expr
 end
