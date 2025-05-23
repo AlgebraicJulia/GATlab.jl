@@ -60,8 +60,8 @@ add_equations!(pres, [f => f′, g => g′])
   manager::Hom(Employee, Employee)
   works_in::Hom(Employee, Department)
   secretary::Hom(Department, Employee)
-  nickname::Hom(Employee, Str)
-  nickname::Hom(Department, Str)
+  reputation::Hom(Employee, Str)
+  reputation::Hom(Department, Str)
   
   # Defined concepts.
   second_level_manager := compose(manager, manager)
@@ -78,7 +78,7 @@ end
 
 # Check generators.
 Employee, Department, Str = Ob.(Ref(FreeCategory.Ob),[:Employee, :Department, :Str])
-@test generators(Company) == [
+@test Set(generators(Company)) == Set([
   Employee,
   Department,
   Str,
@@ -89,7 +89,9 @@ Employee, Department, Str = Ob.(Ref(FreeCategory.Ob),[:Employee, :Department, :S
   Hom(:secretary, Department, Employee),
   Hom(:second_level_manager, Employee, Employee),
   Hom(:third_level_manager, Employee, Employee),
-]
+  Hom(:reputation, Employee, Str),
+  Hom(:reputation, Department, Str)
+ ])
 
 # Check equations.
 manager = Hom(:manager, Employee, Employee)
