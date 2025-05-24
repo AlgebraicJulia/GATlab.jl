@@ -54,6 +54,7 @@ add_equations!(pres, [f => f′, g => g′])
   Employee::Ob
   Department::Ob
   Str::Ob
+  Value::Ob
   
   first_name::Hom(Employee, Str)
   last_name::Hom(Employee, Str)
@@ -62,15 +63,20 @@ add_equations!(pres, [f => f′, g => g′])
   secretary::Hom(Department, Employee)
   reputation::Hom(Employee, Str)
   reputation::Hom(Department, Str)
+
+  val::Hom(Str, Value)
   
   # Defined concepts.
   second_level_manager := compose(manager, manager)
   third_level_manager := compose(manager, compose(manager, manager))
+
+  rvalue := compose(Employee.reputation, val)
   
   # Managers work in the same department as their employees.
   compose(manager, works_in) == works_in
   # The secretary of a department works in that department.
   compose(secretary, works_in) == id(Department)
+
 end
 
 # Check type parameter.

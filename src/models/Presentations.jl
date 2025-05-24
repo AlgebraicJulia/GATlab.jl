@@ -44,7 +44,7 @@ function index_generators(g::Generators{Name}, name::Symbol; type=[], args=[]) w
   filter(g.index) do ((_name, (_type, _args...)), v)
     _name == name && 
     begin !isempty(type) ? _type == [Symbol[];type] : true end &&
-    begin !isempty(args) ? _args == args : true end
+    begin !isempty(args) ? issubset(args, _args) : true end
   end
 end
 
@@ -242,9 +242,10 @@ end
 function make_term(pres::Presentation, expr)
   @match expr begin
     ::Symbol => pres[expr]
-    Expr(:call, term_constructor, args...) =>
-      invoke_term(pres.syntax, term_constructor,
-                  map(arg -> make_term(pres, arg), args))
+    Expr(:., ob, QuoteNode(arg)) => pres[arg, [ob]]
+    Expr(:call, term_constructor, args...) => begin
+        invoke_term(pres.syntax, term_constructor, map(arg -> make_term(pres, arg), args))
+    end
   end
 end
 
@@ -299,7 +300,7 @@ function eval_stmt!(pres::Presentation, stmt::Expr)
   @match stmt begin
     Expr(:(::), name::Symbol, type_expr) =>
       construct_generator!(pres, name, parse_type_expr(type_expr)...)
-    Expr(:(::), Expr(:tuple, names...), type_expr) =>
+    Expr(:(::), Expr(:tuple, names...), type_expr) => 
       construct_generators!(pres, [names...], parse_type_expr(type_expr)...)
     Expr(:(::), type_expr) =>
       construct_generator!(pres, nothing, parse_type_expr(type_expr)...)
