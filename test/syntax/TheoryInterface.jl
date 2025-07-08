@@ -46,7 +46,8 @@ end
   @op 1 + 1
 end
 
-@test (@doc ThCMonoid.Meta.theory) isa Markdown.MD
-@test (@doc ThSet) == (@doc ThSet.Meta.theory)
+# depending on whether in REPL or not
+@test (@doc ThCMonoid.Meta.theory) isa Base.Docs.DocStr || (@doc ThCMonoid.Meta.theory) isa  Markdown.MD
+# @test (@doc ThSet) == (@doc ThSet.Meta.theory) # only true in REPL
 
 end
