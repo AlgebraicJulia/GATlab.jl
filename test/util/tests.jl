@@ -6,4 +6,8 @@ using Test
   include("MetaUtils.jl")
 end
 
+@testset "Either Type" begin
+  include("EitherTypes.jl")
+end
+
 end
