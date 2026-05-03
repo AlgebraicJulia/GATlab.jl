@@ -46,8 +46,9 @@ end
   @op 1 + 1
 end
 
-# DEPRECATED
-# @test (@doc ThCMonoid.Meta.theory) isa Markdown.MD
-# @test (@doc ThSet) == (@doc ThSet.Meta.theory)
+let docs = (@doc ThLawlessCategory).object
+  @test docs isa Markdown.MD
+  @test !any(x -> x isa Markdown.MD, docs.content)
+end
 
 end
