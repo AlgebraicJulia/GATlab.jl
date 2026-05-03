@@ -14,17 +14,21 @@ end
 const literate_dir = joinpath(@__DIR__, "..", "examples")
 const generated_dir = joinpath(@__DIR__, "src", "examples")
 
-for (root, dirs, files) in walkdir(literate_dir)
-  out_dir = joinpath(generated_dir, relpath(root, literate_dir))
-  for file in files
-    f, l = splitext(file)
-    if l == ".jl" && !startswith(f, "_")
-      Literate.markdown(joinpath(root, file), out_dir;
-        config=config, documenter=true, credit=false)
-      Literate.notebook(joinpath(root, file), out_dir;
-        execute=true, documenter=true, credit=false)
+if isdir(literate_dir)
+  for (root, dirs, files) in walkdir(literate_dir)
+    out_dir = joinpath(generated_dir, relpath(root, literate_dir))
+    for file in files
+      f, l = splitext(file)
+      if l == ".jl" && !startswith(f, "_")
+        Literate.markdown(joinpath(root, file), out_dir;
+          config=config, documenter=true, credit=false)
+        Literate.notebook(joinpath(root, file), out_dir;
+          execute=true, documenter=true, credit=false)
+      end
     end
   end
+else
+  @info "Skipping Literate examples generation because examples directory is missing" literate_dir
 end
 
 @info "Building Documenter.jl docs"
