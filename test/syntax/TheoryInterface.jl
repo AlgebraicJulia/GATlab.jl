@@ -46,7 +46,8 @@ end
   @op 1 + 1
 end
 
-let docs = (@doc ThLawlessCategory).object
+let rawdocs = (@doc ThLawlessCategory)
+  docs = rawdocs isa Markdown.MD ? rawdocs : rawdocs.object
   @test docs isa Markdown.MD
   @test !any(x -> x isa Markdown.MD, docs.content)
 end
