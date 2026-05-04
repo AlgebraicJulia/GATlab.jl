@@ -1,6 +1,7 @@
 module TestTheoryInterface
 
 using Test, GATlab, Markdown
+using MLStyle: @match, GuardBy
 
 @theory ThCategoryTypes begin
   Ob::TYPE
@@ -46,8 +47,17 @@ end
   @op 1 + 1
 end
 
-# DEPRECATED
-# @test (@doc ThCMonoid.Meta.theory) isa Markdown.MD
-# @test (@doc ThSet) == (@doc ThSet.Meta.theory)
+let rawdocs = (@doc ThLawlessCategory)
+  # Julia ≤1.10: @doc retrieval wraps the stored Markdown.MD in another MD
+  # via `catdoc(md::MD...) = MD(md...)`, producing one outer nesting level.
+  # Julia ≥1.11: @doc returns a DocStr; .object is the stored flat MD.
+  docs = @match rawdocs begin
+    d::Base.Docs.DocStr => d.object
+    md::Markdown.MD && GuardBy(m -> length(m.content) == 1 && m.content[1] isa Markdown.MD) => md.content[1]  # unwrap catdoc-induced outer nesting
+    _ => rawdocs
+  end
+  @test docs isa Markdown.MD
+  @test !any(x -> x isa Markdown.MD, docs.content)
+end
 
 end
