@@ -104,15 +104,24 @@ x = fromexpr(c, :(id_span(A)), AlgTerm)
 @test retag(Dict{ScopeTag, ScopeTag}(), thcat) isa GAT
 @test rename(gettag(thcat.segments.scopes[end]), Dict(:compose => :shmompose), thcat) isa GAT
 @test reident(Dict(A => A), thcat) isa GAT
-@test_logs min_level=Base.CoreLogging.Warn GAT(
+resolver = GATs.MethodResolver()
+resolvers_dict = Dict(number => resolver)
+accessors_dict = Dict(number => Dict(1 => plus))
+theory_from_dicts = @test_logs min_level=Base.CoreLogging.Warn GAT(
   :NoDeprecation,
   ScopeList{GATs.Judgment}(),
-  Dict{Ident, GATs.MethodResolver}(),
+  resolvers_dict,
   GATs.AlgSort[],
-  Dict{Ident, Dict{Int, Ident}}(),
+  accessors_dict,
   Ident[],
   Dict{GATs.AlgSort, Union{Expr, Symbol}}()
-) isa GAT
+)
+@test theory_from_dicts isa GAT
+@test nameof(theory_from_dicts) == :NoDeprecation
+@test length(keys(theory_from_dicts.resolvers)) == 1
+@test first(keys(theory_from_dicts.resolvers)) == number
+@test theory_from_dicts.resolvers[number] == resolver
+@test theory_from_dicts.accessors[number] == accessors_dict[number]
 
 @test Scopes.getvalue(InCtx(scope, x)) == x
 @test Scopes.getcontext(InCtx(scope, x)) == scope

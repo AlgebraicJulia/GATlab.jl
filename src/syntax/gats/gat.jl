@@ -121,9 +121,9 @@ function GAT(
   GAT(
     name,
     segments,
-    OrderedDict(collect(resolvers)),
+    OrderedDict(pairs(resolvers)),
     sorts,
-    OrderedDict(collect(accessors)),
+    OrderedDict(pairs(accessors)),
     axioms,
     fixed_types
   )
