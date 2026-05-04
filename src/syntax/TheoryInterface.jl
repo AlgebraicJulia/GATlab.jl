@@ -47,14 +47,11 @@ function impl_types end # implemented in ModelInterface
 mdp(::Nothing) = Markdown.MD(Any[])
 mdp(x::Markdown.MD) = x
 function mdp(x::Base.Docs.DocStr)
-  if x.object isa Markdown.MD
-    x.object
-  elseif length(x.text) == 1
-    Markdown.parse(only(x.text))
-  elseif isempty(x.text)
-    Markdown.MD(Any[])
-  else
-    Markdown.parse(join(x.text, "\n"))
+  @match (x.object, x.text) begin
+    (y::Markdown.MD, _) => y
+    (_, [])  => Markdown.MD(Any[])
+    (_, [z]) => Markdown.parse(only(z))
+    (_, z)   => Markdown.parse(join(z, "\n"))
   end
 end
 mdcat(x::Markdown.MD, y::Markdown.MD) = Markdown.MD(vcat(x.content, y.content))
