@@ -3,6 +3,11 @@ module TestModelInterface
 using GATlab, GATlab.Stdlib, Test, StructEquality
 
 @struct_hash_equal struct FinSetC′ end
+@struct_hash_equal struct FinSetC′MissingCategoryMethods end
+@struct_hash_equal struct FinSetC′MissingCategoryId end
+@struct_hash_equal struct FinSetC′WrongCategoryIdType end
+@struct_hash_equal struct FinSetC′BadCategorySortLabel end
+@struct_hash_equal struct FinSetC′ExtraCategorySortAssignment end
 
 # ThCategory models
 ###################
@@ -11,31 +16,31 @@ using GATlab, GATlab.Stdlib, Test, StructEquality
 #-------------------------------
 
 # Error if we fail to implement methods
-@test_throws ErrorException @eval @instance ThCategory{Int, Vector{Int}} [model::FinSetC′] begin
+@test_throws ErrorException @eval @instance ThCategory{Int, Vector{Int}} [model::FinSetC′MissingCategoryMethods] begin
 end
 
 # Error: missing `id`
-@test_throws ErrorException @eval @instance ThCategory{Int, Vector{Int}} [model::FinSetC′] begin
+@test_throws ErrorException @eval @instance ThCategory{Int, Vector{Int}} [model::FinSetC′MissingCategoryId] begin
   compose(f::Vector{Int}, g::Vector{Int}) = g[f]
   dom(f::Vector{Int}) = length(f)
 end
 
 # Error if we don't implement methods with args of of right type (`id`)
-@test_throws ErrorException @eval @instance ThCategory{Int, Vector{Int}} [model::FinSetC′] begin
+@test_throws ErrorException @eval @instance ThCategory{Int, Vector{Int}} [model::FinSetC′WrongCategoryIdType] begin
   id(f::Vector{Int}) = f
   compose(f::Vector{Int}, g::Vector{Int}) = g[f]
   dom(f::Vector{Int}) = length(f)
 end
 
 # Error if we label with nonexistent sorts
-@test_throws LoadError @eval @instance ThCategory{Ob=Int, Hume=Vector{Int}} [model::FinSetC′] begin
+@test_throws LoadError @eval @instance ThCategory{Ob=Int, Hume=Vector{Int}} [model::FinSetC′BadCategorySortLabel] begin
   id(::Int) = error("")
   compose(::Vector{Int}, ::Vector{Int}) = error("")
 end
 
 
 # Error if we have superfluous type assignments
-@test_throws LoadError @eval @instance ThCategory{Ob=Int, Hom=Vector{Int}, Hom2=Matrix{Int}} [model::FinSetC′] begin
+@test_throws LoadError @eval @instance ThCategory{Ob=Int, Hom=Vector{Int}, Hom2=Matrix{Int}} [model::FinSetC′ExtraCategorySortAssignment] begin
   id(::Int) = error("")
   compose(::Vector{Int}, ::Vector{Int}) = error("")
 end
@@ -91,11 +96,15 @@ using .ThCategory
 # Monoidal category models 
 ##########################
 
+@struct_hash_equal struct FinSetC′MissingMonoidalObjectMethods end
+@struct_hash_equal struct FinSetC′BadMonoidalHomType end
+@struct_hash_equal struct FinSetC′Monoidal end
+
 # Failures to create an instance 
 #-------------------------------
 
 # Missing `mcompose` on objects (`Int`s)
-@test_throws ErrorException @eval @instance ThStrictMonCat{Int, Vector{Int}} [model::FinSetC′] begin
+@test_throws ErrorException @eval @instance ThStrictMonCat{Int, Vector{Int}} [model::FinSetC′MissingMonoidalObjectMethods] begin
 
   mcompose(f::Vector{Int}, g::Vector{Int}; context) = [f; g .+ context.B₁]
 
@@ -103,9 +112,9 @@ using .ThCategory
 end
 
 
-@test_throws ErrorException @eval @instance ThStrictMonCat{Int, Int} [model::FinSetC′] begin
+@test_throws ErrorException @eval @instance ThStrictMonCat{Int, Vector{Int}} [model::FinSetC′BadMonoidalHomType] begin
   mcompose(a::Int, b::Int) = a + b
-  mcompose(f::Int, g::Int; context) = f * g
+  mcompose(f::Vector{Int}, g::String; context) = [f; length(g) .+ context.B₁]
 
   munit() = 0
 end
@@ -113,7 +122,15 @@ end
 # Actual instance
 #----------------
 
-@instance ThStrictMonCat{Int, Vector{Int}} [model::FinSetC′] begin
+@instance ThCategory{Ob=Int, Hom=Vector{Int}} [model::FinSetC′Monoidal] begin
+  Ob(i::Int) = Ob[FinSetC′()](i)
+  Hom(f::Vector{Int}, n::Int, m::Int) = Hom[FinSetC′()](f, n, m)
+  id(m::Int) = id[FinSetC′()](m)
+  compose(f::Vector{Int}, g::Vector{Int}) = compose[FinSetC′()](f, g)
+  dom(f::Vector{Int}) = dom[FinSetC′()](f)
+end
+
+@instance ThStrictMonCat{Int, Vector{Int}} [model::FinSetC′Monoidal] begin
 
   mcompose(a::Int, b::Int) = a + b
   mcompose(f::Vector{Int}, g::Vector{Int}; context) = [f; g .+ context.B₁]
@@ -121,15 +138,15 @@ end
   munit() = 0
 end
 
-@test implements(FinSetC′(), ThStrictMonCat, [Int, Vector{Int}])
+@test implements(FinSetC′Monoidal(), ThStrictMonCat, [Int, Vector{Int}])
 
 # Using the instance
 #-------------------
 
 using .ThStrictMonCat
 
-@test mcompose[FinSetC′()](id[FinSetC′()](2), id[FinSetC′()](2); context=(;B₁=2)) ==
-  id[FinSetC′()](4)
+@test mcompose[FinSetC′Monoidal()](id[FinSetC′Monoidal()](2), id[FinSetC′Monoidal()](2); context=(;B₁=2)) ==
+  id[FinSetC′Monoidal()](4)
 
 # Default (old-style) instance
 #-----------------------------
@@ -178,7 +195,7 @@ g = FinFunction([1,1,1],B,A)
 # @test Hom([2,3], A, B) == f
 @test_throws ErrorException Hom(f, A, A)
 
-@withmodel FinSetC′() (mcompose, id) begin
+@withmodel FinSetC′Monoidal() (mcompose, id) begin
   @test mcompose(id(2), id(2); context=(;B₁=2)) == id(4)
 end
 
