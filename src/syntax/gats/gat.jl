@@ -109,6 +109,26 @@ struct GAT <: HasScopeList{Judgment}
   fixed_types::Dict{AlgSort, Union{Expr, Symbol}}
 end
 
+function GAT(
+  name::Symbol,
+  segments::ScopeList{Judgment},
+  resolvers::Dict{Ident, MethodResolver},
+  sorts::Vector{AlgSort},
+  accessors::Dict{Ident, Dict{Int, Ident}},
+  axioms::Vector{Ident},
+  fixed_types::Dict{AlgSort, Union{Expr, Symbol}}
+)
+  GAT(
+    name,
+    segments,
+    OrderedDict(collect(resolvers)),
+    sorts,
+    OrderedDict(collect(accessors)),
+    axioms,
+    fixed_types
+  )
+end
+
 function Base.copy(theory::GAT; name=theory.name)
   GAT(
     name,
@@ -166,7 +186,7 @@ function rename(tag::ScopeTag, renames::Dict{Symbol, Symbol}, resolvers::Ordered
     resolvers
   else
     merge(map(collect(resolvers)) do (r,m)
-      Dict(rename(tag, renames, r) => rename(tag, renames, m))
+      OrderedDict(rename(tag, renames, r) => rename(tag, renames, m))
     end...)
   end
 end
@@ -177,7 +197,7 @@ function reident(reps::Dict{Ident}, resolvers::OrderedDict{Ident, MethodResolver
   else
     merge(map(collect(resolvers)) do (r, m)
       key = reident(reps, r)
-      Dict(key => reident(reps, key, m))
+      OrderedDict(key => reident(reps, key, m))
       # Dict(reident(reps, r) => reident(reps, m)) # reident(reps, m)
     end...)
   end
@@ -198,7 +218,7 @@ function reident(reps::Dict{Ident}, accessors::OrderedDict{Ident, Dict{Int64, Id
     accessors
   else
     merge(map(collect(accessors)) do (i, d)
-      Dict(reident(reps, i) => reident(reps, d))
+      OrderedDict(reident(reps, i) => reident(reps, d))
     end...)
   end
 end

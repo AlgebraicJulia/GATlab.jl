@@ -104,6 +104,15 @@ x = fromexpr(c, :(id_span(A)), AlgTerm)
 @test retag(Dict{ScopeTag, ScopeTag}(), thcat) isa GAT
 @test rename(gettag(thcat.segments.scopes[end]), Dict(:compose => :shmompose), thcat) isa GAT
 @test reident(Dict(A => A), thcat) isa GAT
+@test_logs min_level=Base.CoreLogging.Warn GAT(
+  :NoDeprecation,
+  ScopeList{GATs.Judgment}(),
+  Dict{Ident, GATs.MethodResolver}(),
+  GATs.AlgSort[],
+  Dict{Ident, Dict{Int, Ident}}(),
+  Ident[],
+  Dict{GATs.AlgSort, Union{Expr, Symbol}}()
+) isa GAT
 
 @test Scopes.getvalue(InCtx(scope, x)) == x
 @test Scopes.getcontext(InCtx(scope, x)) == scope
