@@ -58,11 +58,6 @@ mdcat(x::Markdown.MD, y::Markdown.MD) = Markdown.MD(vcat(x.content, y.content))
 
 
 # TODO is every contribution to a theory a new segment, or can a new theory introduce multiple segments? 
-"""
-When we declare a new theory, we add the scope tag of its new segment to this
-dictionary pointing to the module corresponding to the new theory.
-"""
-const GAT_MODULE_LOOKUP = Dict{ScopeTag, Module}()
 
 macro signature(head, body)
   theory_impl(head, body, __module__)
@@ -132,7 +127,6 @@ function theory_impl(head, body, __module__)
 
   theory = fromexpr(parent, body, GAT; name, current_module=fqmn(__module__))
 
-  newsegment = theory.segments.scopes[end]
   docstr = repr(theory)
 
   lines = Any[]
@@ -187,9 +181,6 @@ function theory_impl(head, body, __module__)
 
     $wrapper_expr
   end)))
-
-  # XXX
-  push!(modulelines, :($(GlobalRef(TheoryInterface, :GAT_MODULE_LOOKUP))[$(gettag(newsegment))] = $name))
 
   esc(
     Expr(

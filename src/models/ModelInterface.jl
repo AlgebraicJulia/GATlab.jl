@@ -52,7 +52,7 @@ using ...Util.MetaUtils
 using ...Util.MetaUtils: JuliaFunctionSigNoWhere
 
 using ...Syntax.TheoryMaps: dom, codom
-using ...Syntax.TheoryInterface: GAT_MODULE_LOOKUP, WithModel
+using ...Syntax.TheoryInterface: WithModel
 import ...Syntax.TheoryInterface: implements, impl_type, impl_types
 
 using MLStyle
@@ -577,10 +577,6 @@ macro withmodel(model, subsexpr, body)
   )
 end
 
-# Until GAT_MODULE_LOOKUP is debugged, we can only migrate with the Module
-# migrate_model(F::Module, m::Any, new_model_name=nothing) = 
-#   migrate_model(F.MAP, m, new_model_name)
-
 """
 Given a theory map A -> B, construct a new struct type which wraps a model of
 theory B and is itself a model of theory A. The name of the struct can be
@@ -593,10 +589,10 @@ TODO: The new instance methods do not yet handle the `context` keyword argument.
 function migrate_model(FM::Module, m::Any, new_model_name::Union{Nothing,Symbol}=nothing)
   new_model_name = isnothing(new_model_name) ? gensym(:Migrated) : new_model_name
   F = FM.MAP
-  dom_module =  macroexpand(FM, :($FM.@dom)) #GAT_MODULE_LOOKUP[gettag(dom_theory)]
-  codom_module = macroexpand(FM, :($FM.@codom)) #GAT_MODULE_LOOKUP[gettag(codom_theory)]
-  dom_theory = dom_module.Meta.theory #dom(F)
-  codom_theory = codom_module.Meta.theory #codom(F)
+  dom_module =  macroexpand(FM, :($FM.@dom))
+  codom_module = macroexpand(FM, :($FM.@codom))
+  dom_theory = dom_module.Meta.theory
+  codom_theory = codom_module.Meta.theory
 
   # Expressions which evaluate to the correct Julia type
   jltype_by_sort = Dict(map(sorts(dom_theory)) do v
