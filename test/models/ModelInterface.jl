@@ -33,7 +33,7 @@ end
 end
 
 # Error if we label with nonexistent sorts
-@test_throws LoadError @eval @instance ThCategory{Ob=Int, Hume=Vector{Int}} [model::FinSetC′BadCategorySortLabel] begin
+@test_throws LoadError @eval @instance ThCategory{Ob=Int, InvalidSort=Vector{Int}} [model::FinSetC′BadCategorySortLabel] begin
   id(::Int) = error("")
   compose(::Vector{Int}, ::Vector{Int}) = error("")
 end
@@ -113,8 +113,8 @@ end
 
 
 @test_throws ErrorException @eval @instance ThStrictMonCat{Int, Vector{Int}} [model::FinSetC′BadMonoidalHomType] begin
-  mcompose(a::Int, b::Int) = a + b
-  mcompose(f::Vector{Int}, g::String; context) = [f; length(g) .+ context.B₁]
+  mcompose(a::String, b::String) = string(a, b)
+  mcompose(f::Vector{Int}, g::Vector{Int}; context) = [f; g .+ context.B₁]
 
   munit() = 0
 end
