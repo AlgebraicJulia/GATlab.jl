@@ -1,7 +1,7 @@
 name = "GATlab"
 uuid = "f0ffcf3b-d13a-433e-917c-cc44ccf5ead2"
-version = "0.2.2"
 authors = ["AlgebraicJulia Developers"]
+version = "0.2.3"
 
 [deps]
 AlgebraicInterfaces = "23cfdc9f-0504-424a-be1f-4892b28e2f0c"
@@ -20,7 +20,7 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 AlgebraicInterfaces = "0.1.4"
 Colors = "0.12, 0.13"
 Crayons = "4"
-DataStructures = "0.18"
+DataStructures = "0.18, 0.19"
 JSON = "0.21, 1"
 MLStyle = "0.4"
 Reexport = "1"

@@ -44,11 +44,17 @@ function impl_type end # implemented in ModelInterface
 function impl_types end # implemented in ModelInterface
 
 """ Parse markdown coming out of @doc programatically. """
-mdp(::Nothing) = ""
+mdp(::Nothing) = Markdown.MD(Any[])
 mdp(x::Markdown.MD) = x
 function mdp(x::Base.Docs.DocStr)
-  Markdown.parse(only(x.text))
+  @match (x.object, x.text) begin
+    (y::Markdown.MD, _) => y
+    (_, [])  => Markdown.MD(Any[])
+    (_, [z]) => Markdown.parse(only(z))
+    (_, z)   => Markdown.parse(join(z, "\n"))
+  end
 end
+mdcat(x::Markdown.MD, y::Markdown.MD) = Markdown.MD(vcat(x.content, y.content))
 
 
 # TODO is every contribution to a theory a new segment, or can a new theory introduce multiple segments? 
@@ -197,7 +203,7 @@ function theory_impl(head, body, __module__)
           $(modulelines...)
         end
       ),
-      :(@doc ($(Markdown.MD)($mdp(@doc $doctarget), $docstr)) $name)
+      :(@doc $(mdcat)($mdp(@doc $doctarget), $docstr) $name)
     )
   )
 end
