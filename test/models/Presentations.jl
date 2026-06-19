@@ -7,7 +7,6 @@ presentation_theory(::Presentation{Theory}) where Theory = Theory
 # Presentation
 ##############
 
-
 @symbolic_model FreeCategory{GATExpr, GATExpr} ThCategory begin
   compose(f::Hom, g::Hom) = associate(new(f,g))
 end
@@ -55,21 +54,29 @@ add_equations!(pres, [f => f′, g => g′])
   Employee::Ob
   Department::Ob
   Str::Ob
+  Value::Ob
   
   first_name::Hom(Employee, Str)
   last_name::Hom(Employee, Str)
   manager::Hom(Employee, Employee)
   works_in::Hom(Employee, Department)
   secretary::Hom(Department, Employee)
+  reputation::Hom(Employee, Str)
+  reputation::Hom(Department, Str)
+
+  val::Hom(Str, Value)
   
   # Defined concepts.
   second_level_manager := compose(manager, manager)
   third_level_manager := compose(manager, compose(manager, manager))
+
+  rvalue := compose(Employee.reputation, val)
   
   # Managers work in the same department as their employees.
   compose(manager, works_in) == works_in
   # The secretary of a department works in that department.
   compose(secretary, works_in) == id(Department)
+
 end
 
 # Check type parameter.
@@ -77,7 +84,7 @@ end
 
 # Check generators.
 Employee, Department, Str = Ob.(Ref(FreeCategory.Ob),[:Employee, :Department, :Str])
-@test generators(Company) == [
+@test Set(generators(Company)) == Set([
   Employee,
   Department,
   Str,
@@ -88,7 +95,9 @@ Employee, Department, Str = Ob.(Ref(FreeCategory.Ob),[:Employee, :Department, :S
   Hom(:secretary, Department, Employee),
   Hom(:second_level_manager, Employee, Employee),
   Hom(:third_level_manager, Employee, Employee),
-]
+  Hom(:reputation, Employee, Str),
+  Hom(:reputation, Department, Str)
+ ])
 
 # Check equations.
 manager = Hom(:manager, Employee, Employee)
